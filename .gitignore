@@ -1,0 +1,13 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+release/
+# Tauri
+src-tauri/target/
+src-tauri/updater.key
+*.pdb
