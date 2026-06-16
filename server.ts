@@ -3,13 +3,23 @@ import compression from "compression";
 import axios from "axios";
 import dotenv from "dotenv";
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
-import { userDb, sessionDb, creditTransactionDb, generatedImagesDb, bannerCarouselDb, hashPassword, verifyPassword, generateToken, subUserDb, withRetry, isDbConnected, creditBucketDb, agentDb, commissionDb, withdrawDb, inviteCodeDb } from "./src/server/db";
+import { userDb, sessionDb, creditTransactionDb, generatedImagesDb, bannerCarouselDb, hashPassword, verifyPassword, generateToken, subUserDb, withRetry, isDbConnected, creditBucketDb, agentDb, commissionDb, withdrawDb, inviteCodeDb, workflowDb } from "./src/server/db";
 import { pool } from "./src/server/db";
 import FormData from "form-data";
 import nodemailer from "nodemailer";
 import crypto from "crypto";
 import { startCleanupScheduler } from "./src/server/cleanup-expired-images";
-import { splitImageElements } from "./src/server/imageSplitter";
+import fs from "fs";
+
+// 图片代理缓存：后台下载完的图片直接存这里，代理不用重新去 xgapi.top 拉
+const proxyImageCache = new Map<string, { buffer: Buffer; contentType: string; timestamp: number }>();
+const PROXY_CACHE_TTL = 10 * 60 * 1000; // 10分钟
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of proxyImageCache) {
+    if (now - val.timestamp > PROXY_CACHE_TTL) proxyImageCache.delete(key);
+  }
+}, 60000);
 
 // 全局错误处理：防止未捕获的异步错误导致进程崩溃
 process.on('unhandledRejection', (reason) => {
@@ -125,6 +135,27 @@ function clearIPLoginFailure(ip: string): void {
   ipLoginFailures.delete(ip);
 }
 
+// 模型名称规范化（用于前端展示）
+function normalizeModelForDisplay(rawModel: string | null | undefined): string {
+  if (!rawModel) return 'nano';
+  // 移除可能已有的自动删除后缀
+  const clean = rawModel.replace(/ · \d+天后自动删除| · 即将删除/g, '').trim();
+  if (clean === 'gemini-3.1-flash-image-preview' || clean === 'nanobann2' || clean === 'nanogen') return 'nano';
+  return clean || 'nano';
+}
+
+// 计算图片剩余天数（生成后 3 天自动删除）
+function getAutoDeleteInfo(createdAt: string | Date | null): string {
+  if (!createdAt) return ' · 3天后自动删除';
+  const created = new Date(createdAt);
+  const expiresAt = new Date(created.getTime() + 3 * 24 * 60 * 60 * 1000);
+  const now = new Date();
+  const remainingMs = expiresAt.getTime() - now.getTime();
+  if (remainingMs <= 0) return ' · 即将删除';
+  const remainingDays = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
+  return ` · ${remainingDays}天后自动删除`;
+}
+
 // 价格配置缓存
 let pricingCache: Map<string, { price: number; enabled: boolean }> = new Map();
 let pricingCacheTime = 0;
@@ -212,11 +243,11 @@ async function handleConsumptionCommission(consumerId: number, amount: number, s
 }
 
 // 站点配置缓存
-let siteConfigCache: { logo_url: string; icon_url: string; site_title: string } | null = null;
+let siteConfigCache: { logo_url: string; icon_url: string; site_title: string; oauth_platforms: string[] } | null = null;
 let siteConfigCacheTime = 0;
 const SITE_CONFIG_CACHE_TTL = 60000;
 
-async function getSiteConfig(): Promise<{ logo_url: string; icon_url: string; site_title: string }> {
+async function getSiteConfig(): Promise<{ logo_url: string; icon_url: string; site_title: string; oauth_platforms: string[] }> {
   const now = Date.now();
   if (!siteConfigCache || now - siteConfigCacheTime > SITE_CONFIG_CACHE_TTL) {
     try {
@@ -225,15 +256,35 @@ async function getSiteConfig(): Promise<{ logo_url: string; icon_url: string; si
         siteConfigCache = {
           logo_url: rows[0].logo_url || '/logo.png',
           icon_url: rows[0].icon_url || '/logo.png',
-          site_title: rows[0].site_title || 'Softhooky-智能设计平台'
+          site_title: rows[0].site_title || 'Softhooky-智能设计平台',
+          oauth_platforms: []
         };
+        // 同时获取 OAuth 平台配置
+        try {
+          const [oauthRows]: any = await pool.execute('SELECT platforms FROM oauth_config WHERE id = 1');
+          if (oauthRows && oauthRows.length > 0) {
+            let platforms = oauthRows[0].platforms;
+            if (typeof platforms === 'string') {
+              try { platforms = JSON.parse(platforms); } catch { platforms = {}; }
+            }
+            const enabled: string[] = [];
+            if (platforms && typeof platforms === 'object') {
+              for (const [key, val] of Object.entries(platforms)) {
+                if (val) enabled.push(key);
+              }
+            }
+            siteConfigCache.oauth_platforms = enabled;
+          }
+        } catch (e) {
+          // OAuth 表可能不存在，忽略
+        }
       }
       siteConfigCacheTime = now;
     } catch (err) {
       console.error('获取站点配置失败:', err);
     }
   }
-  return siteConfigCache || { logo_url: '/logo.png', icon_url: '/logo.png', site_title: 'Softhooky-智能设计平台' };
+  return siteConfigCache || { logo_url: '/logo.png', icon_url: '/logo.png', site_title: 'Softhooky-智能设计平台', oauth_platforms: [] };
 }
 
 function clearSiteConfigCache() {
@@ -355,12 +406,46 @@ function clearSiteConfigCache() {
     }
   }
 
+  // 给 generated_images 表添加 task_id 字段（迁移）
+  try {
+    await pool.execute(`ALTER TABLE generated_images ADD COLUMN task_id VARCHAR(100) NULL COMMENT '异步任务ID'`);
+    console.log('✅ generated_images task_id 字段添加成功');
+  } catch (error: any) {
+    if (error.message?.includes('Duplicate column')) {
+      console.log('ℹ️ task_id 字段已存在');
+    } else {
+      console.log('ℹ️ task_id 字段添加失败:', error.message?.substring(0, 100));
+    }
+  }
+
   // 给 generated_images 表的 type 字段添加 chatgen 类型（迁移）
   try {
     await pool.execute(`ALTER TABLE generated_images MODIFY COLUMN type VARCHAR(50) NOT NULL DEFAULT 'generated'`);
     console.log('✅ generated_images type 字段已修改为 VARCHAR，支持 chatgen 类型');
   } catch (error: any) {
     console.log('ℹ️ type 字段修改失败:', error.message?.substring(0, 100));
+  }
+
+  // 修复 generated_images 表的 generated column 问题
+  try {
+    // 检查 expires_at 是否是 generated column
+    const [cols] = await pool.execute(`SHOW COLUMNS FROM generated_images LIKE 'expires_at'`);
+    const col = (cols as any[])[0];
+    if (col && col.Extra?.includes('GENERATED')) {
+      console.log('⚠️ expires_at 是 generated column，正在修改为普通列...');
+      await pool.execute(`ALTER TABLE generated_images MODIFY COLUMN expires_at DATETIME NULL`);
+      console.log('✅ expires_at 已修改为普通列');
+    }
+    // 检查 created_at 是否是 generated column
+    const [caCols] = await pool.execute(`SHOW COLUMNS FROM generated_images LIKE 'created_at'`);
+    const caCol = (caCols as any[])[0];
+    if (caCol && caCol.Extra?.includes('GENERATED')) {
+      console.log('⚠️ created_at 是 generated column，正在修改为普通列...');
+      await pool.execute(`ALTER TABLE generated_images MODIFY COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
+      console.log('✅ created_at 已修改为普通列');
+    }
+  } catch (error: any) {
+    console.log('ℹ️ generated column 修复失败:', error.message?.substring(0, 100));
   }
 
   // 初始化视频定价（默认值）
@@ -387,10 +472,7 @@ function clearSiteConfigCache() {
 
   // 初始化图片生成定价（默认值）
   try {
-    const imagePricing: { key: string; name: string; price: number }[] = [
-      { key: 'seedream_generation', name: 'Seedream 文生图', price: 0.2 },
-      { key: 'seedream_edit', name: 'Seedream 图生图', price: 0.2 },
-    ];
+    const imagePricing: { key: string; name: string; price: number }[] = [];
     for (const p of imagePricing) {
       await pool.execute(
         'INSERT IGNORE INTO pricing_config (`key`, name, price, enabled) VALUES (?, ?, ?, 1)',
@@ -569,6 +651,53 @@ function clearSiteConfigCache() {
   }
 })();
 
+// 初始化 OAuth 配置表
+(async () => {
+  try {
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS oauth_config (
+        id INT PRIMARY KEY DEFAULT 1,
+        qauth_api VARCHAR(500) DEFAULT 'https://api.qauth.cn',
+        qauth_appkey VARCHAR(200) DEFAULT '',
+        qauth_user_secret VARCHAR(200) DEFAULT '',
+        qauth_auto_register TINYINT(1) DEFAULT 1,
+        qauth_state_check TINYINT(1) DEFAULT 1,
+        platforms JSON DEFAULT NULL COMMENT '{"wechat":1,"qq":0,...}',
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='OAuth第三方登录配置'
+    `);
+    await pool.execute(
+      'INSERT IGNORE INTO oauth_config (id, qauth_api, qauth_appkey, qauth_user_secret) VALUES (1, ?, ?, ?)',
+      ['https://api.qauth.cn', '', '']
+    );
+    console.log('✅ oauth_config 表初始化完成');
+  } catch (error) {
+    console.log('ℹ️ oauth_config 表可能已存在或创建失败:', error);
+  }
+})();
+
+// 初始化用户 OAuth 绑定表
+(async () => {
+  try {
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS user_oauth_links (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        provider VARCHAR(50) NOT NULL COMMENT 'wechat/miniprogram/qq/github/dingtalk/weibo/alipay/gitee/sms/facebook/telegram',
+        provider_uid VARCHAR(200) NOT NULL COMMENT '第三方openid',
+        detail_type VARCHAR(50) DEFAULT NULL COMMENT '如wechat的offiaccount/miniprogram',
+        union_id VARCHAR(200) DEFAULT NULL COMMENT '微信unionid',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_provider_uid (provider, provider_uid),
+        KEY idx_user_id (user_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户第三方账号绑定'
+    `);
+    console.log('✅ user_oauth_links 表初始化完成');
+  } catch (error) {
+    console.log('ℹ️ user_oauth_links 表可能已存在或创建失败:', error);
+  }
+})();
+
 // 初始化子账号配额字段
 (async () => {
   try {
@@ -628,9 +757,8 @@ function clearSiteConfigCache() {
       )
     `);
     const defaultModels = [
-      { model_id: 'seedream', label: 'Seedream', enabled: 1, sort_order: 0 },
-      { model_id: 'gpt-image-2', label: 'GPT-Image2', enabled: 1, sort_order: 1 },
-      { model_id: 'nanobann2', label: 'Nanobann2', enabled: 1, sort_order: 2 },
+      { model_id: 'gpt-image-2', label: 'GPT-Image2', enabled: 1, sort_order: 0 },
+      { model_id: 'nanobann2', label: 'Nanobann2', enabled: 1, sort_order: 1 },
     ];
     for (const m of defaultModels) {
       await pool.execute(
@@ -657,25 +785,21 @@ function clearSiteConfigCache() {
         sort_order INT DEFAULT 0
       )
     `);
-    const defaultNavItems = [
+    const defaultNavItems: { nav_id: string; label: string; category: string; sort_order: number; enabled?: number }[] = [
       { nav_id: 'chat-gen', label: '创意生图', category: '素材工作台', sort_order: 0 },
       { nav_id: 'productRefine', label: '产品精修', category: '素材工作台', sort_order: 1 },
       { nav_id: 'productFusion', label: '产品融图', category: '素材工作台', sort_order: 2 },
-      { nav_id: 'tryon', label: '产品试穿', category: '素材工作台', sort_order: 3 },
-      { nav_id: 'handheld', label: '手持产品', category: '素材工作台', sort_order: 4 },
+      { nav_id: 'productTryon', label: '产品穿搭', category: '素材工作台', sort_order: 3 },
+      { nav_id: 'tryon', label: '产品试穿', category: '素材工作台', sort_order: 4 },
       { nav_id: 'three-view', label: '三视图生成', category: '素材工作台', sort_order: 5 },
+      { nav_id: 'product-9grid', label: '产品展示图', category: '素材工作台', sort_order: 6 },
       { nav_id: 'deepseek-chat', label: '电商文案助手', category: 'AI辅助工具', sort_order: 0 },
-      { nav_id: 'xiaohongshu', label: '小红书种草图文', category: '社媒图文引流', sort_order: 0 },
-      { nav_id: 'social', label: '社媒POV出图', category: '社媒图文引流', sort_order: 1 },
       { nav_id: 'detailClone', label: '版式裂变', category: '店铺上架素材', sort_order: 0 },
       { nav_id: 'carousel', label: '产品轮播图', category: '店铺上架素材', sort_order: 1 },
-      { nav_id: 'amazon-carousel', label: '亚马逊轮播图', category: '店铺上架素材', sort_order: 2 },
+      { nav_id: 'amazon-image-gen', label: '亚马逊生图', category: '店铺上架素材', sort_order: 2 },
       { nav_id: 'detail2', label: '详情页设计', category: '店铺上架素材', sort_order: 3 },
       { nav_id: 'banner', label: 'Banner设计', category: '店铺上架素材', sort_order: 4 },
-      { nav_id: 'poster', label: '智能海报设计', category: '店铺上架素材', sort_order: 5 },
-      { nav_id: 'storyboard', label: '故事板', category: '短视频带货引流', sort_order: 0 },
-      { nav_id: 'tk-video', label: 'TK脚本图', category: '短视频带货引流', sort_order: 1 },
-
+      { nav_id: 'poster', label: '营销海报设计', category: '店铺上架素材', sort_order: 5 },
     ];
     for (const n of defaultNavItems) {
       await pool.execute(
@@ -789,6 +913,26 @@ function clearSiteConfigCache() {
   }
 })();
 
+// 初始化模型库表
+(async () => {
+  try {
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS model_library (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL COMMENT '模特名称',
+        gender ENUM('female','male') NOT NULL COMMENT '性别',
+        image_url VARCHAR(500) NOT NULL COMMENT 'COS图片URL',
+        cos_key VARCHAR(500) NOT NULL COMMENT 'COS存储路径',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_gender (gender)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='模特库表'
+    `);
+    console.log('✅ model_library 表初始化完成');
+  } catch (error) {
+    console.log('ℹ️ model_library 表可能已存在或创建失败:', (error as any)?.message?.substring(0, 100));
+  }
+})();
+
 // CORS 中间件必须在所有其他中间件之前
 const ALLOWED_ORIGINS = [
   'https://softhooky.com',
@@ -798,6 +942,7 @@ const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://127.0.0.1:3000',
   'http://127.0.0.1:3001',
+
 ];
 
 app.use((req, res, next) => {
@@ -808,7 +953,8 @@ app.use((req, res, next) => {
     ALLOWED_ORIGINS.includes(origin) ||
     // 开发环境：允许所有 localhost / 127.0.0.1 变体
     /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
-    // Electron file:// 协议
+    // Tauri 桌面应用 WebView origin（tauri.localhost）
+    /^https?:\/\/[\w-]+\.localhost(:\d+)?$/.test(origin) ||
     origin === 'null'
   );
 
@@ -833,6 +979,8 @@ app.use(express.raw({ type: 'multipart/form-data', limit: '100mb' }));
 
 // 验证码存储 (内存)
 const verificationCodes = new Map<string, { code: string; expiresAt: number }>();
+// 重置密码一次性 token 存储
+const resetTokens = new Map<string, { email: string; expiresAt: number }>();
 
 // 邮件发送函数
 async function sendVerificationEmail(to: string, code: string) {
@@ -1126,7 +1274,7 @@ async function uploadToCosWithRetry(
   extension: string,
   userId: number,
   subUserId?: number,
-  maxRetries: number = 1
+  maxRetries: number = 3
 ): Promise<string> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -1155,17 +1303,166 @@ async function startServer() {
     res.json({ success: true, message: '服务器正常运行' });
   });
 
+  // 代理模式调试端点
+  app.get("/api/debug/proxy", (req, res) => {
+    const isSidecar = typeof process !== 'undefined' && (process as any).pkg;
+    const fs = require('fs');
+    const noEnvInCwd = !fs.existsSync('./.env');
+    const proxyTarget = process.env.API_PROXY_TARGET ||
+      (isSidecar || noEnvInCwd ? 'http://43.143.213.221:3001' : null);
+    res.json({
+      isSidecar: !!isSidecar,
+      noEnvInCwd,
+      proxyTarget,
+      cwd: process.cwd(),
+      proxyMode: !!proxyTarget,
+    });
+  });
+
+  // Sidecar 代理模式：当 sidecar 无法直接连远程数据库时，
+  // 将所有 /api 请求转发到远程服务器
+  // 触发条件：1) API_PROXY_TARGET 环境变量 或 2) pkg 编译模式 或 3) .env 不在 CWD（sidecar 工作目录不同）
+  const isSidecar = typeof process !== 'undefined' && (process as any).pkg;
+  const noEnvInCwd = !fs.existsSync('./.env');
+  const proxyTarget = process.env.API_PROXY_TARGET ||
+    (isSidecar || noEnvInCwd ? 'http://43.143.213.221:3001' : null);
+  if (proxyTarget) {
+    console.log(`🔄 代理模式: isSidecar=${!!isSidecar} noEnvInCwd=${noEnvInCwd} target=${proxyTarget}`);
+    console.log(`🔄 Sidecar 代理模式: 转发所有 /api 请求到 ${proxyTarget}`);
+
+    app.use("/api", (req, res, next) => {
+      const origin = req.headers.origin;
+      const allowedOrigins = ['http://localhost:3000', 'http://localhost:3001'];
+      if (origin && allowedOrigins.includes(origin)) {
+        res.header('Access-Control-Allow-Origin', origin);
+        res.header('Access-Control-Allow-Credentials', 'true');
+      }
+      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+      res.header('Access-Control-Allow-Headers', 'Origin, Content-Type, Accept, Authorization');
+      if (req.method === 'OPTIONS') return res.sendStatus(200);
+      next();
+    });
+
+    app.use("/api", async (req, res) => {
+      try {
+        const targetUrl = `${proxyTarget}${req.originalUrl}`;
+        const method = req.method as any;
+        const headers: Record<string, string> = {
+          'Content-Type': req.headers['content-type'] as string || 'application/json',
+        };
+        // 转发 Authorization（登录 token）
+        if (req.headers.authorization) {
+          headers['authorization'] = req.headers.authorization as string;
+        }
+        // 转发 Cookie
+        if (req.headers.cookie) {
+          headers['cookie'] = req.headers.cookie as string;
+        }
+        // 转发原始 IP
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        if (ip) headers['x-forwarded-for'] = Array.isArray(ip) ? ip[0] : ip;
+        headers['x-real-ip'] = req.socket.remoteAddress || '';
+
+        const response = await axios({
+          method,
+          url: targetUrl,
+          data: ['GET', 'HEAD'].includes(req.method) ? undefined : req.body,
+          headers,
+          timeout: 60000,
+          validateStatus: () => true, // 透传所有状态码
+        });
+
+        // 透传远程服务器返回的 CORS 头
+        if (response.headers['access-control-allow-origin']) {
+          res.header('Access-Control-Allow-Origin', response.headers['access-control-allow-origin']);
+        }
+        if (response.headers['access-control-allow-credentials']) {
+          res.header('Access-Control-Allow-Credentials', response.headers['access-control-allow-credentials']);
+        }
+        // 透传 Set-Cookie（登录会话等）
+        if (response.headers['set-cookie']) {
+          const cookies = response.headers['set-cookie'];
+          if (Array.isArray(cookies)) {
+            res.setHeader('Set-Cookie', cookies);
+          } else {
+            res.header('Set-Cookie', cookies);
+          }
+        }
+
+        res.status(response.status).json(response.data);
+      } catch (error: any) {
+        if (error.response) {
+          res.status(error.response.status).json(error.response.data);
+        } else if (error.code === 'ECONNREFUSED' || error.code === 'ECONNRESET') {
+          res.status(502).json({ success: false, message: '无法连接到远程服务器' });
+        } else {
+          res.status(502).json({ success: false, message: '代理请求失败' });
+        }
+      }
+    });
+    // 代理模式也要 listen，否则端口没监听，所有请求都会 ECONNREFUSED
+    await new Promise<void>((resolve, reject) => {
+      app.listen(PORT, "0.0.0.0", () => {
+        console.log(`✅ 代理服务器运行在 http://localhost:${PORT}`);
+        resolve();
+      }).on('error', (err: any) => {
+        if (err.code === 'EADDRINUSE') {
+          console.log(`⚠️ 端口 ${PORT} 被占用，尝试 ${PORT + 1}`);
+          PORT++;
+          app.listen(PORT, "0.0.0.0", () => {
+            console.log(`✅ 代理服务器运行在 http://localhost:${PORT}`);
+            resolve();
+          }).on('error', reject);
+        } else {
+          reject(err);
+        }
+      });
+    });
+    return; // 代理模式不注册后续路由
+  }
+
+  // 版本检查（供桌面端自定义更新用）
+  app.get("/api/version", (req, res) => {
+    const path = require('path');
+    const fs = require('fs');
+    const pkgPath = path.join(__dirname, 'package.json');
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    const updatesDir = path.join(__dirname, 'updates');
+    const files: Record<string, string> = {};
+    if (fs.existsSync(updatesDir)) {
+      for (const f of fs.readdirSync(updatesDir)) {
+        if (f.endsWith('.dmg') || f.endsWith('.exe') || f.endsWith('.sig')) {
+          files[f] = `/updates/${f}`;
+        }
+      }
+    }
+    res.json({
+      success: true,
+      version: pkg.version,
+      files,
+      download_base: '/updates',
+    });
+  });
+
   // 添加请求日志中间件
   app.use((req, res, next) => {
     console.log(`${req.method} ${req.path}`, req.body ? `(body: ${JSON.stringify(req.body).substring(0, 100)})` : '');
     next();
   });
 
-  // 账号解锁（重置登录限制）
+  // 账号解锁（重置登录限制）- 仅管理员可用
   app.post("/api/auth/unlock", async (req, res) => {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ success: false, message: '请输入邮箱' });
     try {
+      // 内联管理员验证（adminMiddleware 定义在后面）
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      if (!token) return res.status(401).json({ success: false, message: '未登录' });
+      const session = await sessionDb.validate(token);
+      if (!session) return res.status(401).json({ success: false, message: '登录已过期' });
+      const adminUser = await userDb.findById(session.user_id);
+      if (!adminUser || !adminUser.is_admin) return res.status(403).json({ success: false, message: '无权限，仅管理员可解锁账号' });
+
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ success: false, message: '请输入邮箱' });
       // 重置数据库中的登录次数和锁定状态
       await pool.execute(
         'UPDATE users SET login_attempts = 0, locked_until = NULL WHERE email = ?',
@@ -1180,109 +1477,135 @@ async function startServer() {
     }
   });
 
-  // ==================== Tianai-Captcha ====================
+  // ==================== 验证码公共 ====================
   const captchaVerifiedTokens = new Set<string>();
 
   function generateCaptchaId(): string {
     return crypto.randomUUID().replace(/-/g, '');
   }
 
-  interface CaptchaData {
-    id: string;
-    type: string;
-    backgroundImage: string;
-    templateImage: string;
+  // ==================== 中文字符点击验证码 ====================
+  const chineseCaptchaStore = new Map<string, {
+    targetChars: string[];
+    charPositions: { char: string; x: number; y: number }[];
+    attempts: number;
+    expires: number;
+  }>();
+
+  // 常用中文字符池（笔画适中，辨识度高）
+  const CHINESE_CHAR_POOL = '的一是不了人我在有他这中大来上个国和地也子时道说能对出就着那要于下得可你年生自作多后成家天过小么心起三前里新方如面同开只定见把手日最又公无点意月份前头长回';
+
+  function pickRandomChineseChars(count: number): string[] {
+    const pool = CHINESE_CHAR_POOL;
+    const chars: string[] = [];
+    const used = new Set<number>();
+    while (chars.length < count && chars.length < pool.length) {
+      const idx = Math.floor(Math.random() * pool.length);
+      if (!used.has(idx)) {
+        used.add(idx);
+        chars.push(pool[idx]);
+      }
+    }
+    return chars;
   }
 
-  const captchaAnswers = new Map<string, { answer: number; expires: number }>();
+  // 生成中文字符点击验证码
+  app.get("/api/captcha/char-click/gen", async (req, res) => {
+    const rateLimit = checkRateLimit(getClientIP(req), 'char-click-gen', 20, 60000);
+    if (rateLimit.limited) {
+      return res.status(429).json({ success: false, message: rateLimit.message });
+    }
 
-  // Scenes with different visual themes
-  const scenes = [
-    { bg: ['#1a2a6c', '#b21f1f', '#fdbb2d'] },
-    { bg: ['#0f2027', '#203a43', '#2c5364'] },
-    { bg: ['#134e5e', '#71b280'] },
-    { bg: ['#fc4a1a', '#f7b733'] },
-    { bg: ['#8e44ad', '#3498db'] },
-  ];
-
-  const CW = 300, CH = 180;  // tac content area
-  const PW = 55, PH = 75;    // puzzle piece size
-
-  function svgScene(w: number, h: number, scene: { bg: string[] }): string {
-    const gradStops = scene.bg.map((c, i) =>
-      `<stop offset="${Math.round(i / (scene.bg.length - 1) * 100)}%" stop-color="${c}"/>`
-    ).join('');
-    return `<defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">${gradStops}</linearGradient></defs>
-<rect width="${w}" height="${h}" fill="url(#g)"/>
-<circle cx="${w * 0.82}" cy="${h * 0.2}" r="28" fill="rgba(255,255,255,0.12)"/>
-<circle cx="${w * 0.12}" cy="${h * 0.18}" r="18" fill="rgba(255,255,255,0.08)"/>
-<path d="M0 ${h} Q${w / 4} ${h - 35} ${w / 2} ${h} Q${w * 3 / 4} ${h - 25} ${w} ${h}" fill="rgba(255,255,255,0.10)"/>`;
-  }
-
-  function makeSvgCaptcha(): CaptchaData {
     const id = generateCaptchaId();
-    const scene = scenes[Math.floor(Math.random() * scenes.length)];
-    // holeX must be within slider range [30, 200] (end is ~215)
-    const holeX = 30 + Math.floor(Math.random() * 170);
-    const holeY = 20 + Math.floor(Math.random() * (CH - PH - 30));
+    // 生成 3 个目标字符
+    const targetChars = pickRandomChineseChars(3);
+    // 生成总共 8 个字符（含 3 个目标 + 5 个干扰）
+    const allChars = pickRandomChineseChars(8);
+    // 确保目标字符在里面（替换前3个位置，然后打乱）
+    for (let i = 0; i < 3; i++) {
+      allChars[i] = targetChars[i];
+    }
+    // 打乱顺序
+    for (let i = allChars.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [allChars[i], allChars[j]] = [allChars[j], allChars[i]];
+    }
 
-    const sceneContent = svgScene(CW, CH, scene);
+    // 生成随机位置（避免重叠）
+    const canvasW = 300, canvasH = 200;
+    const positions: { char: string; x: number; y: number }[] = [];
+    const minDist = 32;
+    for (let i = 0; i < allChars.length; i++) {
+      let x: number, y: number;
+      let tries = 0;
+      do {
+        x = 20 + Math.random() * (canvasW - 40);
+        y = 25 + Math.random() * (canvasH - 45);
+        tries++;
+      } while (tries < 50 && positions.some(p => Math.hypot(p.x - x, p.y - y) < minDist));
+      positions.push({ char: allChars[i], x, y });
+    }
 
-    // Background: scene + transparent hole over semi-transparent dark overlay
-    const bgSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${CW}" height="${CH}">
-      ${sceneContent}
-      <path d="M0 0 L${CW} 0 L${CW} ${CH} L0 ${CH} Z M${holeX} ${holeY} L${holeX + PW} ${holeY} L${holeX + PW} ${holeY + PH} L${holeX} ${holeY + PH} Z" fill="rgba(0,0,0,0.35)" fill-rule="evenodd"/>
-    </svg>`;
-    const bgUri = 'data:image/svg+xml,' + encodeURIComponent(bgSvg);
+    chineseCaptchaStore.set(id, {
+      targetChars,
+      charPositions: positions,
+      attempts: 0,
+      expires: Date.now() + 120000, // 2分钟有效
+    });
+    setTimeout(() => chineseCaptchaStore.delete(id), 120000);
 
-    // Template: transparent piece with just a highlighted border
-    const tplSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${PW}" height="${CH}">
-      <defs><filter id="s"><feDropShadow dx="2" dy="2" stdDeviation="3" flood-opacity=".5"/></filter></defs>
-      <rect x="1" y="${holeY + 1}" width="${PW - 2}" height="${PH - 2}" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="2" rx="4" filter="url(#s)"/>
-    </svg>`;
-    const tplUri = 'data:image/svg+xml,' + encodeURIComponent(tplSvg);
-
-    captchaAnswers.set(id, { answer: holeX, expires: Date.now() + 120000 });
-    setTimeout(() => captchaAnswers.delete(id), 120000);
-
-    return { id, type: 'SLIDER', backgroundImage: bgUri, templateImage: tplUri };
-  }
-
-  app.post("/api/captcha/tianai/gen", async (req, res) => {
-    const data = makeSvgCaptcha();
-    res.json({ code: 200, msg: 'success', data });
+    res.json({
+      success: true,
+      data: {
+        id,
+        targetChars,
+        // 返回字符位置（不含字符内容），前端自行渲染
+        charPositions: positions.map(p => ({ x: p.x, y: p.y, char: p.char })),
+      }
+    });
   });
 
-  app.post("/api/captcha/tianai/check", async (req, res) => {
-    try {
-      const { id, data: trackData } = req.body;
-      if (!id || !trackData?.trackList?.length) {
-        return res.json({ code: 4001, msg: '参数错误' });
-      }
-      const stored = captchaAnswers.get(id);
-      if (!stored || Date.now() > stored.expires) {
-        captchaAnswers.delete(id);
-        return res.json({ code: 4001, msg: '验证码已过期' });
-      }
-      // SDK sends a NEW object without moveX/startX.
-      // Compute moveX from trackList: last event.x - first event.x
-      const track = trackData.trackList;
-      const firstX = track[0]?.x || 0;
-      const lastX = track[track.length - 1]?.x || 0;
-      const moveX = Math.abs(lastX - firstX);
-      const diff = Math.abs(moveX - stored.answer);
-      if (diff > 25) {
-        return res.json({ code: 4001, msg: '验证失败，请重试' });
-      }
-      captchaAnswers.delete(id);
-      const token = generateCaptchaId();
-      captchaVerifiedTokens.add(token);
-      setTimeout(() => captchaVerifiedTokens.delete(token), 5 * 60 * 1000);
-      res.json({ code: 200, msg: 'success', data: { token, id } });
-    } catch (err: any) {
-      console.error('Captcha check error:', err);
-      res.json({ code: 5000, msg: '服务器错误' });
+  // 验证中文字符点击
+  app.post("/api/captcha/char-click/check", async (req, res) => {
+    const { id, clickedChars } = req.body;
+    const ip = getClientIP(req);
+    const rateLimit = checkRateLimit(ip, 'char-click-check', 15, 60000);
+    if (rateLimit.limited) {
+      return res.status(429).json({ success: false, message: rateLimit.message });
     }
+
+    if (!id || !clickedChars || !Array.isArray(clickedChars)) {
+      return res.json({ success: false, message: '参数错误' });
+    }
+
+    const session = chineseCaptchaStore.get(id);
+    if (!session || Date.now() > session.expires) {
+      chineseCaptchaStore.delete(id);
+      return res.json({ success: false, message: '验证码已过期，请刷新重试' });
+    }
+
+    // 防暴力破解：限制尝试次数
+    session.attempts++;
+    if (session.attempts > 3) {
+      chineseCaptchaStore.delete(id);
+      return res.json({ success: false, message: '验证失败次数过多，请刷新重试' });
+    }
+
+    // 校验点击的字符是否与目标字符按序匹配
+    if (clickedChars.length !== 3) {
+      return res.json({ success: false, message: '请点击全部 3 个目标字符' });
+    }
+
+    const isCorrect = clickedChars.every((c: string, i: number) => c === session.targetChars[i]);
+    if (!isCorrect) {
+      return res.json({ success: false, message: '验证失败，请重试' });
+    }
+
+    chineseCaptchaStore.delete(id);
+    const token = generateCaptchaId();
+    captchaVerifiedTokens.add(token);
+    setTimeout(() => captchaVerifiedTokens.delete(token), 5 * 60 * 1000);
+    res.json({ success: true, data: { token } });
   });
 
   // 调试端点 - 检查sessions表
@@ -1421,20 +1744,42 @@ async function startServer() {
 
     // 验证成功，删除验证码
     verificationCodes.delete(email);
-    res.json({ success: true, message: '验证成功' });
+
+    // 生成一次性重置密码 token（用于 /api/auth/reset-password）
+    const resetToken = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
+    resetTokens.set(resetToken, { email, expiresAt: Date.now() + 10 * 60 * 1000 }); // 10分钟有效
+    setTimeout(() => resetTokens.delete(resetToken), 10 * 60 * 1000);
+
+    res.json({ success: true, message: '验证成功', resetToken });
   });
 
   // 重置密码
   app.post("/api/auth/reset-password", async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, resetToken } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ success: false, message: '请提供邮箱和新密码' });
     }
 
-    if (password.length < 6) {
-      return res.status(400).json({ success: false, message: '密码至少需要 6 位' });
+    if (!resetToken) {
+      return res.status(400).json({ success: false, message: '请先通过邮箱验证码验证' });
     }
+
+    if (password.length < 8) {
+      return res.status(400).json({ success: false, message: '密码至少需要 8 位' });
+    }
+
+    // 验证 resetToken
+    const tokenData = resetTokens.get(resetToken);
+    if (!tokenData || tokenData.email !== email) {
+      return res.status(400).json({ success: false, message: '验证已过期，请重新验证邮箱' });
+    }
+    if (tokenData.expiresAt < Date.now()) {
+      resetTokens.delete(resetToken);
+      return res.status(400).json({ success: false, message: '验证已过期，请重新验证邮箱' });
+    }
+    // 一次性使用
+    resetTokens.delete(resetToken);
 
     try {
       // 查找用户
@@ -1473,6 +1818,13 @@ async function startServer() {
       return res.status(429).json({ success: false, message: rateLimit.message });
     }
 
+    // 验证图形验证码 token
+    const { captchaToken } = req.body;
+    if (!captchaToken || !captchaVerifiedTokens.has(captchaToken)) {
+      return res.status(400).json({ success: false, message: '请先完成安全验证' });
+    }
+    captchaVerifiedTokens.delete(captchaToken);
+
     // 验证输入
     if (!email || !password) {
       return res.status(400).json({ success: false, message: '请填写邮箱和密码' });
@@ -1500,8 +1852,8 @@ async function startServer() {
       return res.status(400).json({ success: false, message: '请输入有效的邮箱地址' });
     }
 
-    if (password.length < 6) {
-      return res.status(400).json({ success: false, message: '密码至少需要 6 位' });
+    if (password.length < 8) {
+      return res.status(400).json({ success: false, message: '密码至少需要 8 位' });
     }
 
     try {
@@ -1513,7 +1865,7 @@ async function startServer() {
 
       // 创建用户（积分默认为0，自动生成apiKey）
       const passwordHash = await hashPassword(password);
-      const finalApiKey = apiKey || 'sk-r5Clizar6aV39YsxLbHR3rW209LqmnYa5fLT1iePRBtfZT47';
+      const finalApiKey = apiKey || '';
       const userId = await userDb.create(email, passwordHash, finalApiKey);
       // 新注册用户赠送 1 积分
       let giftAmount = 1;
@@ -1543,6 +1895,8 @@ async function startServer() {
                   await commissionDb.create(invitedByAgent.id, userId, -invitedByAgent.commission_balance, 'gift', '注册赠送(余额不足)');
                 }
               }
+              // 标记邀请码已使用
+              await inviteCodeDb.markAsUsed(inviteCode);
               console.log(`✅ 用户通过代理注册: ${email} -> 代理 ${invitedByAgent.email}, 获赠 ${giftAmount} 积分`);
             }
           }
@@ -1626,6 +1980,11 @@ async function startServer() {
         return res.status(401).json({ success: false, message: '邮箱或密码错误' });
       }
 
+      // 检查账号是否被禁用
+      if (!user.is_enabled) {
+        return res.status(403).json({ success: false, message: '账号已被禁用，请联系管理员 tailmart@163.com' });
+      }
+
       // 检查是否被锁定
       if (user.locked_until && new Date(user.locked_until) > new Date()) {
         const lockedTime = new Date(user.locked_until);
@@ -1701,14 +2060,12 @@ async function startServer() {
 
       // 创建会话（传入 IP 地址，自动踢掉该账号在该 IP 的旧会话）
       const token = generateToken();
-      console.log(`🔐 用户登录: ${email} (IP: ${ipAddress}), 生成token: ${token}, 进程ID: ${process.pid}`);
+      console.log(`🔐 用户登录: ${email} (IP: ${ipAddress}), 进程ID: ${process.pid}`);
       await sessionDb.create(user.id, token, ipAddress);
       console.log('✅ 会话创建成功，已踢掉该账号在该 IP 的旧会话');
 
       // 验证session是否创建成功
       const [verifyRows]: any = await pool.execute('SELECT id, token, LEFT(token, 10) as prefix, created_at FROM sessions WHERE user_id = ? ORDER BY id DESC', [user.id]);
-      console.log('🔍 验证session创建 - 数据库中的所有session:', verifyRows);
-      console.log('🔍 验证session创建 - 返回给用户的token:', token);
 
       res.json({
         success: true,
@@ -1726,7 +2083,7 @@ async function startServer() {
       });
     } catch (error: any) {
       console.error('Login error:', error);
-      res.status(500).json({ success: false, message: '登录失败，请稍后重试', detail: error.message });
+      res.status(500).json({ success: false, message: '登录失败，请稍后重试' });
     }
   });
 
@@ -2067,7 +2424,7 @@ async function startServer() {
   });
 
   // 管理后台更新订单状态
-  app.put("/api/admin/orders/:id", async (req, res) => {
+  app.put("/api/admin/orders/:id", adminMiddleware, async (req, res) => {
     try {
       const orderId = parseInt(req.params.id);
       const { status } = req.body;
@@ -2234,15 +2591,13 @@ async function startServer() {
         return;
       }
       res.json({ success: true, data: [
-        { model_id: 'seedream', label: 'Seedream', enabled: true, sort_order: 0 },
-        { model_id: 'nanobann2', label: 'Nanobann2', enabled: true, sort_order: 1 },
-        { model_id: 'gpt-image-2', label: 'GPT Image 2', enabled: true, sort_order: 2 },
+        { model_id: 'nanobann2', label: 'Nanobann2', enabled: true, sort_order: 0 },
+        { model_id: 'gpt-image-2', label: 'GPT Image 2', enabled: true, sort_order: 1 },
       ]});
     } catch (error: any) {
       res.json({ success: true, data: [
-        { model_id: 'seedream', label: 'Seedream', enabled: true, sort_order: 0 },
-        { model_id: 'nanobann2', label: 'Nanobann2', enabled: true, sort_order: 1 },
-        { model_id: 'gpt-image-2', label: 'GPT Image 2', enabled: true, sort_order: 2 },
+        { model_id: 'nanobann2', label: 'Nanobann2', enabled: true, sort_order: 0 },
+        { model_id: 'gpt-image-2', label: 'GPT Image 2', enabled: true, sort_order: 1 },
       ]});
     }
   });
@@ -2293,24 +2648,21 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
     try {
       // 自动同步前端新增的导航项到数据库
       // 清理已下架的旧导航项
-      await pool.execute("DELETE FROM nav_config WHERE nav_id IN ('nano-gen', 'detail', 'sora2-video', 'styleCopy', 'gpt54-chat', 'gemini-video', 'veo31')");
+      await pool.execute("DELETE FROM nav_config WHERE nav_id IN ('nano-gen', 'detail', 'sora2-video', 'styleCopy', 'gpt54-chat', 'gemini-video', 'veo31', 'handheld', 'xiaohongshu', 'social', 'storyboard', 'tk-video')");
       const REQUIRED_NAV_ITEMS = [
         { nav_id: 'chat-gen', label: '创意生图', category: '素材工作台', enabled: 1, sort_order: 0 },
-        { nav_id: 'productRefine', label: '产品精修', category: '素材工作台', enabled: 1, sort_order: 1 },
-        { nav_id: 'productFusion', label: '产品融图', category: '素材工作台', enabled: 1, sort_order: 2 },
-        { nav_id: 'tryon', label: '产品试穿', category: '素材工作台', enabled: 1, sort_order: 3 },
-        { nav_id: 'handheld', label: '手持产品', category: '素材工作台', enabled: 1, sort_order: 4 },
-        { nav_id: 'three-view', label: '三视图生成', category: '素材工作台', enabled: 1, sort_order: 5 },
+        { nav_id: 'workflow', label: '工作流生图', category: '素材工作台', enabled: 1, sort_order: 1 },
+        { nav_id: 'productRefine', label: '产品精修', category: '素材工作台', enabled: 1, sort_order: 2 },
+        { nav_id: 'productFusion', label: '产品融图', category: '素材工作台', enabled: 1, sort_order: 3 },
+        { nav_id: 'productTryon', label: '产品穿搭', category: '素材工作台', enabled: 1, sort_order: 4 },
+        { nav_id: 'tryon', label: '产品试穿', category: '素材工作台', enabled: 1, sort_order: 5 },
+        { nav_id: 'three-view', label: '三视图生成', category: '素材工作台', enabled: 1, sort_order: 6 },
         { nav_id: 'detailClone', label: '版式裂变', category: '店铺上架素材', enabled: 1, sort_order: 0 },
         { nav_id: 'carousel', label: '产品轮播图', category: '店铺上架素材', enabled: 1, sort_order: 1 },
-        { nav_id: 'amazon-carousel', label: '亚马逊轮播图', category: '店铺上架素材', enabled: 1, sort_order: 2 },
+        { nav_id: 'amazon-image-gen', label: '亚马逊生图', category: '店铺上架素材', enabled: 1, sort_order: 2 },
         { nav_id: 'detail2', label: '详情页设计', category: '店铺上架素材', enabled: 1, sort_order: 3 },
         { nav_id: 'banner', label: 'Banner设计', category: '店铺上架素材', enabled: 1, sort_order: 4 },
-        { nav_id: 'poster', label: '智能海报设计', category: '店铺上架素材', enabled: 1, sort_order: 5 },
-        { nav_id: 'xiaohongshu', label: '小红书种草图文', category: '社媒图文引流', enabled: 1, sort_order: 0 },
-        { nav_id: 'social', label: '社媒POV出图', category: '社媒图文引流', enabled: 1, sort_order: 1 },
-        { nav_id: 'storyboard', label: '故事板', category: '短视频带货引流', enabled: 1, sort_order: 0 },
-        { nav_id: 'tk-video', label: 'TK脚本图', category: '短视频带货引流', enabled: 1, sort_order: 1 },
+        { nav_id: 'poster', label: '营销海报设计', category: '店铺上架素材', enabled: 1, sort_order: 5 },
 
         { nav_id: 'deepseek-chat', label: '电商文案助手', category: 'AI辅助工具', enabled: 1, sort_order: 0 },
       ];
@@ -2337,7 +2689,7 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
   app.get("/api/admin/nav", adminMiddleware, async (req: any, res) => {
     try {
       // 清理已删除的旧导航项
-      await pool.execute("DELETE FROM nav_config WHERE nav_id IN ('nano-gen', 'detail', 'sora2-video', 'styleCopy', 'gpt54-chat', 'gemini-video', 'veo31')");
+      await pool.execute("DELETE FROM nav_config WHERE nav_id IN ('nano-gen', 'detail', 'sora2-video', 'styleCopy', 'gpt54-chat', 'gemini-video', 'veo31', 'handheld', 'xiaohongshu', 'social', 'storyboard', 'tk-video')");
       const [rows]: any = await pool.execute(
         'SELECT nav_id, label, category, enabled, sort_order FROM nav_config ORDER BY sort_order ASC'
       );
@@ -2591,15 +2943,13 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
   });
 
   // ==================== 支付相关配置 ====================
+  // 从环境变量读取（避免硬编码密钥到源码）
   const PAYMENT_CONFIG = {
-    // 微信支付
-    WX_APPID: '20211116018',
-    WX_SECRET: '2c9a1f305a72088484e8e795b1972bfa',
-    // 支付宝
-    ALI_APPID: '20211115900',
-    ALI_SECRET: '9a34b47e21803d472ab14c1d6da77e24',
-    // 支付网关
-    PAYMENT_API_URL: 'https://api.dpweixin.com/payment/do.html'
+    WX_APPID: process.env.WX_APPID || '20211116018',
+    WX_SECRET: process.env.WX_SECRET || '',
+    ALI_APPID: process.env.ALI_APPID || '20211115900',
+    ALI_SECRET: process.env.ALI_SECRET || '',
+    PAYMENT_API_URL: process.env.PAYMENT_API_URL || 'https://api.dpweixin.com/payment/do.html'
   };
 
   // 生成支付签名
@@ -3693,33 +4043,34 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
 
       let allQuery = '';
       if (isSubUser) {
-        allQuery = 'SELECT ct.* FROM credit_transactions ct WHERE ct.sub_user_id = ? AND ct.type != "recharge" ORDER BY ct.created_at ASC';
+        allQuery = 'SELECT ct.* FROM credit_transactions ct WHERE ct.sub_user_id = ? ORDER BY ct.created_at ASC';
       } else {
-        allQuery = 'SELECT ct.* FROM credit_transactions ct WHERE (ct.parent_user_id = ? OR (ct.user_id = ? AND ct.type != "recharge")) ORDER BY ct.created_at ASC';
+        allQuery = 'SELECT ct.* FROM credit_transactions ct WHERE ct.parent_user_id = ? OR ct.user_id = ? ORDER BY ct.created_at ASC';
       }
       const allRecordsResult = await pool.execute(allQuery, isSubUser ? [req.user.id] : [userId, userId]);
-      
-      let calcCredits = currentCredits;
-      const creditMap: Record<number, number> = {};
       
       const sortedRecords = ((allRecordsResult[0] as any[]) || []).sort((a: any, b: any) => 
         new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       );
+
+      const totalAllAmount = sortedRecords.reduce((sum: number, r: any) => sum + parseFloat(r.amount || '0'), 0);
+      let calcCredits = currentCredits - totalAllAmount;
+      const creditMap: Record<number, number> = {};
       
       for (const rec of sortedRecords) {
-        const amount = getCreditAmount(rec.type, Math.abs(parseFloat(rec.amount)));
         creditMap[rec.id] = calcCredits;
-        calcCredits -= amount;
+        calcCredits += parseFloat(rec.amount || '0');
       }
 
       const consumptionsData = ((consumptionsResult[0] as any[]) || []).map((c: any) => {
         const amount = getCreditAmount(c.type, Math.abs(parseFloat(c.amount)));
-        const beforeCredits = creditMap[c.id] || currentCredits;
+        const beforeCredits = creditMap[c.id];
+        const afterCredits = beforeCredits !== undefined ? beforeCredits + parseFloat(c.amount || '0') : currentCredits;
         return {
           ...c,
           amount: -amount,
-          beforeCredits: beforeCredits,
-          afterCredits: beforeCredits - amount,
+          beforeCredits: beforeCredits !== undefined ? beforeCredits : afterCredits + amount,
+          afterCredits,
           description: c.description || getDescription(c.type)
         };
       });
@@ -3854,35 +4205,25 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
 
       const totalCredits = imageCount * creditsPerImage;
       
-      // 获取用户当前积分
-      const user = await userDb.findById(userId);
-      if (!user) {
-        return res.status(404).json({ success: false, message: '用户不存在' });
-      }
+      // 使用统一扣费接口（含行锁+积分桶+子账号配额检查）
+      const deductResult = await creditTransactionDb.deduct(
+        parentUserId, totalCredits, 'prompt_reverse',
+        `反推提示词 - ${imageCount}张图片${req.user.isSubUser ? '(子账号)' : ''}`,
+        parentUserId, req.user.isSubUser ? userId : undefined
+      );
 
-      const currentCredits = user.credits || 0;
-      
-      // 检查积分是否足够
-      if (currentCredits < totalCredits) {
+      if (!deductResult.success) {
         return res.status(400).json({ 
           success: false, 
-          message: `积分不足，需要 ¥${totalCredits.toFixed(1)}，当前仅有 ¥${currentCredits.toFixed(1)}` 
+          message: deductResult.message || '积分不足'
         });
       }
-
-      // 扣费
-      const newCredits = currentCredits - totalCredits;
-      await userDb.updateCredits(userId, newCredits);
-
-      // 记录交易
-      await creditTransactionDb.create(userId, totalCredits, 'deduct', `反推提示词 - ${imageCount}张图片`);
 
       console.log('✅ 反推提示词扣费成功:', {
         userId,
         imageCount,
         totalCredits,
-        previousCredits: currentCredits,
-        newCredits
+        remainingCredits: deductResult.credits
       });
 
       // 代理佣金
@@ -3892,7 +4233,7 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
         success: true,
         message: '扣费成功',
         deductedCredits: totalCredits,
-        newCredits
+        newCredits: deductResult.credits
       });
     } catch (error: any) {
       console.error('反推提示词扣费失败:', error);
@@ -3926,16 +4267,297 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
     }
   });
 
-  // ==================== 子账号 API ====================
+
+  // ==================== OAuth 第三方登录 API ====================
+
+  // 获取 OAuth 配置（供登录页使用）
+
+
+  // ==================== 共享 OAuth 辅助函数 ====================
+
+  // 生成 OAuth 回调的 HTML 页面（postMessage 通知父窗口后关闭）
+  function oauthCallbackHtml(errorMsg?: string, token?: string, user?: any): string {
+    if (errorMsg) {
+      return `<html><body><script>
+        try {
+          var msg = ${JSON.stringify(errorMsg)};
+          if (window.opener) {
+            window.opener.postMessage({ type: 'OAUTH_LOGIN_ERROR', payload: { message: msg } }, '*');
+          }
+          localStorage.setItem('oauth_login_error', msg);
+        } catch(e) {}
+        alert(msg);
+        window.close();
+      </script></body></html>`;
+    }
+    const payload = JSON.stringify({ token, user });
+    return `<html>
+      <body>
+        <script>
+          (function() {
+            var payload = ${payload};
+            var jsonPayload = JSON.stringify(payload);
+            try {
+              if (window.opener) {
+                window.opener.postMessage({ type: 'OAUTH_LOGIN_SUCCESS', payload: payload }, '*');
+              }
+            } catch(e) {}
+            try {
+              localStorage.setItem('oauth_login_result', jsonPayload);
+              localStorage.setItem('oauth_login_ts', Date.now().toString());
+            } catch(e) {}
+            window.close();
+          })();
+        </script>
+      </body>
+    </html>`;
+  }
+
+  // OAuth 回调处理核心逻辑
+  async function handleOAuthCallback(code: string, state: string, req: any, res: any): Promise<void> {
+    // 验证 state（如果 state map 中存在）
+    if (global.__oauth_states && !global.__oauth_states.has(state)) {
+      res.send(oauthCallbackHtml('state无效或已过期，请重新登录'));
+      return;
+    }
+    if (global.__oauth_states) global.__oauth_states.delete(state);
+
+    // 获取 OAuth 配置
+    const [configRows]: any = await pool.execute('SELECT * FROM oauth_config WHERE id = 1');
+    if (!configRows || configRows.length === 0) {
+      res.send(oauthCallbackHtml('OAuth配置不存在'));
+      return;
+    }
+
+    const cfg = configRows[0];
+    const qauth_api = cfg.qauth_api || 'https://api.qauth.cn';
+    const appkey = cfg.qauth_appkey;
+    const secret = cfg.qauth_user_secret;
+    const autoRegister = cfg.qauth_auto_register === 1;
+
+    // 调用 QuickAuth API 获取用户信息
+    const qauthResponse = await axios.get(`${qauth_api}/authinfov2`, {
+      params: { code, appkey, secret },
+      timeout: 15000
+    });
+
+    const qauthData = qauthResponse.data;
+    if (!qauthData || qauthData.code !== 0) {
+      res.send(oauthCallbackHtml('QuickAuth登录失败: ' + (qauthData?.msg || '未知错误')));
+      return;
+    }
+
+    const authObj = qauthData.res;
+    const userObj = authObj.userInfo;
+
+    let provider = authObj.authType;
+    let detailType = null;
+    let unionId = null;
+
+    if (authObj.authType === 'wechat') {
+      detailType = authObj.detailType;
+      unionId = userObj.unionId || null;
+    }
+
+    let providerUid = userObj.openId;
+    if (!providerUid) {
+      res.send(oauthCallbackHtml('获取第三方用户信息失败'));
+      return;
+    }
+
+    // 先查 unionId（微信跨平台绑定）
+    let existingUser = null;
+    if (unionId) {
+      const [unionRows]: any = await pool.execute(
+        'SELECT user_id FROM user_oauth_links WHERE provider = ? AND union_id = ? LIMIT 1',
+        ['wechat', unionId]
+      );
+      if (unionRows && unionRows.length > 0) {
+        existingUser = unionRows[0].user_id;
+      }
+    }
+
+    // 再查 provider_uid
+    if (!existingUser) {
+      const [uidRows]: any = await pool.execute(
+        'SELECT user_id FROM user_oauth_links WHERE provider = ? AND provider_uid = ? LIMIT 1',
+        [provider, providerUid]
+      );
+      if (uidRows && uidRows.length > 0) {
+        existingUser = uidRows[0].user_id;
+      }
+    }
+
+    let finalUserId: number;
+
+    if (existingUser) {
+      finalUserId = existingUser;
+    } else {
+      if (!autoRegister) {
+        res.send(oauthCallbackHtml('该第三方账号未绑定任何用户，且系统未启用自动注册'));
+        return;
+      }
+
+      // 自动创建用户
+      const randomName = userObj.randomName || `oauth_${Date.now()}`;
+      const randomPassword = crypto.randomBytes(6).toString('hex');
+      const email = `${randomName}@oauth.${provider}.com`;
+      const oauthApiKey = 'sk-' + crypto.randomBytes(32).toString('hex');
+
+      const [insertResult]: any = await pool.execute(
+        'INSERT INTO users (email, password_hash, credits, is_enabled, api_key) VALUES (?, ?, ?, 1, ?)',
+        [email, await hashPassword(randomPassword), 1, oauthApiKey]
+      );
+      finalUserId = insertResult.insertId;
+
+      await pool.execute(
+        'INSERT INTO user_oauth_links (user_id, provider, provider_uid, detail_type, union_id) VALUES (?, ?, ?, ?, ?)',
+        [finalUserId, provider, providerUid, detailType, unionId]
+      );
+    }
+
+    // 生成 token 登录
+    const token = generateToken();
+    await sessionDb.create(finalUserId, token);
+    await userDb.updateLastLogin(finalUserId);
+
+    // 获取用户信息
+    const [userRows]: any = await pool.execute('SELECT * FROM users WHERE id = ?', [finalUserId]);
+    if (!userRows || userRows.length === 0) {
+      res.send(oauthCallbackHtml('用户不存在'));
+      return;
+    }
+
+    const user = userRows[0];
+    res.send(oauthCallbackHtml(undefined, token, {
+      id: user.id,
+      email: user.email,
+      credits: user.credits || 0
+    }));
+  }
+
+  app.get("/api/auth/oauth-config", async (req, res) => {
+    try {
+      const [rows]: any = await pool.execute('SELECT qauth_api, platforms FROM oauth_config WHERE id = 1');
+      if (rows && rows.length > 0) {
+        let platforms = rows[0].platforms;
+        if (typeof platforms === 'string') {
+          try { platforms = JSON.parse(platforms); } catch { platforms = {}; }
+        }
+        const enabledPlatforms: string[] = [];
+        if (platforms && typeof platforms === 'object') {
+          for (const [key, val] of Object.entries(platforms)) {
+            if (val) enabledPlatforms.push(key);
+          }
+        }
+        res.json({ success: true, data: { platforms: enabledPlatforms, qauth_api: rows[0].qauth_api } });
+      } else {
+        res.json({ success: true, data: { platforms: [], qauth_api: 'https://api.qauth.cn' } });
+      }
+    } catch (error: any) {
+      console.error('获取OAuth配置失败:', error);
+      res.json({ success: true, data: { platforms: [], qauth_api: 'https://api.qauth.cn' } });
+    }
+  });
+
+  // 发起 OAuth 登录（重定向到 QuickAuth）
+  app.get("/api/auth/oauth/login", async (req, res) => {
+    try {
+      const type = req.query.type as string;
+      const redirect = req.query.redirect as string || '/';
+
+      if (!type) {
+        return res.status(400).json({ success: false, message: '缺少type参数' });
+      }
+
+      const [rows]: any = await pool.execute('SELECT qauth_api, qauth_appkey FROM oauth_config WHERE id = 1');
+      if (!rows || rows.length === 0 || !rows[0].qauth_appkey) {
+        return res.status(400).json({ success: false, message: 'OAuth未配置，请先联系管理员配置' });
+      }
+
+      const qauth_api = rows[0].qauth_api || 'https://api.qauth.cn';
+      const appkey = rows[0].qauth_appkey;
+
+      // 生成 state 用于 CSRF 防护
+      const state = crypto.randomBytes(16).toString('hex');
+
+      // 构建回调 URL（当前服务器地址 + callback）
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+      const host = req.headers['x-forwarded-host'] || req.get('host');
+      const callbackUrl = `${protocol}://${host}/api/auth/oauth/callback`;
+
+      // 构建 QuickAuth OAuth URL
+      let oauthUrl = `${qauth_api}/oauth?type=${type}&appkey=${appkey}&state=${state}&redirect=${encodeURIComponent(callbackUrl)}`;
+
+      if (type === 'miniprogram') {
+        oauthUrl += '&detailType=miniprogram';
+      }
+
+      // state 存入 session（使用内存 Map 简单存储，生产环境建议用 Redis）
+      if (!global.__oauth_states) global.__oauth_states = new Map();
+      global.__oauth_states.set(state, {
+        createdAt: Date.now(),
+        type,
+        userAgent: req.headers['user-agent'] || ''
+      });
+
+      // 清理过期的 state（5分钟有效）
+      setTimeout(() => {
+        if (global.__oauth_states) global.__oauth_states.delete(state);
+      }, 5 * 60 * 1000);
+
+      // 每5分钟清理一次过期 state
+      if (!global.__oauth_cleanup) {
+        global.__oauth_cleanup = setInterval(() => {
+          if (global.__oauth_states) {
+            const now = Date.now();
+            for (const [key, val] of global.__oauth_states.entries()) {
+              if (now - val.createdAt > 5 * 60 * 1000) global.__oauth_states.delete(key);
+            }
+          }
+        }, 5 * 60 * 1000);
+      }
+
+      res.json({ success: true, data: { url: oauthUrl } });
+    } catch (error: any) {
+      console.error('发起OAuth登录失败:', error);
+      res.status(500).json({ success: false, message: '发起OAuth登录失败' });
+    }
+  });
+
+  // OAuth 回调处理（QuickAuth 授权后回跳）
+    // OAuth 回调处理（QuickAuth 授权后回跳）
+  app.get("/api/auth/oauth/callback", async (req, res) => {
+    const { code, state } = req.query;
+    if (!code || !state) {
+      return res.status(400).send(oauthCallbackHtml('回调参数不完整'));
+    }
+    try {
+      await handleOAuthCallback(code as string, state as string, req, res);
+    } catch (err: any) {
+      console.error('OAuth回调处理失败:', err);
+      res.send(oauthCallbackHtml(err.message || 'OAuth 处理失败，请重试'));
+    }
+  });// ==================== 子账号 API ====================
 
   // 子账号登录
   app.post("/api/auth/sub-login", async (req, res) => {
     const { email, password } = req.body;
     
-    const ipAddress = req.headers['x-forwarded-for']?.toString().split(',')[0].trim() || 
-                      req.headers['x-real-ip']?.toString() || 
-                      req.socket.remoteAddress || 
-                      'unknown';
+    // 获取客户端 IP 地址
+    const ipAddress = getClientIP(req);
+
+    // IP 限流检查：每分钟最多10次（与主账号登录一致）
+    const rateLimit = checkRateLimit(ipAddress, 'sub-login', 10, 60000);
+    if (rateLimit.limited) {
+      return res.status(429).json({ success: false, message: rateLimit.message });
+    }
+
+    // 检查 IP 是否被锁定
+    const ipLockCheck = isIPLocked(ipAddress);
+    if (ipLockCheck.locked) {
+      return res.status(429).json({ success: false, message: ipLockCheck.reason });
+    }
     
     if (!email || !password) {
       return res.status(400).json({ success: false, message: '请输入邮箱和密码' });
@@ -4095,8 +4717,8 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
         return res.status(400).json({ success: false, message: '请填写所有必填项' });
       }
 
-      if (password.length < 6) {
-        return res.status(400).json({ success: false, message: '密码至少需要 6 位' });
+      if (password.length < 8) {
+        return res.status(400).json({ success: false, message: '密码至少需要 8 位' });
       }
 
       // 检查邮箱是否已存在
@@ -4768,27 +5390,47 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
       }
 
       console.log('🔍 调用generatedImagesDb.create...');
-      const imageId = await generatedImagesDb.create(
-        userId,
-        finalUrl,
-        prompt || '',
-        {
-          model: model || 'gemini-3.1-flash-image-preview',
-          type: type || 'generated',
-          aspectRatio: aspectRatio || '1:1',
-          parentUserId: subUserId ? parentUserId : undefined
-        }
-      );
 
-      console.log('✅ 图片已保存到数据库，ID:', imageId);
+      // 检查是否已存在相同URL的图片（避免重复入库）
+      let imageId: number | null = null;
+      const [existing] = await pool.execute(
+        'SELECT id, type FROM generated_images WHERE user_id = ? AND image_url = ? LIMIT 1',
+        [userId, finalUrl]
+      );
+      if ((existing as any[]).length > 0) {
+        imageId = (existing as any[])[0].id;
+        const existingType = (existing as any[])[0].type;
+        // 如果前端传了新type且与现有type不同，更新type
+        if (type && existingType !== type) {
+          await pool.execute('UPDATE generated_images SET type = ? WHERE id = ?', [type, imageId]);
+          console.log('🔄 图片已存在，更新type从', existingType, '到', type, 'ID:', imageId);
+        } else {
+          console.log('⏭️ 图片已存在，跳过入库:', finalUrl.substring(0, 60));
+        }
+      } else {
+        const displayModel = normalizeModelForDisplay(model || 'gemini-3.1-flash-image-preview');
+        imageId = await generatedImagesDb.create(
+          userId,
+          finalUrl,
+          prompt || '',
+          {
+            model: displayModel,
+            type: type || 'generated',
+            aspectRatio: aspectRatio || '1:1',
+            parentUserId: subUserId ? parentUserId : undefined
+          }
+        );
+        console.log('✅ 图片已保存到数据库，ID:', imageId);
+      }
       
-      // 扣费逻辑：视频扣0.5，图片扣0.3（只有明确要求扣费时才扣，避免重复扣费）
+      // 扣费逻辑：从 pricing 表动态取价（只有明确要求扣费时才扣，避免重复扣费）
       const { skipDeduct } = req.body;
       if (skipDeduct) {
         console.log('⏭️ 跳过扣费（图片生成时已扣费）');
       } else {
         try {
-          const deductAmount = isVideo ? 1.5 : 0.3;
+          const savePricingKey = isVideo ? 'gemini_video_4s' : 'nanobann2_generation';
+          const deductAmount = await getUserEffectivePricing(parentUserId, savePricingKey);
           const deductType = isVideo ? 'video' : 'generate';
           const deductDesc = isVideo ? '视频生成' : (prompt ? prompt.substring(0, 30) : '图片生成');
           
@@ -4806,7 +5448,6 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
           if (deductResult.success) {
             console.log('✅ 扣费成功');
             // 代理佣金
-            const savePricingKey = isVideo ? 'gemini_video_4s' : 'nanobann2_generation';
             await handleConsumptionCommission(parentUserId, deductAmount, 'consume', savePricingKey);
           } else {
             console.error('⚠️ 扣费失败:', deductResult.message);
@@ -4838,14 +5479,20 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
 
       const result = await generatedImagesDb.getByUserId(userId, parentUserId, page, pageSize, filter);
 
+      // 规范化模型名称并添加自动删除提示
+      const displayImages = (result.images || []).map((img: any) => ({
+        ...img,
+        model: normalizeModelForDisplay(img.model) + getAutoDeleteInfo(img.created_at),
+      }));
+
       res.json({
         success: true,
-        data: result.images,
+        data: displayImages,
         pagination: {
           page: result.page,
           pageSize: result.pageSize,
           total: result.total,
-          totalPages: result.totalPages
+          totalPages: Math.ceil((result.total || 0) / pageSize)
         }
       });
     } catch (error: any) {
@@ -4940,7 +5587,10 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
           }
         }
 
-        await generatedImagesDb.delete(image.id, userId);
+        await pool.execute(
+          'DELETE FROM generated_images WHERE id = ? AND (user_id = ? OR parent_user_id = ?)',
+          [image.id, userId, parentUserId]
+        );
         console.log('✅ 数据库记录已删除, id:', image.id);
       } else {
         console.log('⚠️ 数据库未找到该图片记录，仅清理画布');
@@ -5040,24 +5690,32 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
     }
   });
 
-  // 清理用户自己的过期图片
+  // 清理用户自己的过期图片（主账号同时清理子账号的）
   app.post('/api/images/library/cleanup', authMiddleware, async (req: any, res) => {
     try {
       const userId = req.user?.id;
       if (!userId) {
         return res.status(401).json({ success: false, message: '用户未认证' });
       }
+      const parentUserId = req.user.parentUserId || userId;
+      const isSubUser = req.user.isSubUser;
+
+      // 子账号只清理自己的，主账号清理自己和子账号的
+      const userCondition = isSubUser
+        ? 'user_id = ?'
+        : '(user_id = ? OR parent_user_id = ?)';
+      const queryParams = isSubUser ? [userId] : [userId, parentUserId];
 
       const [expired] = await pool.execute(
-        `SELECT id, image_url FROM generated_images WHERE user_id = ? AND created_at < DATE_SUB(NOW(), INTERVAL 3 DAY)`,
-        [userId]
+        `SELECT id, image_url FROM generated_images WHERE ${userCondition} AND created_at < DATE_SUB(NOW(), INTERVAL 3 DAY)`,
+        queryParams
       );
       const expiredImages = expired as any[];
 
       let cosDeleted = 0;
       for (const img of expiredImages) {
         const url = img.image_url;
-        if (url && (url.includes(process.env.COS_PUBLIC_URL || '') || url.includes(''))) {
+        if (url && process.env.COS_PUBLIC_URL && url.includes(process.env.COS_PUBLIC_URL)) {
           try {
             const key = url.replace(process.env.COS_PUBLIC_URL + '/', '');
             await cosClient.send(new DeleteObjectCommand({
@@ -5072,8 +5730,8 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
       }
 
       const [result] = await pool.execute(
-        `DELETE FROM generated_images WHERE user_id = ? AND created_at < DATE_SUB(NOW(), INTERVAL 3 DAY)`,
-        [userId]
+        `DELETE FROM generated_images WHERE ${userCondition} AND created_at < DATE_SUB(NOW(), INTERVAL 3 DAY)`,
+        queryParams
       );
 
       const deletedCount = (result as any).affectedRows;
@@ -5113,25 +5771,19 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
 
     // 根据模型选择不同的 API 密钥和扣费
     const isGptImage2 = model === 'gpt-image-2';
-    const isSeedream = model === 'seedream';
     const apiModel = isGptImage2
       ? 'gpt-image-2'
-      : isSeedream
-        ? 'seedream-5.0'
-        : (model === 'nanobann2' ? 'gemini-3.1-flash-image-preview' : (model || 'gemini-3.1-flash-image-preview'));
+      : ((model === 'nanobann2' || model === 'nano') ? 'gemini-3.1-flash-image-preview' : (model || 'gemini-3.1-flash-image-preview'));
 
     const API_KEY = isGptImage2
       ? (process.env.IMAGE_GEN_API_KEY_1 || '')
-      : isSeedream
-        ? (process.env.XG_API_KEY || '')
-        : (process.env.IMAGE_GEN_API_KEY_2 || '');
+      : (process.env.IMAGE_GEN_API_KEY_2 || '');
 
     console.log('📤 Image generation request:', {
       userId,
       parentUserId,
       model: apiModel,
       isGptImage2,
-      isSeedream,
       aspectRatio,
       resolution,
       promptLength: prompt?.length
@@ -5139,7 +5791,7 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
 
     try {
       // 从数据库获取价格（考虑代理自定义定价）
-      const pricingKey = isGptImage2 ? 'gpt_image2_generation' : isSeedream ? 'seedream_generation' : 'nanobann2_generation';
+      const pricingKey = isGptImage2 ? 'gpt_image2_generation' : 'nanobann2_generation';
       const COST = await getUserEffectivePricing(parentUserId, pricingKey);
       console.log('💰 COST DEBUG:', { pricingKey, COST, isGptImage2, parentUserId });
 
@@ -5182,12 +5834,7 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
       };
 
       if (aspectRatio && aspectRatio !== '智能' && aspectRatio !== 'auto') {
-        if (isSeedream) {
-          // seedream: 用 quality 控制分辨率，不传 size（避免冲突）
-          payload.aspect_ratio = aspectRatio;
-          payload.quality = resolution?.toLowerCase() === '4k' ? '4k' : resolution?.toLowerCase() === '2k' ? '2k' : '1k';
-          payload.response_format = 'url';
-        } else if (isGptImage2) {
+        if (isGptImage2) {
           // gpt-image-2: aspect_ratio + 按分辨率缩放 size
           payload.aspect_ratio = aspectRatio;
           payload.size = getScaledSize(aspectRatio);
@@ -5213,7 +5860,7 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
       } catch (e) { console.log('generations failed:', e.message); }
 
       // fallback: chat completions（只取1张）
-      if (rawImageUrls.length === 0 && !isGptImage2 && !isSeedream) {
+      if (rawImageUrls.length === 0 && !isGptImage2) {
         try {
           const chatPayload = {
             model: apiModel,
@@ -5238,50 +5885,64 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
 
       if (rawImageUrls.length === 0) return res.status(500).json({ error: '图片生成失败，未获取到图片URL' });
 
-      // ★ 先扣费再返回（按实际生成的图片张数）
+      // ★★★ 同步下载图片、上传COS、写库，返回COS URL ★★★
       const actualCost = COST * rawImageUrls.length;
-      const modelLabel = isSeedream ? '(Seedream)' : isGptImage2 ? '(GPT-Image2)' : '';
-      await creditTransactionDb.deduct(parentUserId, actualCost, 'generate', `图片生成${modelLabel}${rawImageUrls.length > 1 ? `(x${rawImageUrls.length})` : ''}${req.user.isSubUser ? '(子账号)' : ''}`, parentUserId, subUserId);
-      await handleConsumptionCommission(parentUserId, actualCost, 'consume', pricingKey);
-      const updatedUser = await userDb.findById(parentUserId);
-
-      // ★ 同步写库：立即把 API URL 写入 generated_images（type=chatgen），用户刷新不会丢
-      for (const rawUrl of rawImageUrls) {
-        await generatedImagesDb.create(userId, rawUrl, prompt, {
-          model: apiModel, aspectRatio: aspectRatio || '智能', resolution: resolution || '1K',
-          type: 'chatgen', parentUserId: subUserId ? parentUserId : undefined
-        }).catch(err => console.error('同步写库失败:', err));
-      }
-
-      // ★ 立即返回 API 原始 URL（用户先看到图片）
-      res.json({
-        data: rawImageUrls.map(url => ({ url })),
-        remainingCredits: updatedUser?.credits || 0
-      });
-
-      // ★ 后台异步：并行下载 + 上传 COS，然后更新 DB 中的 URL
-      (async () => {
-        try {
-          await Promise.all(rawImageUrls.map(async (rawUrl) => {
+      const modelLabel = isGptImage2 ? '(GPT-Image2)' : '';
+      let cosUrls: string[] = [];
+      try {
+        cosUrls = await Promise.all(rawImageUrls.map(async (rawUrl: string) => {
+          for (let attempt = 1; attempt <= 3; attempt++) {
             try {
               const ir = await axios.get(rawUrl, { responseType: 'arraybuffer', timeout: 30000,
                 headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://softhooky.com/', 'Accept': 'image/*' }, maxRedirects: 5 });
               const imageBuffer = Buffer.from(ir.data);
-              const cosUrl = await uploadToCosWithRetry(imageBuffer, getExtensionFromUrl(rawUrl), parentUserId, subUserId);
-              // 将 DB 中的 API URL 替换为 COS URL
-              await pool.execute(
-                'UPDATE generated_images SET image_url = ? WHERE user_id = ? AND image_url = ? AND type = ?',
-                [cosUrl, userId, rawUrl, 'chatgen']
-              );
-            } catch (err) {
-              console.error('异步上传COS失败:', err);
+              proxyImageCache.set(rawUrl, { buffer: imageBuffer, contentType: String(ir.headers['content-type']) || 'image/png', timestamp: Date.now() });
+              return await uploadToCosWithRetry(imageBuffer, getExtensionFromUrl(rawUrl), parentUserId, subUserId);
+            } catch (err: any) {
+              console.error(`下载+COS上传失败(尝试${attempt}/3):`, err.message);
+              if (attempt < 3) await new Promise(r => setTimeout(r, 2000 * attempt));
+              if (attempt === 3) throw err;
             }
-          }));
-          console.log('✅ 异步COS上传完成');
-        } catch (err) {
-          console.error('异步COS上传异常:', err);
+          }
+          throw new Error('COS上传全部失败');
+        }));
+      } catch (err: any) {
+        console.error('COS上传失败，返回临时URL兜底:', err.message);
+        cosUrls = rawImageUrls; // 兜底：返回临时URL
+      }
+
+      // 同步写库（用COS URL）
+      async function saveWithRetry(url: string, retries = 2) {
+        for (let attempt = 0; attempt <= retries; attempt++) {
+          try {
+            return await generatedImagesDb.create(userId, url, prompt, {
+              model: normalizeModelForDisplay(model || 'nanobann2'), aspectRatio: aspectRatio || '智能', resolution: resolution || '1K',
+              type: 'chatgen', parentUserId: subUserId ? parentUserId : undefined
+            });
+          } catch (err: any) {
+            console.error(`写库失败(尝试${attempt + 1}/${retries + 1}):`, err.message);
+            if (attempt < retries) await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+          }
         }
-      })();
+      }
+      await Promise.all(cosUrls.map(url => saveWithRetry(url))).catch(err => console.error('批量写库失败:', err));
+
+      // 同步扣费 + 佣金（先扣费再返回结果，防止白嫖）
+      const deductResult = await creditTransactionDb.deduct(parentUserId, actualCost, 'generate',
+        `图片生成${modelLabel}${rawImageUrls.length > 1 ? `(x${rawImageUrls.length})` : ''}${req.user.isSubUser ? '(子账号)' : ''}`,
+        parentUserId, subUserId
+      );
+      if (!deductResult.success) {
+        console.error('❌ 扣费失败:', deductResult.message);
+        return res.status(400).json({ error: '扣费失败: ' + deductResult.message });
+      }
+      await handleConsumptionCommission(parentUserId, actualCost, 'consume', pricingKey);
+
+      // 返回COS URL（含真实剩余积分）
+      res.json({
+        data: cosUrls.map(url => ({ url })),
+        remainingCredits: deductResult.credits || 0
+      });
     } catch (error: any) {
       console.error("Image generation error:", error.message);
       console.error("Error details:", {
@@ -5305,18 +5966,13 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
 
     // 根据模型选择不同的 API 密钥和扣费
     const isGptImage2 = model === 'gpt-image-2';
-    const isSeedream = model === 'seedream';
     const apiModel = isGptImage2
       ? 'gpt-image-2'
-      : isSeedream
-        ? 'seedream-5.0'
-        : (model === 'nanobann2' ? 'gemini-3.1-flash-image-preview' : (model || 'gemini-3.1-flash-image-preview'));
+      : ((model === 'nanobann2' || model === 'nano') ? 'gemini-3.1-flash-image-preview' : (model || 'gemini-3.1-flash-image-preview'));
 
     const API_KEY = isGptImage2
       ? (process.env.IMAGE_GEN_API_KEY_1 || '')
-      : isSeedream
-        ? (process.env.XG_API_KEY || '')
-        : (process.env.IMAGE_GEN_API_KEY_2 || '');
+      : (process.env.IMAGE_GEN_API_KEY_2 || '');
 
     console.log('📥 /api/images/edits request received!');
     const bodyForLog: any = { ...req.body };
@@ -5332,7 +5988,6 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
       imagesCount: images?.length,
       model: apiModel,
       isGptImage2,
-      isSeedream,
       size,
       quality,
       aspectRatio
@@ -5345,9 +6000,9 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
 
     try {
       // 从数据库获取价格（考虑代理自定义定价）
-      const pricingKey = isGptImage2 ? 'gpt_image2_edit' : isSeedream ? 'seedream_edit' : 'nanobann2_edit';
+      const pricingKey = isGptImage2 ? 'gpt_image2_edit' : 'nanobann2_edit';
       const COST = await getUserEffectivePricing(parentUserId, pricingKey);
-      console.log('💰 EDIT COST DEBUG:', { pricingKey, COST, isGptImage2, isSeedream, parentUserId });
+      console.log('💰 EDIT COST DEBUG:', { pricingKey, COST, isGptImage2, parentUserId });
 
       const mainUser = await userDb.findById(parentUserId);
       
@@ -5429,8 +6084,8 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
 
       for (let retryCount = 0; retryCount <= maxRetries; retryCount++) {
         try {
-          if (apiModel === 'gpt-image-2' || apiModel === 'seedream-5.0') {
-            // gpt-image-2 / seedream: 使用 images/edits API (FormData 方式上传)
+          if (apiModel === 'gpt-image-2') {
+            // gpt-image-2: 使用 images/edits API (FormData 方式上传)
             const editFormData = new FormData();
             editFormData.append('model', apiModel);
             editFormData.append('prompt', prompt);
@@ -5455,15 +6110,9 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
 
             if (aspectRatio && aspectRatio !== '智能' && aspectRatio !== 'auto') {
               editFormData.append('aspect_ratio', aspectRatio);
-              if (isSeedream) {
-                // seedream: quality 控制分辨率，不传 size
-                editFormData.append('quality', quality || '1k');
-                editFormData.append('response_format', 'url');
-              } else {
-                // gpt-image-2: 按分辨率缩放 size
-                const base = editSizeMap[aspectRatio] || { w: 1024, h: 1024 };
-                editFormData.append('size', `${base.w * editResScale}x${base.h * editResScale}`);
-              }
+              // gpt-image-2: 按分辨率缩放 size
+              const base = editSizeMap[aspectRatio] || { w: 1024, h: 1024 };
+              editFormData.append('size', `${base.w * editResScale}x${base.h * editResScale}`);
             }
 
             if (retryCount === 0) {
@@ -5628,31 +6277,12 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
         return res.status(500).json({ error: '图片编辑成功但未获取到图片URL，请重试' });
       }
 
-      // ★ 先扣费再返回
-      const modelLabel = isSeedream ? '(Seedream)' : isGptImage2 ? '(GPT-Image2)' : '';
-      await creditTransactionDb.deduct(parentUserId, COST, 'edit', `图片编辑${modelLabel}${req.user.isSubUser ? '(子账号)' : ''}`, parentUserId, subUserId);
-      await handleConsumptionCommission(parentUserId, COST, 'consume', pricingKey);
-      const updatedUser = await userDb.findById(parentUserId);
-
-      // ★ 同步写库：先把 API URL 写入 DB，防刷新丢失
-      const editType = isSeedream ? 'chatgen' : 'edited';
-      for (const rawUrl of rawUrls) {
-        await generatedImagesDb.create(userId, rawUrl, prompt, {
-          model: apiModel, aspectRatio: aspectRatio || '智能', resolution: '1K',
-          type: editType, parentUserId: subUserId ? parentUserId : undefined
-        }).catch(err => console.error('同步写库失败(edits):', err));
-      }
-
-      // ★ 立即返回 API 原始 URL
-      res.json({
-        data: rawUrls.map(url => ({ url })),
-        remainingCredits: updatedUser?.credits || 0
-      });
-
-      // ★ 后台异步：并行下载 + 上传 COS，然后更新 DB 中的 URL
-      (async () => {
-        try {
-          await Promise.all(rawUrls.map(async (rawUrl: string) => {
+      // ★★★ 同步下载图片、上传COS、写库，返回COS URL ★★★
+      const modelLabel = isGptImage2 ? '(GPT-Image2)' : '';
+      let cosUrls: string[] = [];
+      try {
+        cosUrls = await Promise.all(rawUrls.map(async (rawUrl: string) => {
+          for (let attempt = 1; attempt <= 3; attempt++) {
             try {
               const ir = await axios.get(rawUrl, {
                 responseType: 'arraybuffer', timeout: 30000,
@@ -5664,20 +6294,52 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
                 }, maxRedirects: 5
               });
               const imageBuffer = Buffer.from(ir.data);
-              const cosUrl = await uploadToCosWithRetry(imageBuffer, getExtensionFromUrl(rawUrl), parentUserId, subUserId);
-              await pool.execute(
-                'UPDATE generated_images SET image_url = ? WHERE user_id = ? AND image_url = ? AND type = ?',
-                [cosUrl, userId, rawUrl, editType]
-              );
-            } catch (err) {
-              console.error('异步上传COS失败(edits):', err);
+              proxyImageCache.set(rawUrl, { buffer: imageBuffer, contentType: String(ir.headers['content-type']) || 'image/png', timestamp: Date.now() });
+              return await uploadToCosWithRetry(imageBuffer, getExtensionFromUrl(rawUrl), parentUserId, subUserId);
+            } catch (err: any) {
+              console.error(`下载+COS上传失败(edits)(尝试${attempt}/3):`, err.message);
+              if (attempt < 3) await new Promise(r => setTimeout(r, 2000 * attempt));
+              if (attempt === 3) throw err;
             }
-          }));
-          console.log('✅ 编辑图片异步COS上传完成');
-        } catch (err) {
-          console.error('异步COS上传异常(edits):', err);
+          }
+          throw new Error('COS上传全部失败');
+        }));
+      } catch (err: any) {
+        console.error('COS上传失败(edits)，返回临时URL兜底:', err.message);
+        cosUrls = rawUrls; // 兜底：返回临时URL
+      }
+
+      // 同步写库（用COS URL）
+      async function saveEditWithRetry(url: string, retries = 2) {
+        for (let attempt = 0; attempt <= retries; attempt++) {
+          try {
+            return await generatedImagesDb.create(userId, url, prompt, {
+              model: normalizeModelForDisplay(model || 'nanobann2'), aspectRatio: aspectRatio || '智能', resolution: '1K',
+              type: 'chatgen', parentUserId: subUserId ? parentUserId : undefined
+            });
+          } catch (err: any) {
+            console.error(`写库失败(edits)(尝试${attempt + 1}/${retries + 1}):`, err.message);
+            if (attempt < retries) await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+          }
         }
-      })();
+      }
+      await Promise.all(cosUrls.map(url => saveEditWithRetry(url))).catch(err => console.error('批量写库失败(edits):', err));
+
+      // 按实际返回图片张数收费（与 generations 一致）
+      const actualEditCost = COST * rawUrls.length;
+
+      // 同步扣费 + 佣金（先扣费再返回结果，防止白嫖）
+      const deductResult = await creditTransactionDb.deduct(parentUserId, actualEditCost, 'edit',
+        `图片编辑${modelLabel}${req.user.isSubUser ? '(子账号)' : ''}`, parentUserId, subUserId
+      );
+      if (!deductResult.success) {
+        console.error('❌ 扣费失败(edits):', deductResult.message);
+        return res.status(400).json({ error: '扣费失败: ' + deductResult.message });
+      }
+      await handleConsumptionCommission(parentUserId, actualEditCost, 'consume', pricingKey);
+
+      // 返回COS URL（含真实剩余积分）
+      res.json({ data: cosUrls.map(url => ({ url })), remainingCredits: deductResult.credits || 0 });
     } catch (error: any) {
       console.error("Image edit error:", error.message);
       console.error("Error stack:", error.stack);
@@ -5697,6 +6359,62 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
       }
       
       res.status(error.response?.status || 500).json({ error: errorMessage });
+    }
+  });
+
+  // ==================== 图片代理：加载外部图片绕过防盗链 ====================
+  // 支持 OPTIONS 预检请求（canvas 跨域使用）
+  app.all("/api/images/proxy", async (req, res) => {
+    // 统一设置 CORS 头部（对所有方法生效）
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', '*');
+    res.setHeader('Access-Control-Max-Age', '86400');
+
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(204);
+    }
+
+    const imageUrl = req.query.url as string;
+    if (!imageUrl) {
+      return res.status(400).json({ error: "Missing url parameter" });
+    }
+
+    // 安全检查：只允许 HTTP/HTTPS URL
+    if (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
+      return res.status(400).json({ error: "Invalid url" });
+    }
+
+    // 优先从缓存取
+    const cached = proxyImageCache.get(imageUrl);
+    if (cached && Date.now() - cached.timestamp < PROXY_CACHE_TTL) {
+      res.setHeader('Content-Type', cached.contentType);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.send(cached.buffer);
+    }
+
+    try {
+      const response = await axios.get(imageUrl, {
+        responseType: 'arraybuffer',
+        timeout: 30000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Referer': 'https://softhooky.com/',
+          'Accept': 'image/*,*/*',
+        },
+        maxRedirects: 5,
+      });
+
+      const contentType = String(response.headers['content-type'] || 'image/png');
+      const buffer = Buffer.from(response.data);
+      // 回写入缓存
+      proxyImageCache.set(imageUrl, { buffer, contentType, timestamp: Date.now() });
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      res.send(buffer);
+    } catch (err: any) {
+      console.error('图片代理失败:', err.message);
+      res.status(502).json({ error: 'Failed to proxy image' });
     }
   });
 
@@ -5757,18 +6475,15 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
       if (response.data && response.data.length > 0) {
         const generatedUrl = response.data[0].url;
 
-        // 扣除积分（从主账号扣除）
-        try {
-          await creditTransactionDb.deduct(parentUserId, COST, 'product_fusion', `产品融图-${scene}${req.user.isSubUser ? '(子账号)' : ''}`, parentUserId, subUserId);
-
-          // 代理佣金
-          await handleConsumptionCommission(parentUserId, COST, 'consume', 'nanobann2_generation');
-        } catch (deductError: any) {
-          console.error('扣除积分失败:', deductError.message);
+        // 扣除积分（从主账号扣除）— 扣费失败则阻断返回
+        const deductResult = await creditTransactionDb.deduct(parentUserId, COST, 'product_fusion', `产品融图-${scene}${req.user.isSubUser ? '(子账号)' : ''}`, parentUserId, subUserId);
+        if (!deductResult.success) {
+          return res.status(400).json({ error: '扣费失败: ' + (deductResult.message || '') });
         }
 
-        // 获取最新积分
-        const updatedUser = await userDb.findById(parentUserId);
+        // 代理佣金
+        await handleConsumptionCommission(parentUserId, COST, 'consume', 'product_fusion');
+        const updatedCredits = deductResult.credits || 0;
 
         // 立即返回临时URL，异步上传到COS
         (async () => {
@@ -5789,7 +6504,7 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
 
             // 先保存临时URL到数据库
             await generatedImagesDb.create(userId, generatedUrl, `产品融图-${scene}`, {
-              model: 'gemini-3.1-flash-image-preview',
+              model: 'nano',
               aspectRatio: aspectRatio || '3:4',
               type: 'generated',
               parentUserId: subUserId ? parentUserId : undefined
@@ -5800,7 +6515,7 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
             if (updatedRows === 0) {
               console.warn(`⚠️ 产品融图临时URL记录更新失败，创建新记录`);
               await generatedImagesDb.create(userId, generatedUrl, `产品融图-${scene}`, {
-                model: 'gemini-3.1-flash-image-preview',
+                model: 'nano',
                 aspectRatio: aspectRatio || '3:4',
                 type: 'generated',
                 parentUserId: subUserId ? parentUserId : undefined
@@ -5812,7 +6527,7 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
             // 保存临时URL到数据库
             try {
               await generatedImagesDb.create(userId, generatedUrl, `产品融图-${scene}`, {
-                model: 'gemini-3.1-flash-image-preview',
+                model: 'nano',
                 aspectRatio: aspectRatio || '3:4',
                 type: 'generated',
                 parentUserId: subUserId ? parentUserId : undefined
@@ -5827,7 +6542,7 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
           success: true,
           imageUrl: generatedUrl,
           prompt: fusionPrompt,
-          remainingCredits: updatedUser?.credits || 0
+          remainingCredits: updatedCredits
         });
       } else {
         return res.status(500).json({ error: "生成失败，未返回图片" });
@@ -6073,61 +6788,6 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
     }
   });
 
-  // ==================== 代理下载图片（解决CORS问题） ====================
-  app.get("/api/images/proxy", async (req: any, res: any) => {
-    const { url } = req.query;
-    
-    if (!url) {
-      return res.status(400).json({ error: "url parameter is required" });
-    }
-
-    try {
-      console.log('🌐 代理下载图片:', url.substring(0, 100));
-      
-      const imageResponse = await axios.get(url, { 
-        responseType: 'arraybuffer',
-        timeout: 60000,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
-          'Referer': 'https://softhooky.com/',
-          'Cache-Control': 'no-cache'
-        },
-        validateStatus: (status) => status < 500 // Allow 404, 403 etc to be handled
-      });
-      
-      if (imageResponse.status !== 200) {
-        console.error(`❌ 源服务器返回错误状态: ${imageResponse.status}`);
-        return res.status(imageResponse.status).json({ 
-          error: `Source returned ${imageResponse.status}`,
-          url: url.substring(0, 100)
-        });
-      }
-      
-      const contentType = imageResponse.headers['content-type'] || 'image/png';
-      res.set('Content-Type', contentType);
-      res.set('Access-Control-Allow-Origin', '*');
-      res.set('Cache-Control', 'public, max-age=3600');
-      res.send(imageResponse.data);
-      
-      console.log('✅ 代理下载成功:', url.substring(0, 50), 'Size:', imageResponse.data?.length);
-    } catch (error: any) {
-      console.error("❌ 代理下载失败:", error.message);
-      console.error("URL:", url?.substring(0, 100));
-      
-      if (error.response) {
-        console.error("响应状态:", error.response.status);
-        console.error("响应头:", error.response.headers);
-      }
-      
-      res.status(500).json({ 
-        error: "Failed to download image", 
-        details: error.message,
-        url: url?.substring(0, 100)
-      });
-    }
-  });
-
   // ==================== PDF文件上传接口 ====================
   app.post("/api/upload/pdf", authMiddleware, async (req: any, res) => {
     try {
@@ -6249,7 +6909,7 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
             [chatUserId, -chatCredits, 'consumption', `AI文案对话(${model})`]
           );
           // 代理佣金
-          await handleConsumptionCommission(chatUserId, geminiCredits, 'consume', 'deepseek_chat');
+          await handleConsumptionCommission(chatUserId, chatCredits, 'consume', 'deepseek_chat');
         }
       } catch (creditError) {
         console.error('扣除积分失败:', creditError);
@@ -6461,7 +7121,63 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
     }
   });
 
-  // ==================== 优惠券管理 API ====================
+  // ==================== OAuth 第三方登录配置 API ====================
+
+  // 获取 OAuth 配置
+  app.get("/api/admin/oauth-config", adminMiddleware, async (req, res) => {
+    try {
+      const [rows]: any = await pool.execute('SELECT * FROM oauth_config WHERE id = 1');
+      if (rows && rows.length > 0) {
+        const config = rows[0];
+        if (typeof config.platforms === 'string') {
+          try { config.platforms = JSON.parse(config.platforms); } catch { config.platforms = {}; }
+        }
+        res.json({ success: true, data: config });
+      } else {
+        res.json({ success: true, data: {
+          qauth_api: 'https://api.qauth.cn',
+          qauth_appkey: '',
+          qauth_user_secret: '',
+          qauth_auto_register: 1,
+          qauth_state_check: 1,
+          platforms: {}
+        }});
+      }
+    } catch (error: any) {
+      console.error('获取OAuth配置失败:', error);
+      res.status(500).json({ success: false, message: '获取OAuth配置失败' });
+    }
+  });
+
+  // 更新 OAuth 配置
+  app.put("/api/admin/oauth-config", adminMiddleware, async (req, res) => {
+    try {
+      const { qauth_api, qauth_appkey, qauth_user_secret, qauth_auto_register, qauth_state_check, platforms } = req.body;
+      const updates: string[] = [];
+      const params: any[] = [];
+
+      if (qauth_api !== undefined) { updates.push('qauth_api = ?'); params.push(qauth_api); }
+      if (qauth_appkey !== undefined) { updates.push('qauth_appkey = ?'); params.push(qauth_appkey); }
+      if (qauth_user_secret !== undefined) { updates.push('qauth_user_secret = ?'); params.push(qauth_user_secret); }
+      if (qauth_auto_register !== undefined) { updates.push('qauth_auto_register = ?'); params.push(qauth_auto_register ? 1 : 0); }
+      if (qauth_state_check !== undefined) { updates.push('qauth_state_check = ?'); params.push(qauth_state_check ? 1 : 0); }
+      if (platforms !== undefined) { updates.push('platforms = ?'); params.push(typeof platforms === 'string' ? platforms : JSON.stringify(platforms)); }
+
+      if (updates.length === 0) {
+        return res.status(400).json({ success: false, message: '没有需要更新的字段' });
+      }
+
+      params.push(1);
+      await pool.execute(`UPDATE oauth_config SET ${updates.join(', ')} WHERE id = ?`, params);
+
+      res.json({ success: true, message: 'OAuth配置保存成功' });
+    } catch (error: any) {
+      console.error('更新OAuth配置失败:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  });
+
+  // ==================== 优惠券管理 API ===================
 
   // 创建优惠券
   app.post("/api/admin/coupons", adminMiddleware, async (req: any, res) => {
@@ -6694,7 +7410,7 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
       const ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
       const buffer = Buffer.from(matches[2], 'base64');
       // 上传到 COS
-      const url = await uploadToCosWithRetry(buffer, ext);
+      const url = await uploadToCosWithRetry(buffer, ext, req.user.id);
       // 更新数据库
       await withdrawDb.updateProof(id, url);
       res.json({ success: true, url, message: '凭证上传成功' });
@@ -6712,6 +7428,108 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
       res.json({ success: true, message: '凭证已删除' });
     } catch (error: any) {
       res.status(500).json({ success: false, message: '删除失败' });
+    }
+  });
+
+  // ==================== 模特库管理 API ====================
+
+  // 获取模特列表
+  app.get("/api/admin/model-library", adminMiddleware, async (req: any, res) => {
+    try {
+      const gender = req.query.gender as string;
+      if (!gender || !['female', 'male'].includes(gender)) {
+        return res.status(400).json({ success: false, message: '请指定性别参数 (female/male)' });
+      }
+      const [rows] = await pool.execute(
+        'SELECT id, name, gender, image_url, created_at FROM model_library WHERE gender = ? ORDER BY created_at DESC',
+        [gender]
+      );
+      res.json({ success: true, data: rows });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  });
+
+  // 上传模特图片
+  app.post("/api/admin/model-library/upload", adminMiddleware, async (req: any, res) => {
+    try {
+      const { name, gender, imageBase64 } = req.body;
+      if (!name || !gender || !imageBase64) {
+        return res.status(400).json({ success: false, message: '缺少必要参数' });
+      }
+      if (!['female', 'male'].includes(gender)) {
+        return res.status(400).json({ success: false, message: '性别参数错误' });
+      }
+
+      const matches = imageBase64.match(/^data:image\/(png|jpeg|jpg|gif|webp);base64,(.+)$/);
+      if (!matches) {
+        return res.status(400).json({ success: false, message: '图片格式不正确' });
+      }
+      const ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
+      const buffer = Buffer.from(matches[2], 'base64');
+
+      const now = new Date();
+      const year = now.getFullYear().toString();
+      const month = (now.getMonth() + 1).toString().padStart(2, '0');
+      const timestamp = Date.now();
+      const randomStr = Math.random().toString(36).substring(2, 8);
+      const key = `model-library/${gender}/${year}/${month}/${timestamp}-${randomStr}.${ext}`;
+
+      const command = new PutObjectCommand({
+        Bucket: process.env.COS_BUCKET!,
+        Key: key,
+        Body: buffer,
+        ContentType: `image/${ext}`,
+      });
+      await cosClient.send(command);
+
+      const imageUrl = `${process.env.COS_PUBLIC_URL}/${key}`;
+
+      const [result] = await pool.execute(
+        'INSERT INTO model_library (name, gender, image_url, cos_key) VALUES (?, ?, ?, ?)',
+        [name, gender, imageUrl, key]
+      );
+
+      res.json({
+        success: true,
+        id: (result as any).insertId,
+        name,
+        gender,
+        image_url: imageUrl,
+        message: '上传成功'
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  });
+
+  // 删除模特
+  app.delete("/api/admin/model-library/:id", adminMiddleware, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [rows] = await pool.execute('SELECT * FROM model_library WHERE id = ?', [id]);
+      const model = (rows as any[])[0];
+      if (!model) {
+        return res.status(404).json({ success: false, message: '模特不存在' });
+      }
+
+      // 从COS删除
+      try {
+        const deleteCommand = new DeleteObjectCommand({
+          Bucket: process.env.COS_BUCKET!,
+          Key: model.cos_key,
+        });
+        await cosClient.send(deleteCommand);
+      } catch (cosErr: any) {
+        console.error('COS删除失败:', cosErr.message);
+      }
+
+      // 从数据库删除
+      await pool.execute('DELETE FROM model_library WHERE id = ?', [id]);
+
+      res.json({ success: true, message: '删除成功' });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
     }
   });
 
@@ -6884,7 +7702,8 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
 
       const [rows] = await pool.execute('SELECT state_data FROM canvas_states WHERE user_id = ?', [userId]);
       if (Array.isArray(rows) && rows.length > 0) {
-        const stateData = typeof rows[0].state_data === 'string' ? JSON.parse(rows[0].state_data) : rows[0].state_data;
+        const row = rows[0] as any;
+        const stateData = typeof row.state_data === 'string' ? JSON.parse(row.state_data) : row.state_data;
         res.json({ success: true, data: stateData });
       } else {
         res.json({ success: true, data: null });
@@ -6945,7 +7764,8 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
       } catch {}
       const [rows] = await pool.execute('SELECT state_data FROM canvas_plugin_states WHERE user_id = ? AND plugin_id = ?', [userId, pluginId]);
       if (Array.isArray(rows) && rows.length > 0) {
-        const stateData = typeof rows[0].state_data === 'string' ? JSON.parse(rows[0].state_data) : rows[0].state_data;
+        const row = rows[0] as any;
+        const stateData = typeof row.state_data === 'string' ? JSON.parse(row.state_data) : row.state_data;
         res.json({ success: true, data: stateData });
       } else {
         res.json({ success: true, data: null });
@@ -6957,29 +7777,99 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
   });
 
   // 应用版本检测（用于PakePlus等桌面端检测更新）
+  let cachedAppVersion: string | null = null;
+  function getAppVersion(): string {
+    if (!cachedAppVersion) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf-8'));
+        cachedAppVersion = pkg.version || '1.0.0';
+      } catch {
+        cachedAppVersion = '1.0.0';
+      }
+    }
+    return cachedAppVersion;
+  }
   app.get("/api/app/version", async (req, res) => {
-    res.json({ success: true, version: SERVER_START_TIME, node: process.version });
+    res.json({ success: true, version: getAppVersion(), node: process.version, buildTime: SERVER_START_TIME });
   });
 
-  // 图片代理：解决COS跨域问题（用于canvas合并长图等场景）
-  app.get("/api/images/proxy", async (req, res) => {
+  // ==================== Tauri 自动更新接口 ====================
+  app.get("/api/tauri/update", async (req, res) => {
     try {
-      const imageUrl = req.query.url as string;
-      if (!imageUrl) return res.status(400).json({ success: false, error: '缺少url参数' });
+      const currentVersion = getAppVersion();
+      const platform = req.query.platform as string; // darwin-aarch64, darwin-x86_64, windows-x86_64
+      const arch = req.query.arch as string;
+      const host = req.headers.host || '43.161.228.92:3001';
+      const protocol = 'http';
+      const baseUrl = `${protocol}://${host}`;
 
-      const response = await axios.get(imageUrl, {
-        responseType: 'stream',
-        timeout: 30000,
+      // 读取更新清单文件
+      const updateDir = path.join(process.cwd(), 'deploy', 'updates');
+      const manifestPath = path.join(updateDir, 'update-manifest.json');
+
+      if (!fs.existsSync(manifestPath)) {
+        return res.status(200).json({ status: 'upToDate' });
+      }
+
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+      const latestVersion = manifest.version;
+
+      // 版本比较
+      const currentParts = currentVersion.split('.').map(Number);
+      const latestParts = latestVersion.split('.').map(Number);
+      let hasUpdate = false;
+      for (let i = 0; i < 3; i++) {
+        if ((latestParts[i] || 0) > (currentParts[i] || 0)) { hasUpdate = true; break; }
+        if ((latestParts[i] || 0) < (currentParts[i] || 0)) break;
+      }
+
+      if (!hasUpdate) {
+        return res.status(200).json({ status: 'upToDate' });
+      }
+
+      // 根据平台确定安装包文件名
+      let installerUrl = '';
+      let installerSize = 0;
+      let signature = '';
+
+      if (platform?.includes('darwin')) {
+        installerUrl = manifest.dmgUrl || `${baseUrl}/updates/${manifest.dmgFile || 'Softhooky.dmg'}`;
+        installerSize = manifest.dmgSize || 0;
+      } else if (platform?.includes('windows')) {
+        installerUrl = manifest.nsisUrl || `${baseUrl}/updates/${manifest.nsisFile || 'Softhooky_x64-setup.exe'}`;
+        installerSize = manifest.nsisSize || 0;
+      }
+
+      res.status(200).json({
+        status: 'available',
+        version: latestVersion,
+        notes: manifest.notes || '新版本更新',
+        pub_date: manifest.pubDate || new Date().toISOString(),
+        platforms: {
+          [platform || (process.platform === 'darwin' ? 'darwin-aarch64' : 'windows-x86_64')]: {
+            signature: signature,
+            url: installerUrl,
+            size: installerSize
+          }
+        }
       });
+    } catch (error) {
+      console.error('Tauri update check error:', error);
+      res.status(200).json({ status: 'upToDate' });
+    }
+  });
 
-      const contentType = response.headers['content-type'] || 'image/png';
-      res.setHeader('Content-Type', contentType);
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Cache-Control', 'public, max-age=86400');
-      response.data.pipe(res);
-    } catch (error: any) {
-      console.error('图片代理失败:', error.message);
-      res.status(500).json({ success: false, error: '图片代理失败' });
+  // Tauri 更新文件下载接口
+  app.get("/updates/:filename", async (req, res) => {
+    try {
+      const filename = req.params.filename;
+      const filePath = path.join(process.cwd(), 'deploy', 'updates', filename);
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: 'File not found' });
+      }
+      res.download(filePath);
+    } catch (error) {
+      res.status(500).json({ error: 'Download failed' });
     }
   });
 
@@ -7025,7 +7915,7 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
       console.log('[chat/images] Loading images for user:', userId);
       const [rows] = await pool.execute(
         `SELECT image_url, prompt, model, aspect_ratio, created_at, type FROM generated_images
-         WHERE user_id = ? AND type = 'chatgen' AND (expires_at IS NULL OR expires_at > NOW())
+         WHERE user_id = ? AND (type = 'chatgen' OR type = 'generated') AND (expires_at IS NULL OR expires_at > NOW())
          ORDER BY created_at DESC LIMIT 200`,
         [userId]
       );
@@ -7077,7 +7967,7 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
         return res.status(400).json({ error: `积分不足，需要 ${totalCost} 积分，当前 ${mainUser?.credits || 0} 积分` });
       }
 
-      const VEO_API_KEY = process.env.VEO_API_KEY || 'sk-r5Clizar6aV39YsxLbHR3rW209LqmnYa5fLT1iePRBtfZT47';
+      const VEO_API_KEY = process.env.VEO_API_KEY || '';
       let taskIds: string[] = [];
 
       if (images && Array.isArray(images) && images.length > 0 && images.some(Boolean)) {
@@ -7166,7 +8056,7 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
   app.get("/api/video/seedance/status/:taskId", authMiddleware, async (req: any, res: any) => {
     const { taskId } = req.params;
     try {
-      const VEO_API_KEY = process.env.VEO_API_KEY || 'sk-r5Clizar6aV39YsxLbHR3rW209LqmnYa5fLT1iePRBtfZT47';
+      const VEO_API_KEY = process.env.VEO_API_KEY || '';
       // 优先使用 video/generations 查询（带结果地址）
       let resp;
       try {
@@ -7197,42 +8087,102 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
     }
   });
 
-  // ==================== 图片元素切割与PSD生成 ====================
-  // 将图片中的独立元素（文字、图形等）分割提取，用于生成PSD分层文件
-  app.post("/api/images/split-to-psd", authMiddleware, async (req: any, res: any) => {
+  // ==================== 工作流 API ====================
+  app.get("/api/workflows", authMiddleware, async (req: any, res) => {
     try {
-      const { imageUrl, topN = 40 } = req.body;
-      if (!imageUrl) {
-        return res.status(400).json({ success: false, message: '缺少图片URL' });
-      }
-
-      console.log('✂️ 开始切割图片元素:', imageUrl.substring(0, 80));
-
-      // 下载原图
-      const response = await axios.get(imageUrl, {
-        responseType: 'arraybuffer',
-        timeout: 60000,
-        headers: { 'User-Agent': 'Softhooky/1.0' },
-      });
-      const buffer = Buffer.from(response.data);
-
-      // 执行元素分割
-      const result = await splitImageElements(buffer, topN);
-
-      console.log(`✅ 图片切割完成: 共 ${result.elements.length} 个元素`);
-
-      res.json({ success: true, data: result });
+      const userId = req.user.isSubUser ? req.user.parentUserId : req.user.id;
+      const workflows = await workflowDb.getByUserId(userId);
+      const list = workflows.map((w: any) => ({
+        id: w.id,
+        name: w.name,
+        nodes: JSON.parse(w.nodes_json),
+        connections: JSON.parse(w.connections_json),
+        createdAt: w.created_at,
+        updatedAt: w.updated_at
+      }));
+      res.json({ success: true, data: list });
     } catch (error: any) {
-      console.error('❌ 图片元素切割失败:', error.message);
-      res.status(500).json({
-        success: false,
-        message: error.message || '图片元素切割失败',
-      });
+      console.error('Get workflows error:', error);
+      res.status(500).json({ success: false, message: '获取工作流列表失败' });
+    }
+  });
+
+  app.post("/api/workflows", authMiddleware, async (req: any, res) => {
+    try {
+      const userId = req.user.isSubUser ? req.user.parentUserId : req.user.id;
+      const { name, nodes, connections } = req.body;
+      const id = await workflowDb.create(
+        userId,
+        name || '未命名工作流',
+        JSON.stringify(nodes || '[]'),
+        JSON.stringify(connections || '[]')
+      );
+      res.json({ success: true, data: { id } });
+    } catch (error: any) {
+      console.error('Create workflow error:', error);
+      res.status(500).json({ success: false, message: '保存工作流失败' });
+    }
+  });
+
+  app.put("/api/workflows/:id", authMiddleware, async (req: any, res) => {
+    try {
+      const userId = req.user.isSubUser ? req.user.parentUserId : req.user.id;
+      const { id } = req.params;
+      const { name, nodes, connections } = req.body;
+      await workflowDb.update(
+        parseInt(id),
+        userId,
+        name || '未命名工作流',
+        JSON.stringify(nodes || '[]'),
+        JSON.stringify(connections || '[]')
+      );
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Update workflow error:', error);
+      res.status(500).json({ success: false, message: '更新工作流失败' });
+    }
+  });
+
+  app.delete("/api/workflows/:id", authMiddleware, async (req: any, res) => {
+    try {
+      const userId = req.user.isSubUser ? req.user.parentUserId : req.user.id;
+      const { id } = req.params;
+      await workflowDb.delete(parseInt(id), userId);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error('Delete workflow error:', error);
+      res.status(500).json({ success: false, message: '删除工作流失败' });
+    }
+  });
+
+  // Tauri 桌面端自动更新接口
+  app.get("/api/desktop/updates", async (req, res) => {
+    try {
+      const currentVersion = (req.query.current_version as string) || '0.0.0';
+      const fs = await import('fs');
+      const path = await import('path');
+      const updatesJsonPath = path.join(process.cwd(), 'updates', 'updates.json');
+      
+      if (!fs.existsSync(updatesJsonPath)) {
+        return res.json({
+          version: '1.1.0',
+          notes: '暂无更新',
+          pub_date: new Date().toISOString(),
+          platforms: {}
+        });
+      }
+      
+      const updatesData = JSON.parse(fs.readFileSync(updatesJsonPath, 'utf-8'));
+      res.json(updatesData);
+    } catch (error) {
+      console.error('Update check error:', error);
+      res.status(500).json({ success: false, message: '检查更新失败' });
     }
   });
 
   // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+  const hasFrontendSources = fs.existsSync("src/main.tsx");
+  if (process.env.NODE_ENV !== "production" && hasFrontendSources) {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true, hmr: false },
@@ -7244,19 +8194,63 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
     const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'upload');
     console.log('📁 Upload directory:', uploadDir);
     app.use("/upload", express.static(uploadDir));
+    const updatesDir = path.join(process.cwd(), 'updates');
+    app.use("/updates", express.static(updatesDir));
     app.use(compression());
-    app.use(express.static("dist", {
-      maxAge: '1y',
-      immutable: true,
-      setHeaders: (res, path) => {
-        if (path.endsWith('.html')) {
+
+    // OAuth 回调捕获（必须在静态文件前面，防止服务 index.html 拦截请求参数）
+    app.use(async (req, res, next) => {
+      const code = req.query.code as string;
+      const state = req.query.state as string;
+      if (!code || !state) return next();
+      try {
+        await handleOAuthCallback(code, state, req, res);
+      } catch (err) {
+        console.error('OAuth callback handling error:', err);
+        res.send(oauthCallbackHtml('OAuth 处理失败，请重试'));
+      }
+    });
+
+    const distPath = path.join(__dirname, 'dist');
+    app.use(express.static(distPath, {
+      maxAge: 0,
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html')) {
           res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         }
       },
     }));
-    app.get("*", (req, res) => {
+
+    // 下载落地页（包含 Deep Link 邀请码）
+    app.get("/download", (req, res) => {
+      const filePath = path.join(distPath, 'download.html');
+      if (fs.existsSync(filePath)) {
+        res.sendFile(filePath);
+      } else {
+        // 开发环境或文件不存在时，返回一个简单的页面
+        const code = req.query.code || '';
+        res.send(`
+          <!DOCTYPE html><html><head><meta charset="utf-8"><title>Softhooky 下载</title>
+          <meta name="viewport" content="width=device-width,initial-scale=1">
+          <style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f5f5f5}.card{background:#fff;border-radius:16px;padding:40px;max-width:400px;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.08)}h1{font-size:20px;color:#1a1a1a}.code{font-size:24px;font-weight:700;color:#667eea;letter-spacing:2px;margin:16px 0;padding:12px;background:#f0f0ff;border-radius:8px}p{color:#666;font-size:14px}</style>
+          <body><div class="card"><h1>Softhooky 桌面客户端</h1>
+          ${code ? `<p>邀请码</p><div class="code">${String(code).toUpperCase()}</div><p>请打开桌面端，在注册时输入此邀请码</p>` : '<p>请从官网下载桌面客户端</p>'}
+          </div></body></html>
+        `);
+      }
+    });
+
+    app.get("*", (req, res, next) => {
+      if (req.path.startsWith("/api")) {
+        return next();
+      }
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.sendFile("dist/index.html", { root: "." });
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+
+    // /api 未匹配路由返回 JSON 404，而不是 HTML
+    app.use("/api", (req, res) => {
+      res.status(404).json({ success: false, message: `接口不存在: ${req.method} ${req.originalUrl}` });
     });
   }
 
@@ -7314,6 +8308,11 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
     }
   });
 }
+
+startServer().catch((err) => {
+  console.error('❌ 启动服务器失败:', err);
+  process.exit(1);
+});
 
 startServer().catch((err) => {
   console.error('❌ 启动服务器失败:', err);

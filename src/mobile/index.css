@@ -1,120 +1,98 @@
-/* 移动端专属样式 - 完全独立于 PC 端 */
+/* Mobile-specific styles */
 
-@theme {
-  --mobile-safe-top: env(safe-area-inset-top, 0px);
-  --mobile-safe-bottom: env(safe-area-inset-bottom, 0px);
-  --mobile-tab-height: 56px;
-  --mobile-header-height: 48px;
-}
-
-/* 移动端全局重置 */
-.mobile-app {
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-top: env(safe-area-inset-top, 0px);
-  font-family: "Nunito", "Inter", ui-sans-serif, system-ui, sans-serif;
-  -webkit-tap-highlight-color: transparent;
-  -webkit-text-size-adjust: 100%;
-  -webkit-font-smoothing: antialiased;
-}
-
-.mobile-app * {
-  -webkit-overflow-scrolling: touch;
-}
-
-.mobile-app input,
-.mobile-app textarea,
-.mobile-app select {
-  font-size: 16px; /* 防止 iOS 自动缩放 */
-}
-
-/* 顶部 Header 安全区 */
-.mobile-header {
-  padding-top: env(safe-area-inset-top, 0px);
-}
-
-/* 移动端 Taptic 触摸反馈 */
-.mobile-tap {
-  transition: transform 0.1s ease, opacity 0.1s ease;
-}
-.mobile-tap:active {
-  transform: scale(0.97);
-  opacity: 0.85;
-}
-
-/* 移动端卡片样式 */
-.mobile-card {
-  background: #ffffff;
-  border-radius: 16px;
-  border: 1px solid #f0f0f0;
-  transition: box-shadow 0.2s ease;
-}
-.mobile-card:active {
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-}
-
-/* 底部动作条动画 */
-@keyframes mobile-slide-up {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
-}
-.animate-mobile-slide-up {
-  animation: mobile-slide-up 0.35s cubic-bezier(0.32, 0.72, 0, 1);
-}
-
-/* 页面切换动画 */
-@keyframes mobile-fade-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
+/* Fade in animation */
 .animate-mobile-fade-in {
-  animation: mobile-fade-in 0.25s ease-out;
+  animation: mobile-fade-in 0.3s ease-out;
 }
 
-/* 骨架屏闪烁 */
-@keyframes mobile-shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-.mobile-shimmer {
-  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
-  background-size: 200% 100%;
-  animation: mobile-shimmer 1.5s infinite;
-}
-
-/* 移动端隐藏滚动条 */
-.mobile-app ::-webkit-scrollbar {
-  display: none;
+@keyframes mobile-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-/* 消息气泡动画 */
-@keyframes bubble-in {
-  from { opacity: 0; transform: scale(0.92) translateY(8px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
-}
-.animate-bubble-in {
-  animation: bubble-in 0.25s ease-out;
+/* Slide up animation for bottom sheets */
+.animate-mobile-slide-up {
+  animation: mobile-slide-up 0.3s ease-out;
 }
 
-/* 图片加载渐变 */
-.mobile-image-placeholder {
-  background: linear-gradient(135deg, #f6f6f6 0%, #eeeeee 50%, #f6f6f6 100%);
+@keyframes mobile-slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
 
-/* 工具栏横向滚动 */
+/* Tap highlight removal */
+.mobile-tap {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Card style */
+.mobile-card {
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Horizontal scroll */
 .mobile-scroll-x {
   overflow-x: auto;
-  overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+  -ms-overflow-style: none;
 }
+
 .mobile-scroll-x::-webkit-scrollbar {
   display: none;
 }
 
-/* 底部安全区通用 */
-.pb-safe {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+/* Home hero card gradient */
+.home-hero-card {
+  background: linear-gradient(135deg, #1e40af, #3b82f6, #06b6d4);
 }
-.pt-safe {
-  padding-top: env(safe-area-inset-top, 0px);
+
+.home-hero-badge {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(8px);
+}
+
+.home-hero-btn {
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+}
+
+.home-hero-icon {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.home-credits-btn {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(59, 130, 246, 0.05));
+  border: 1px solid rgba(59, 130, 246, 0.15);
+}
+
+/* Dark theme specific overrides for mobile */
+.mobile-app input,
+.mobile-app textarea {
+  color: white;
+}
+
+.mobile-app input::placeholder,
+.mobile-app textarea::placeholder {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+/* Scrollbar for dark theme */
+.mobile-app ::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }

@@ -1,13 +1,15 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, X, Loader2, Plus, Images, Hand, Download, Check, Wand2, ChevronDown } from 'lucide-react';
 import { fileToDataUrl } from '../../services/r2Service';
 import { editImage } from '../../services/imageService';
+import { imageLibraryService } from '../../services/imageLibraryService';
 import { analyzeMultipleImages } from '../../services/aiChatService';
 import { requireAuth } from '../../utils/authCheck';
 import { getAvailableModels } from '../../services/modelService';
 import { ImagePreviewModal } from '../../components/ImagePreviewModal';
 import { ReEditModal } from '../../components/ReEditModal';
 import { LoadingAnimation } from '../../components/LoadingAnimation';
+import { LANGUAGES, getSavedLanguage, saveLanguage } from '../../constants/languages';
 
 const ASPECT_RATIOS = [
   { value: '1:1', label: '1:1' },
@@ -82,7 +84,7 @@ interface Card {
 export const HandheldPage: React.FC = () => {
   const [models, setModels] = useState<{ value: string; label: string }[]>([]);
   useEffect(() => {
-    getAvailableModels(['seedream']).then(m => {
+    getAvailableModels().then(m => {
       const sorted = m.filter(x => x.enabled).sort((a, b) => a.sort_order - b.sort_order);
       setModels(sorted.map(x => ({ value: x.model_id, label: x.label })));
       if (sorted.length > 0) setSelectedModel(sorted[0].model_id);
@@ -103,6 +105,7 @@ export const HandheldPage: React.FC = () => {
   const [results, setResults] = useState<{ url: string; idx: number }[]>([]);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [reEditImage, setReEditImage] = useState<string | null>(null);
+  const [language, setLanguage] = useState(getSavedLanguage());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -211,6 +214,7 @@ ${personPart}
           if (imgUrl) {
             const itemIdx = ++globalIdx;
             setResults(prev => [{ url: imgUrl, idx: itemIdx }, ...prev]);
+            imageLibraryService.saveToLibrary({ image_url: imgUrl, prompt: genPrompt, model: String(selectedModel || 'nanobann2'), aspect_ratio: String(aspectRatio), resolution: String(quality || '2K'), type: 'edited' });
           }
         } catch (err: any) { console.error('生成失败:', err?.message || err); }
         doneCount++;
@@ -339,6 +343,17 @@ ${personPart}
               const sel = aspectRatio === r.value;
               return <button key={r.value} onClick={() => setAspectRatio(r.value)} className={`py-2 rounded-xl text-xs font-medium transition-all ${sel ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>{r.label}</button>;
             })}</div>
+          </div>
+
+          <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <Wand2 size={14} className="text-blue-500" />
+              <span className="text-sm font-semibold text-[#171717]">语言</span>
+            </div>
+            <select value={language} onChange={(e) => { setLanguage(e.target.value); saveLanguage(e.target.value); }}
+              className="w-full bg-gray-100 px-3 py-2.5 rounded-xl text-sm text-[#171717] border-0 focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer">
+              {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+            </select>
           </div>
 
           <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">

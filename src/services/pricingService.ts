@@ -5,8 +5,6 @@ interface Pricing {
   nanobann2_edit?: number;
   gpt_image2_generation?: number;
   gpt_image2_edit?: number;
-  seedream_generation?: number;
-  seedream_edit?: number;
   product_fusion?: number;
   veo31_video?: number;
   veo31_video_fast?: number;
@@ -59,12 +57,12 @@ export const getPricing = async (): Promise<Pricing> => {
 
 export const getGeneratePrice = async (): Promise<number> => {
   const pricing = await getPricing();
-  return pricing.seedream_generation || pricing.nanobann2_generation || pricing.gpt_image2_generation || 0.3;
+  return pricing.nanobann2_generation || pricing.gpt_image2_generation || 0.3;
 }
 
 export const getEditPrice = async (): Promise<number> => {
   const pricing = await getPricing();
-  return pricing.seedream_edit || pricing.nanobann2_edit || pricing.gpt_image2_edit || 0.3;
+  return pricing.nanobann2_edit || pricing.gpt_image2_edit || 0.3;
 }
 
 export const clearPricingCache = () => {

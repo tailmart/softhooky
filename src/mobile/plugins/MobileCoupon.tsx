@@ -31,34 +31,34 @@ export const MobileCoupon: React.FC<MobileCouponProps> = ({ onBack }) => {
   }, [code]);
 
   return (
-    <div className="flex flex-col h-full bg-[#FAFAFA]">
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-[#f0f0f0] bg-white flex-shrink-0">
-        <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-full bg-[#f5f5f5] mobile-tap"><X size={16} className="text-[#737373]" /></button>
-        <h1 className="text-base font-bold text-[#171717]">优惠券</h1>
+    <div className="flex flex-col h-full bg-[#0a0a0a]">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-[#0a0a0a] flex-shrink-0">
+        <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.06] mobile-tap"><X size={16} className="text-white/40" /></button>
+        <h1 className="text-base font-bold text-white">优惠券</h1>
       </div>
       <div className="flex-1 overflow-y-auto">
         <div className="px-4 pt-8 pb-8 space-y-6">
           <div className="flex flex-col items-center">
-            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-rose-100 to-rose-50 flex items-center justify-center mb-4">
-              <Gift size={36} className="text-rose-500" />
+            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-blue-500/20 to-blue-500/10 flex items-center justify-center mb-4">
+              <Gift size={36} className="text-blue-400" />
             </div>
-            <h2 className="text-lg font-bold text-[#171717]">兑换优惠券</h2>
-            <p className="text-sm text-[#a3a3a3] mt-1">输入优惠券码兑换积分</p>
+            <h2 className="text-lg font-bold text-white">兑换优惠券</h2>
+            <p className="text-sm text-white/30 mt-1">输入优惠券码兑换积分</p>
           </div>
 
-          <div className="bg-white rounded-2xl border border-[#f0f0f0] p-2 flex items-center gap-2">
+          <div className="bg-white/[0.04] rounded-2xl border border-white/[0.06] p-2 flex items-center gap-2">
             <input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="请输入优惠券码" maxLength={20}
-              className="flex-1 px-3 py-3 text-sm text-[#171717] placeholder-[#bdbdbd] outline-none bg-transparent" />
+              className="flex-1 px-3 py-3 text-sm text-white placeholder-white/20 outline-none bg-transparent" />
             <button onClick={handleRedeem} disabled={!code.trim() || isLoading}
-              className="px-5 py-2.5 bg-[#171717] text-white rounded-xl text-sm font-medium disabled:opacity-40 mobile-tap whitespace-nowrap">
+              className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl text-sm font-medium disabled:opacity-40 mobile-tap whitespace-nowrap shadow-lg shadow-blue-500/25">
               {isLoading ? <Loader2 size={16} className="animate-spin" /> : '兑换'}
             </button>
           </div>
 
           {result && (
-            <div className={`rounded-2xl px-4 py-3 flex items-center gap-3 ${result.success ? 'bg-green-50 border border-green-100' : 'bg-red-50 border border-red-100'}`}>
-              {result.success ? <Check size={18} className="text-green-600" /> : <AlertTriangle size={18} className="text-red-500" />}
-              <p className={`text-sm ${result.success ? 'text-green-700' : 'text-red-600'}`}>{result.message}</p>
+            <div className={`rounded-2xl px-4 py-3 flex items-center gap-3 ${result.success ? 'bg-green-500/10 border border-green-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
+              {result.success ? <Check size={18} className="text-green-400" /> : <AlertTriangle size={18} className="text-red-400" />}
+              <p className={`text-sm ${result.success ? 'text-green-400' : 'text-red-400'}`}>{result.message}</p>
             </div>
           )}
         </div>

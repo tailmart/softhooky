@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Routes, Route } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { SiteConfigProvider } from './contexts/SiteConfigContext';
+import { SiteConfigProvider, useSiteConfig } from './contexts/SiteConfigContext';
 import { CanvasPage } from './pages/CanvasPage';
 import { SubAccountLoginPage } from './pages/SubAccountLoginPage';
 import AgentApp from './pages/agent/AgentApp';
@@ -10,10 +10,64 @@ import AdminApp from './pages/admin/AdminApp';
 import { refreshCredits } from './services/authService';
 import { AuthModal } from './components/AuthModal';
 import { MobileApp } from './mobile/MobileApp';
+import TauriUpdater from './components/TauriUpdater';
 
 const VideoProjectPage = React.lazy(() => import('./pages/VideoProjectPage'));
+const WorkflowPage = React.lazy(() => import('./pages/plugins/WorkflowPage').then(m => ({ default: m.WorkflowPage })));
 
 const APP_VERSION_KEY = 'app_build_version';
+
+const WorkflowAuthWrapper = () => {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) window.location.href = '/';
+  }, [isLoading, isAuthenticated]);
+
+  if (isLoading || !isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#F7F7F7] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-[#171717] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <React.Suspense fallback={
+      <div className="min-h-screen bg-[#F7F7F7] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-[#171717] border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <WorkflowPage />
+    </React.Suspense>
+  );
+};
+
+const VideoAuthWrapper = () => {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) window.location.href = '/';
+  }, [isLoading, isAuthenticated]);
+
+  if (isLoading || !isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#F7F7F7] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-[#171717] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <React.Suspense fallback={
+      <div className="min-h-screen bg-[#F7F7F7] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-[#171717] border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <VideoProjectPage />
+    </React.Suspense>
+  );
+};
 
 type View = 'canvas';
 
@@ -100,18 +154,62 @@ const AppContent = () => {
   );
 };
 
+function OAuthCallbackHandler({ children }: { children: React.ReactNode }) {
+  const [handled, setHandled] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const state = params.get('state');
+    if (!code || !state || handled) return;
+    setHandled(true);
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/auth/oauth/callback?code=${code}&state=${state}`);
+        const html = await res.text();
+        const m = html.match(/var payload = ({.*?});/);
+        const errM = html.match(/var msg = (".*?");/);
+        if (m) {
+          const payload = JSON.parse(m[1]);
+          if (payload.token && payload.user) {
+            const jsonPayload = JSON.stringify({ token: payload.token, user: payload.user });
+            try { window.opener?.postMessage({ type: 'OAUTH_LOGIN_SUCCESS', payload }, '*'); } catch {}
+            try { localStorage.setItem('oauth_login_result', jsonPayload); } catch {}
+            window.close();
+          }
+        } else if (errM) {
+          const msg = JSON.parse(errM[1]);
+          try { window.opener?.postMessage({ type: 'OAUTH_LOGIN_ERROR', payload: { message: msg } }, '*'); } catch {}
+          try { localStorage.setItem('oauth_login_error', msg); } catch {}
+          alert(msg);
+          window.close();
+        }
+      } catch (e) {
+        console.error('OAuth callback error:', e);
+      }
+    })();
+  }, [handled]);
+
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
     <AuthProvider>
       <SiteConfigProvider>
-        <Routes>
-          <Route path="/mobile" element={<MobileApp />} />
-          <Route path="/sub-login" element={<SubAccountLoginPage />} />
-          <Route path="/admin/*" element={<AdminApp />} />
-          <Route path="/agent/*" element={<AgentApp />} />
-          <Route path="/video" element={<VideoProjectPage />} />
-          <Route path="/*" element={<AppContent />} />
-        </Routes>
+        <OAuthCallbackHandler>
+          <TauriUpdater />
+          <Routes>
+            <Route path="/mobile" element={<MobileApp />} />
+            <Route path="/sub-login" element={<SubAccountLoginPage />} />
+            <Route path="/admin/*" element={<AdminApp />} />
+            <Route path="/agent/*" element={<AgentApp />} />
+            <Route path="/video" element={<VideoAuthWrapper />} />
+            <Route path="/workflow" element={<WorkflowAuthWrapper />} />
+            <Route path="/*" element={<AppContent />} />
+          </Routes>
+        </OAuthCallbackHandler>
       </SiteConfigProvider>
     </AuthProvider>
   );

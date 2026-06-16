@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, X, Loader2, Plus, FileImage, Wand2, Download, Eye, Check, Copy, Globe, ChevronDown } from 'lucide-react';
 import { fileToDataUrl } from '../../services/r2Service';
 import { editImage } from '../../services/imageService';
@@ -7,11 +7,11 @@ import { uploadFileToCos } from '../../services/cosService';
 import { imageLibraryService } from '../../services/imageLibraryService';
 import { requireAuth } from '../../utils/authCheck';
 import { getAvailableModels } from '../../services/modelService';
+import { createConcurrencyLimit } from '../../utils/concurrency';
 import { ImagePreviewModal } from '../../components/ImagePreviewModal';
 import { ReEditModal } from '../../components/ReEditModal';
 import { ModelSpeedNote } from '../../components/ModelSpeedNote';
 import { LoadingAnimation } from '../../components/LoadingAnimation';
-import { PsdExportButton } from '../../components/PsdExportButton';
 
 const LANGUAGES: { value: string; label: string }[] = [
   { value: 'zh', label: '简体中文' },
@@ -30,7 +30,7 @@ const IMAGE_TYPES = ['封面图', '主图', '细节图', '对比图', '使用场
 export const XiaohongshuPage: React.FC = () => {
   const [models, setModels] = useState<{ value: string; label: string }[]>([]);
   useEffect(() => {
-    getAvailableModels(['seedream']).then(m => {
+    getAvailableModels().then(m => {
       const sorted = m.filter(x => x.enabled).sort((a, b) => a.sort_order - b.sort_order);
       setModels(sorted.map(x => ({ value: x.model_id, label: x.label })));
       if (sorted.length > 0) setSelectedModel('nanobann2');
@@ -194,20 +194,26 @@ export const XiaohongshuPage: React.FC = () => {
       setUploadProgress(`生成图片中(0/${totalCount})...`);
       for (let i = 0; i < productImages.length; i++) {
         try {
-          const cosUrl = await uploadFileToCos(productImages[i].file);
-          await imageLibraryService.saveToLibrary({ image_url: cosUrl, prompt: `小红书素材产品图 #${i + 1}`, model: selectedModel, aspect_ratio: aspectRatio, resolution: quality, type: 'edited' });
+          await uploadFileToCos(productImages[i].file);
         } catch {}
       }
 
       imageLibraryService.clearSavedUrlsCache();
 
+      const limit = createConcurrencyLimit(3);
+      let completedCount = 0;
+      const langLabel = LANGUAGES.find(l => l.value === language)?.label || '中文';
+
+      const tasks = [];
       for (let i = 0; i < Math.min(useDescriptions.length, IMAGE_TYPES.length); i++) {
         const desc = useDescriptions[i]?.trim();
         if (!desc) continue;
 
-        setUploadProgress(`生成中${i + 1}/${totalCount} ${IMAGE_TYPES[i]}...`);
-        const langLabel = LANGUAGES.find(l => l.value === language)?.label || '中文';
-        const prompt = `小红书帖子图片${IMAGE_TYPES[i]}，${aspectRatio}比例，要求: ${langLabel}生成
+        const imageType = IMAGE_TYPES[i];
+        const taskIdx = i;
+        tasks.push(limit(async () => {
+          setUploadProgress(`生成中${completedCount + 1}/${totalCount} ${imageType}...`);
+          const prompt = `小红书帖子图片${imageType}，${aspectRatio}比例，要求: ${langLabel}生成
 产品名称: ${productName || '美妆产品'}
 产品卖点: ${desc}
 产品描述参考: ${productDesc || '（AI自主创意）'}${deepAnalysisRef.current}
@@ -224,16 +230,21 @@ export const XiaohongshuPage: React.FC = () => {
 
 重要：图片上所有文字必须使用${langLabel}，禁止使用其他语言。`;
 
-        try {
-          const resp = await editImage({ prompt, images: urls, aspectRatio, resolution: quality, model: selectedModel });
-          if (resp.data?.[0]?.url) {
-            const finalUrl = resp.data[0].url;
-            imageLibraryService.saveToLibrary({ image_url: finalUrl, prompt: `小红书帖子${IMAGE_TYPES[i]}`, model: selectedModel, aspect_ratio: aspectRatio, resolution: quality, type: 'generated' }).catch(() => {});
-            genCount++;
-            setResults(prev => [finalUrl, ...prev]);
-          }
-        } catch { /* 生成失败 */ }
+          try {
+            const resp = await editImage({ prompt, images: urls, aspectRatio, resolution: quality, model: selectedModel });
+            if (resp.data?.[0]?.url) {
+              const finalUrl = resp.data[0].url;
+              genCount++;
+              setResults(prev => [finalUrl, ...prev]);
+              imageLibraryService.saveToLibrary({ image_url: finalUrl, prompt, model: String(selectedModel || 'nanobann2'), aspect_ratio: String(aspectRatio), resolution: String(quality || '2K'), type: 'edited' });
+            }
+          } catch { /* 生成失败 */ }
+          completedCount++;
+          setUploadProgress(`生成中${completedCount}/${totalCount}...`);
+        }));
       }
+
+      await Promise.all(tasks);
 
       if (genCount === 0) alert('生成失败，请重试');
     } catch (error: any) {
@@ -488,7 +499,7 @@ export const XiaohongshuPage: React.FC = () => {
                             <button onClick={() => setPreviewImage(url)} className="w-7 h-7 flex items-center justify-center rounded-xl text-[#A3A3A3] hover:bg-[#F0F0F0] hover:text-[#171717]" title="预览"><Eye size={14} /></button>
                             <button onClick={() => setReEditImage(url)} className="w-7 h-7 flex items-center justify-center rounded-xl text-[#A3A3A3] hover:bg-[#F0F0F0] hover:text-[#171717]" title="微调"><Wand2 size={14} /></button>
                             <button onClick={() => handleDownload(url)} className="w-7 h-7 flex items-center justify-center rounded-xl text-[#A3A3A3] hover:bg-[#F0F0F0] hover:text-[#171717]" title="下载"><Download size={14} /></button>
-                            <PsdExportButton imageUrl={url} />
+
                           </div>
                         </div>
                       </div>

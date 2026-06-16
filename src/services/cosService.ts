@@ -100,15 +100,32 @@ export async function uploadImagesToCos(imageUrls: string[]): Promise<string[]> 
   }
 }
 
+// 缓存已转换的图片，避免重复处理
+const dataUrlCache = new Map<string, string>();
+
+function getCacheKey(file: File, maxDimension?: number): string {
+  return `${file.name}_${file.size}_${file.lastModified}_${maxDimension || 'orig'}`;
+}
+
 /**
- * 将 File 对象转换为 base64 data URL（不上传，直接给 AI 接口用）
+ * 将 File 对象转换为 base64 data URL（带缓存）
  * 可选 maxDimension：限制最长边，缩小图片减少网络传输量（默认不压缩）
  */
 export function fileToDataUrl(file: File, maxDimension?: number): Promise<string> {
+  const cacheKey = getCacheKey(file, maxDimension);
+  const cached = dataUrlCache.get(cacheKey);
+  if (cached) {
+    return Promise.resolve(cached);
+  }
   return new Promise((resolve, reject) => {
+    const resolveWithCache = (dataUrl: string) => {
+      dataUrlCache.set(cacheKey, dataUrl);
+      resolve(dataUrl);
+    };
+
     if (!maxDimension) {
       const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
+      reader.onload = () => resolveWithCache(reader.result as string);
       reader.onerror = reject;
       reader.readAsDataURL(file);
       return;
@@ -136,12 +153,12 @@ export function fileToDataUrl(file: File, maxDimension?: number): Promise<string
         const ctx = canvas.getContext('2d');
         if (!ctx) throw new Error('Canvas 初始化失败');
         ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.85));
+        resolveWithCache(canvas.toDataURL('image/jpeg', 0.85));
       } catch (err) {
         // canvas 处理失败时回退到原始文件读取（不压缩）
         console.warn('Canvas resize 失败，回退到原始文件:', err);
         const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
+        reader.onload = () => resolveWithCache(reader.result as string);
         reader.onerror = reject;
         reader.readAsDataURL(file);
       } finally {
@@ -154,4 +171,11 @@ export function fileToDataUrl(file: File, maxDimension?: number): Promise<string
     };
     img.src = URL.createObjectURL(file);
   });
+}
+
+/**
+ * 清除 fileToDataUrl 缓存（在处理大量新图片前调用可释放内存）
+ */
+export function clearDataUrlCache(): void {
+  dataUrlCache.clear();
 }

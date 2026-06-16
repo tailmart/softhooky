@@ -30,11 +30,10 @@ interface GenerateParams {
 
 type ProductType = 
   | 'recommend'
-  | 'handheld'
   | 'three-view'
   | 'style-transfer'
   | 'standalone-carousel'
-  | 'amazon-carousel'
+  | 'amazon-image-gen'
   | 'detail-page'
   | 'banner'
   | 'poster'
@@ -50,11 +49,10 @@ type AIModel = 'nano' | 'gpt';
 // 积分配置
 const CREDITS_CONFIG: Record<ProductType, { nano: number; gpt: number }> = {
   'recommend': { nano: 5, gpt: 10 },
-  'handheld': { nano: 10, gpt: 20 },
   'three-view': { nano: 15, gpt: 30 },
   'style-transfer': { nano: 10, gpt: 20 },
   'standalone-carousel': { nano: 20, gpt: 40 },
-  'amazon-carousel': { nano: 20, gpt: 40 },
+  'amazon-image-gen': { nano: 20, gpt: 40 },
   'detail-page': { nano: 30, gpt: 60 },
   'banner': { nano: 15, gpt: 30 },
   'poster': { nano: 15, gpt: 30 },
@@ -68,11 +66,10 @@ const CREDITS_CONFIG: Record<ProductType, { nano: number; gpt: number }> = {
 // 功能名称映射
 const PRODUCT_TYPE_NAMES: Record<ProductType, string> = {
   'recommend': '推荐',
-  'handheld': '手持产品',
   'three-view': '三视图生成',
-  'style-transfer': '设计风格迁移',
+  'style-transfer': '智能设计克隆',
   'standalone-carousel': '独立站轮播图',
-  'amazon-carousel': '亚马逊轮播图',
+  'amazon-image-gen': '亚马逊生图',
   'detail-page': '详情页设计',
   'banner': 'Banner设计',
   'poster': '智能海报设计',
@@ -188,8 +185,8 @@ export class ProductRefinementSkill {
   // 获取功能分类
   getProductCategories(): Record<string, ProductType[]> {
     return {
-      'AI产品视觉': ['recommend', 'handheld', 'three-view'],
-      '电商': ['style-transfer', 'standalone-carousel', 'amazon-carousel', 'detail-page', 'banner', 'poster'],
+      '场景融合': ['recommend', 'three-view'],
+      '电商': ['style-transfer', 'standalone-carousel', 'amazon-image-gen', 'detail-page', 'banner', 'poster'],
       '社媒': ['xiaohongshu', 'social-pov'],
       '视频': ['storyboard', 'tk-script'],
       '工具': ['copywriting'],
@@ -360,19 +357,18 @@ export class ProductRefinementSkill {
   handleTypeSelection(input: string): ProductType | null {
     const typeMap: Record<string, ProductType> = {
       '1': 'recommend',
-      '2': 'handheld',
-      '3': 'three-view',
-      '4': 'style-transfer',
-      '5': 'standalone-carousel',
-      '6': 'amazon-carousel',
-      '7': 'detail-page',
-      '8': 'banner',
-      '9': 'poster',
-      '10': 'xiaohongshu',
-      '11': 'social-pov',
-      '12': 'storyboard',
-      '13': 'tk-script',
-      '14': 'copywriting',
+      '2': 'three-view',
+      '3': 'style-transfer',
+      '4': 'standalone-carousel',
+      '5': 'amazon-image-gen',
+      '6': 'detail-page',
+      '7': 'banner',
+      '8': 'poster',
+      '9': 'xiaohongshu',
+      '10': 'social-pov',
+      '11': 'storyboard',
+      '12': 'tk-script',
+      '13': 'copywriting',
     };
 
     // 尝试通过数字选择
@@ -493,7 +489,6 @@ export class ProductRefinementSkill {
   getExamplePrompt(type: ProductType): string {
     const examples: Record<ProductType, string> = {
       'recommend': '请为我推荐最佳的产品展示方案',
-      'handheld': '请生成手持产品的展示效果',
       'three-view': '请生成产品的正面、侧面、背面三视图',
       'style-transfer': '请将我的产品设计迁移到现代简约风格',
       'standalone-carousel': `请为我生成独立站轮播图：
@@ -501,7 +496,7 @@ export class ProductRefinementSkill {
 - 产品标题：[请输入]
 - 产品描述：[请输入]
 - 生成语言：[中文/英文]`,
-      'amazon-carousel': `请为我生成亚马逊轮播图：
+      'amazon-image-gen': `请为我生成亚马逊生图：
 - 产品图片：[请上传]
 - 产品标题：[请输入]
 - 五点描述：[请输入]`,

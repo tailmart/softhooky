@@ -61,8 +61,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     };
 
+    const handleAuthStateChanged = () => {
+      checkAuth();
+    };
+
     window.addEventListener('credits-updated', handleCreditsUpdate);
-    return () => window.removeEventListener('credits-updated', handleCreditsUpdate);
+    window.addEventListener('auth-state-changed', handleAuthStateChanged);
+    return () => {
+      window.removeEventListener('credits-updated', handleCreditsUpdate);
+      window.removeEventListener('auth-state-changed', handleAuthStateChanged);
+    };
   }, []);
 
   const logout = () => {

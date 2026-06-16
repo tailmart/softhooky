@@ -55,8 +55,8 @@ export const RatioPicker: React.FC<RatioPickerProps> = ({ options, selected, onC
               onClick={() => onChange(opt.value)}
               className={`mobile-tap flex-shrink-0 flex flex-col items-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-medium transition-all ${
                 isActive
-                  ? 'bg-[#171717] text-white shadow-sm'
-                  : 'bg-white text-[#737373] border border-[#eee]'
+                  ? 'bg-blue-500 text-white shadow-sm shadow-blue-500/25'
+                  : 'bg-white/[0.04] text-white/40 border border-white/[0.06]'
               }`}
             >
               {/* Shape icon */}
@@ -64,7 +64,7 @@ export const RatioPicker: React.FC<RatioPickerProps> = ({ options, selected, onC
                 className="rounded-sm border-2 flex items-center justify-center transition-colors"
                 style={{
                   ...shapeStyle,
-                  borderColor: isActive ? 'rgba(255,255,255,0.8)' : 'rgba(115,115,115,0.4)',
+                  borderColor: isActive ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.15)',
                   backgroundColor: isActive ? 'rgba(255,255,255,0.1)' : 'transparent',
                 }}
               />

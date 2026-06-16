@@ -4,6 +4,7 @@ interface SiteConfig {
   logo_url: string
   icon_url: string
   site_title: string
+  oauth_platforms?: string[]
 }
 
 interface SiteConfigContextType {

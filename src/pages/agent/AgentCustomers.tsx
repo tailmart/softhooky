@@ -1,28 +1,40 @@
 import React, { useState, useEffect } from 'react'
 import axios from 'axios'
-import { Loader2, Users, Search } from 'lucide-react'
+import { Loader2, Users, Search, ChevronLeft, ChevronRight } from 'lucide-react'
 
 function getAuthHeaders() {
   const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken')
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+const PAGE_SIZE = 20
+
 export default function AgentCustomers() {
   const [customers, setCustomers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
 
-  useEffect(() => { loadCustomers() }, [])
+  useEffect(() => { loadCustomers() }, [page])
 
   const loadCustomers = async () => {
+    setLoading(true)
     try {
-      const res = await axios.get('/api/agent/customers?page=1&pageSize=100', { headers: getAuthHeaders() })
-      if (res.data.success) setCustomers(res.data.customers || [])
+      const res = await axios.get(`/api/agent/customers?page=${page}&pageSize=${PAGE_SIZE}`, { headers: getAuthHeaders() })
+      if (res.data.success) {
+        setCustomers(res.data.customers || [])
+        setTotal(res.data.total || 0)
+      }
     } catch {}
     setLoading(false)
   }
 
-  const filtered = customers.filter(c => c.email.toLowerCase().includes(searchQuery.toLowerCase()))
+  const filtered = searchQuery
+    ? customers.filter(c => c.email.toLowerCase().includes(searchQuery.toLowerCase()))
+    : customers
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   if (loading) return <div className="flex items-center justify-center h-64"><Loader2 size={24} className="animate-spin text-indigo-500" /></div>
 
@@ -60,6 +72,38 @@ export default function AgentCustomers() {
           </div>
         )}
       </div>
+
+      {/* 分页 */}
+      {total > PAGE_SIZE && (
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-gray-500">共 {total} 位客户</span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+              <button
+                key={p}
+                onClick={() => setPage(p)}
+                className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${p === page ? 'bg-indigo-500 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+              >
+                {p}
+              </button>
+            ))}
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -47,7 +47,7 @@ const veoPollStatus = async (taskId: string) => {
 export const Veo31VideoPage: React.FC<{ hideHeader?: boolean }> = ({ hideHeader }) => {
   const [models, setModels] = useState<{ value: string; label: string }[]>([]);
   useEffect(() => {
-    getAvailableModels(['seedream']).then(m => {
+    getAvailableModels().then(m => {
       const sorted = m.filter(x => x.enabled).sort((a, b) => a.sort_order - b.sort_order);
       setModels(sorted.map(x => ({ value: x.model_id, label: x.label })));
     });

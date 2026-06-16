@@ -323,6 +323,65 @@ export const userDb = {
   }
 };
 
+// ==================== 工作流数据库操作 ====================
+export const workflowDb = {
+  async initTable() {
+    await pool.execute(`CREATE TABLE IF NOT EXISTS workflows (
+      id INT PRIMARY KEY AUTO_INCREMENT,
+      user_id INT NOT NULL,
+      name VARCHAR(255) NOT NULL DEFAULT '',
+      nodes_json LONGTEXT NOT NULL,
+      connections_json LONGTEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+  },
+
+  async getByUserId(userId: number) {
+    await this.initTable();
+    const [rows] = await pool.execute(
+      'SELECT id, user_id, name, nodes_json, connections_json, created_at, updated_at FROM workflows WHERE user_id = ? ORDER BY updated_at DESC',
+      [userId]
+    );
+    return rows as any[];
+  },
+
+  async getById(id: number, userId: number) {
+    await this.initTable();
+    const [rows] = await pool.execute(
+      'SELECT id, user_id, name, nodes_json, connections_json, created_at, updated_at FROM workflows WHERE id = ? AND user_id = ?',
+      [id, userId]
+    );
+    return (rows as any[])[0] || null;
+  },
+
+  async create(userId: number, name: string, nodesJson: string, connectionsJson: string) {
+    await this.initTable();
+    const [result] = await pool.execute(
+      'INSERT INTO workflows (user_id, name, nodes_json, connections_json) VALUES (?, ?, ?, ?)',
+      [userId, name, nodesJson, connectionsJson]
+    );
+    return (result as any).insertId;
+  },
+
+  async update(id: number, userId: number, name: string, nodesJson: string, connectionsJson: string) {
+    await this.initTable();
+    await pool.execute(
+      'UPDATE workflows SET name = ?, nodes_json = ?, connections_json = ?, updated_at = NOW() WHERE id = ? AND user_id = ?',
+      [name, nodesJson, connectionsJson, id, userId]
+    );
+  },
+
+  async delete(id: number, userId: number) {
+    await this.initTable();
+    await pool.execute(
+      'DELETE FROM workflows WHERE id = ? AND user_id = ?',
+      [id, userId]
+    );
+  }
+};
+
 // ==================== 代理定价数据库操作 ====================
 export const agentDb = {
   async setPricing(agentId: number, pricing: Record<string, number>) {
@@ -977,7 +1036,7 @@ export const generatedImagesDb = {
       
       try {
         const [result] = await connection.execute(
-          'INSERT INTO generated_images (user_id, parent_user_id, image_url, prompt, model, aspect_ratio, resolution, type, task_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO generated_images (user_id, parent_user_id, image_url, prompt, model, aspect_ratio, resolution, type, task_id, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 3 DAY))',
           [
             userId,
             options?.parentUserId || null,
@@ -995,7 +1054,7 @@ export const generatedImagesDb = {
       } catch (insertErr: any) {
         if (insertErr.message?.includes("Unknown column 'task_id'")) {
           const [result] = await connection.execute(
-            'INSERT INTO generated_images (user_id, parent_user_id, image_url, prompt, model, aspect_ratio, resolution, type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO generated_images (user_id, parent_user_id, image_url, prompt, model, aspect_ratio, resolution, type, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 3 DAY))',
             [
               userId,
               options?.parentUserId || null,
@@ -1065,11 +1124,18 @@ export const generatedImagesDb = {
     };
   },
 
-  async delete(id: number, userId: number) {
-    await pool.execute(
-      'DELETE FROM generated_images WHERE id = ? AND user_id = ?',
-      [id, userId]
-    );
+  async delete(id: number, userId: number, parentUserId?: number) {
+    if (parentUserId && parentUserId !== userId) {
+      await pool.execute(
+        'DELETE FROM generated_images WHERE id = ? AND (user_id = ? OR parent_user_id = ?)',
+        [id, userId, parentUserId]
+      );
+    } else {
+      await pool.execute(
+        'DELETE FROM generated_images WHERE id = ? AND user_id = ?',
+        [id, userId]
+      );
+    }
   },
 
   async updateUrlByTaskId(taskId: string, newUrl: string) {

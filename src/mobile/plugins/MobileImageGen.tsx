@@ -55,6 +55,19 @@ export const MobileImageGen: React.FC<MobileImageGenProps> = ({ onBack }) => {
         setModel(sorted[0].model_id);
       }
     });
+    // 加载历史生成记录（从数据库读取 COS 地址，确保图片可访问）
+    const token = getAuthToken();
+    if (token) {
+      fetch('/api/chat/images', { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.json())
+        .then(res => {
+          if (res.success && Array.isArray(res.data)) {
+            const urls = res.data.map((img: any) => img.image_url || img.imageUrl || img.url).filter(Boolean);
+            setResults(urls);
+          }
+        })
+        .catch(() => {});
+    }
   }, []);
 
   const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -167,17 +180,17 @@ export const MobileImageGen: React.FC<MobileImageGenProps> = ({ onBack }) => {
   const canGenerate = prompt.trim().length > 0 || images.length > 0;
 
   return (
-    <div className="flex flex-col h-full bg-[#FAFAFA]">
+    <div className="flex flex-col h-full bg-[#0a0a0a]">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-[#f0f0f0] bg-white flex-shrink-0">
-        <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-full bg-[#f5f5f5] mobile-tap">
-          <X size={16} className="text-[#737373]" />
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-[#0a0a0a] flex-shrink-0">
+        <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.06] mobile-tap">
+          <X size={16} className="text-white/40" />
         </button>
-        <h1 className="text-base font-bold text-[#171717]">创意生图</h1>
+        <h1 className="text-base font-bold text-white">TK带货图片</h1>
         {isAuthenticated && user && (
-          <div className="ml-auto flex items-center gap-1 bg-amber-50 px-2.5 py-1 rounded-full">
-            <Coins size={12} className="text-amber-500" />
-            <span className="text-xs font-semibold text-amber-600">{Number(user.credits || 0).toFixed(1)}</span>
+          <div className="ml-auto flex items-center gap-1 bg-blue-500/10 px-2.5 py-1 rounded-full">
+            <Coins size={12} className="text-blue-400" />
+            <span className="text-xs font-semibold text-blue-400">{Number(user.credits || 0).toFixed(1)}</span>
           </div>
         )}
       </div>
@@ -187,14 +200,14 @@ export const MobileImageGen: React.FC<MobileImageGenProps> = ({ onBack }) => {
         <div className="px-4 pt-4 pb-32 space-y-5">
           {/* Upload */}
           <div>
-            <label className="text-xs font-semibold text-[#999] uppercase tracking-wider mb-2.5 block">
-              参考图片 <span className="text-[#bdbdbd] normal-case">（可选）</span>
+            <label className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-2.5 block">
+              参考图片 <span className="text-white/20 normal-case">（可选）</span>
             </label>
             <div className="flex gap-2.5 flex-wrap">
               {images.map((url, idx) => (
-                <div key={idx} className="relative w-[80px] h-[80px] rounded-2xl overflow-hidden bg-white border border-[#eee] shadow-sm">
+                <div key={idx} className="relative w-[80px] h-[80px] rounded-2xl overflow-hidden bg-white/[0.04] border border-white/[0.06]">
                   <img src={url} alt="" className="w-full h-full object-cover" />
-                  <button onClick={() => removeImage(idx)} className="absolute top-1 right-1 w-5 h-5 bg-black/50 rounded-full flex items-center justify-center">
+                  <button onClick={() => removeImage(idx)} className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center">
                     <X size={10} className="text-white" />
                   </button>
                 </div>
@@ -202,10 +215,10 @@ export const MobileImageGen: React.FC<MobileImageGenProps> = ({ onBack }) => {
               {images.length < 5 && (
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-[80px] h-[80px] rounded-2xl border-2 border-dashed border-[#ddd] flex flex-col items-center justify-center gap-1 bg-white/50 active:bg-white transition-colors"
+                  className="w-[80px] h-[80px] rounded-2xl border-2 border-dashed border-white/[0.1] flex flex-col items-center justify-center gap-1 bg-white/[0.02]"
                 >
-                  <Plus size={22} className="text-[#bbb]" />
-                  <span className="text-[9px] text-[#bbb]">上传</span>
+                  <Plus size={22} className="text-white/20" />
+                  <span className="text-[9px] text-white/20">上传</span>
                 </button>
               )}
             </div>
@@ -214,25 +227,25 @@ export const MobileImageGen: React.FC<MobileImageGenProps> = ({ onBack }) => {
 
           {/* Model Selector */}
           <div>
-            <label className="text-xs font-semibold text-[#999] uppercase tracking-wider mb-2 block">模型</label>
+            <label className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-2 block">模型</label>
             <button
               onClick={() => setShowModelSheet(true)}
-              className="w-full flex items-center justify-between px-4 py-3.5 bg-white rounded-2xl border border-[#eee] text-sm"
+              className="w-full flex items-center justify-between px-4 py-3.5 bg-white/[0.04] rounded-2xl border border-white/[0.06] text-sm"
             >
-              <span className="text-[#171717] font-medium">{models.find(m => m.value === model)?.label}</span>
-              <ChevronDown size={16} className="text-[#a3a3a3]" />
+              <span className="text-white font-medium">{models.find(m => m.value === model)?.label}</span>
+              <ChevronDown size={16} className="text-white/30" />
             </button>
           </div>
 
           {/* Model Bottom Sheet */}
           {showModelSheet && (
             <div className="fixed inset-0 z-[100] flex items-end" onClick={() => setShowModelSheet(false)}>
-              <div className="absolute inset-0 bg-black/40" />
-              <div className="relative w-full bg-white rounded-t-3xl pb-[calc(16px+env(safe-area-inset-bottom))]" onClick={e => e.stopPropagation()}>
-                <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-[#f0f0f0]">
-                  <h3 className="text-base font-bold text-[#171717]">选择模型</h3>
-                  <button onClick={() => setShowModelSheet(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-[#f5f5f5]">
-                    <X size={16} className="text-[#737373]" />
+              <div className="absolute inset-0 bg-black/60" />
+              <div className="relative w-full bg-[#141414] rounded-t-3xl pb-[calc(16px+env(safe-area-inset-bottom))]" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-white/[0.06]">
+                  <h3 className="text-base font-bold text-white">选择模型</h3>
+                  <button onClick={() => setShowModelSheet(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.06]">
+                    <X size={16} className="text-white/40" />
                   </button>
                 </div>
                 <div className="px-3 py-2">
@@ -241,11 +254,11 @@ export const MobileImageGen: React.FC<MobileImageGenProps> = ({ onBack }) => {
                       key={m.value}
                       onClick={() => { setModel(m.value); setShowModelSheet(false); }}
                       className={`w-full flex items-center justify-between px-4 py-4 rounded-xl my-0.5 ${
-                        model === m.value ? 'bg-[#f5f5f5]' : 'hover:bg-[#fafafa]'
+                        model === m.value ? 'bg-white/[0.06]' : 'hover:bg-white/[0.03]'
                       }`}
                     >
-                      <span className={`text-sm ${model === m.value ? 'font-semibold text-[#171717]' : 'text-[#525252]'}`}>{m.label}</span>
-                      {model === m.value && <Check size={18} className="text-[#171717]" />}
+                      <span className={`text-sm ${model === m.value ? 'font-semibold text-white' : 'text-white/50'}`}>{m.label}</span>
+                      {model === m.value && <Check size={18} className="text-blue-400" />}
                     </button>
                   ))}
                 </div>
@@ -255,13 +268,13 @@ export const MobileImageGen: React.FC<MobileImageGenProps> = ({ onBack }) => {
 
           {/* Aspect Ratio */}
           <div>
-            <label className="text-xs font-semibold text-[#999] uppercase tracking-wider mb-2 block">比例</label>
+            <label className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-2 block">比例</label>
             <RatioPicker options={RATIOS} selected={ratio} onChange={setRatio} />
           </div>
 
           {/* Prompt */}
           <div>
-            <label className="text-xs font-semibold text-[#999] uppercase tracking-wider mb-2 block">
+            <label className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-2 block">
               描述 <span className="text-red-400">*</span>
             </label>
             <textarea
@@ -269,7 +282,7 @@ export const MobileImageGen: React.FC<MobileImageGenProps> = ({ onBack }) => {
               onChange={e => setPrompt(e.target.value)}
               placeholder="描述你想要生成的图片内容...&#10;例如：一款白色陶瓷咖啡杯，极简风格，木桌背景，自然光"
               rows={4}
-              className="w-full px-4 py-3.5 bg-white rounded-2xl border border-[#eee] text-sm text-[#171717] placeholder-[#bdbdbd] resize-none outline-none focus:border-[#171717] transition-colors leading-relaxed"
+              className="w-full px-4 py-3.5 bg-white/[0.04] rounded-2xl border border-white/[0.06] text-sm text-white placeholder-white/20 resize-none outline-none focus:border-blue-500/30 transition-colors leading-relaxed"
             />
           </div>
 
@@ -277,11 +290,11 @@ export const MobileImageGen: React.FC<MobileImageGenProps> = ({ onBack }) => {
           <button
             onClick={isAuthenticated ? handleGenerate : () => window.dispatchEvent(new Event('mobile-auth-required'))}
             disabled={isGenerating}
-            className={`w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-sm font-bold transition-all shadow-sm ${
+            className={`w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-sm font-bold transition-all shadow-lg shadow-blue-500/25 ${
               isAuthenticated && !isGenerating && canGenerate
-                ? 'bg-[#171717] text-white active:bg-[#333]'
-                : 'bg-[#171717] text-white active:bg-[#333]'
-            } ${!canGenerate && isAuthenticated ? 'opacity-60' : ''}`}
+                ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white active:from-blue-600 active:to-blue-700'
+                : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
+            } ${!canGenerate && isAuthenticated ? 'opacity-50' : ''}`}
           >
             {!isAuthenticated ? (
               <><AlertTriangle size={16} /> 登录后使用</>
@@ -293,8 +306,8 @@ export const MobileImageGen: React.FC<MobileImageGenProps> = ({ onBack }) => {
           </button>
 
           {error && (
-            <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-3">
-              <p className="text-xs text-red-600">{error}</p>
+            <div className="bg-red-500/10 border border-red-500/20 rounded-2xl px-4 py-3">
+              <p className="text-xs text-red-400">{error}</p>
             </div>
           )}
 
@@ -302,13 +315,13 @@ export const MobileImageGen: React.FC<MobileImageGenProps> = ({ onBack }) => {
           {results.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <ImageIcon size={16} className="text-[#171717]" />
-                <h2 className="text-sm font-bold text-[#171717]">生成结果</h2>
+                <ImageIcon size={16} className="text-white/50" />
+                <h2 className="text-sm font-bold text-white/60">生成结果</h2>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 {results.map((url, idx) => (
-                  <div key={`${url}-${idx}`} className="mobile-card overflow-hidden">
-                    <div className="aspect-square bg-[#fafafa]">
+                  <div key={`${url}-${idx}`} className="mobile-card overflow-hidden rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                    <div className="aspect-square bg-white/[0.02]">
                       <img
                         src={url}
                         alt=""
@@ -317,10 +330,10 @@ export const MobileImageGen: React.FC<MobileImageGenProps> = ({ onBack }) => {
                         loading="lazy"
                       />
                     </div>
-                    <div className="flex items-center gap-2 px-3 py-2.5 border-t border-[#f5f5f5]">
+                    <div className="flex items-center gap-2 px-3 py-2.5 border-t border-white/[0.04]">
                       <button
                         onClick={() => handleDownload(url)}
-                        className="mobile-tap flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[#f5f5f5] text-[#525252] text-xs font-medium"
+                        className="mobile-tap flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-white/[0.04] text-white/40 text-xs font-medium"
                       >
                         <Download size={14} /> 下载
                       </button>

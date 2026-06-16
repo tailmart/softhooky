@@ -11,6 +11,7 @@ import NavManagePage from './NavManagePage'
 import CouponManagePage from './CouponManagePage'
 import SettingsPage from './SettingsPage'
 import AgentManagePage from './AgentManagePage'
+import ModelLibraryPage from './ModelLibraryPage'
 import AdminLayout from './AdminLayout'
 
 interface User {
@@ -29,11 +30,26 @@ export default function AdminApp() {
     const savedUser = localStorage.getItem('adminUser')
     
     if (savedToken && savedUser) {
-      setToken(savedToken)
-      setUser(JSON.parse(savedUser))
+      // 使用 fetch 验证 token，避免触发 axios 拦截器的 alert/redirect
+      fetch('/api/admin/dashboard', {
+        headers: { Authorization: `Bearer ${savedToken}` }
+      }).then(resp => {
+        if (resp.ok) {
+          setToken(savedToken)
+          setUser(JSON.parse(savedUser))
+        } else {
+          localStorage.removeItem('adminToken')
+          localStorage.removeItem('adminUser')
+        }
+      }).catch(() => {
+        localStorage.removeItem('adminToken')
+        localStorage.removeItem('adminUser')
+      }).finally(() => {
+        setLoading(false)
+      })
+    } else {
+      setLoading(false)
     }
-    
-    setLoading(false)
   }, [])
 
   const handleLogin = (token: string, user: User) => {
@@ -74,6 +90,7 @@ export default function AdminApp() {
         <Route path="nav" element={<NavManagePage token={token} />} />
         <Route path="coupons" element={<CouponManagePage token={token} />} />
         <Route path="models" element={<Navigate to="/admin/nav" replace />} />
+        <Route path="model-library" element={<ModelLibraryPage token={token} />} />
         <Route path="settings" element={<SettingsPage token={token} />} />
         <Route path="agents" element={<AgentManagePage token={token} />} />
         <Route index element={<Navigate to="/admin/dashboard" replace />} />

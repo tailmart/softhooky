@@ -152,33 +152,33 @@ export default function UsersPage({ token }: { token: string }) {
       </div>
 
       {/* 统计卡片 */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="bg-gradient-to-br from-[#6366F1] to-[#818CF8] rounded-3xl p-5 text-white">
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
-              <Users size={24} />
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="bg-white rounded-2xl p-4 border border-[#E8ECF0]">
+          <div className="flex items-center gap-2.5 mb-3">
+            <div className="w-8 h-8 bg-[#EEF2FF] rounded-xl flex items-center justify-center">
+              <Users size={16} className="text-[#6366F1]" />
             </div>
+            <p className="text-xs text-[#9CA3AF] font-medium">总用户数</p>
           </div>
-          <p className="text-[#C7D2FE] text-sm font-medium">总用户数</p>
-          <p className="text-3xl font-bold mt-1">{pagination?.total || stats.total}</p>
+          <p className="text-xl font-bold text-[#1A1D21]">{pagination?.total || stats.total}</p>
         </div>
-        <div className="bg-gradient-to-br from-[#10B981] to-[#34D399] rounded-3xl p-5 text-white">
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
-              <CheckCircle size={24} />
+        <div className="bg-white rounded-2xl p-4 border border-[#E8ECF0]">
+          <div className="flex items-center gap-2.5 mb-3">
+            <div className="w-8 h-8 bg-[#D1FAE5] rounded-xl flex items-center justify-center">
+              <CheckCircle size={16} className="text-[#10B981]" />
             </div>
+            <p className="text-xs text-[#9CA3AF] font-medium">正常用户</p>
           </div>
-          <p className="text-[#A7F3D0] text-sm font-medium">正常用户</p>
-          <p className="text-3xl font-bold mt-1">{stats.enabled}</p>
+          <p className="text-xl font-bold text-[#1A1D21]">{stats.enabled}</p>
         </div>
-        <div className="bg-gradient-to-br from-[#EF4444] to-[#F87171] rounded-3xl p-5 text-white">
-          <div className="flex items-center justify-between mb-3">
-            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
-              <Ban size={24} />
+        <div className="bg-white rounded-2xl p-4 border border-[#E8ECF0]">
+          <div className="flex items-center gap-2.5 mb-3">
+            <div className="w-8 h-8 bg-[#FEF2F2] rounded-xl flex items-center justify-center">
+              <Ban size={16} className="text-[#EF4444]" />
             </div>
+            <p className="text-xs text-[#9CA3AF] font-medium">禁用用户</p>
           </div>
-          <p className="text-[#FCA5A5] text-sm font-medium">禁用用户</p>
-          <p className="text-3xl font-bold mt-1">{stats.disabled}</p>
+          <p className="text-xl font-bold text-[#1A1D21]">{stats.disabled}</p>
         </div>
       </div>
 

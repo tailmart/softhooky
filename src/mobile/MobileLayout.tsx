@@ -23,12 +23,12 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
   const { config } = useSiteConfig();
 
   return (
-    <div className="mobile-app h-dvh bg-white flex flex-col overflow-hidden">
-      {/* 顶部 Header - 在flex流中 */}
-      {!hideHeader && <div className="mobile-header flex-shrink-0 bg-white border-b border-[#e5e5e5]">
+    <div className="mobile-app h-dvh bg-[#0a0a0a] flex flex-col overflow-hidden">
+      {/* 顶部 Header */}
+      {!hideHeader && <div className="mobile-header flex-shrink-0 bg-[#0a0a0a] border-b border-white/[0.06]">
         <div className="flex items-center justify-between px-4 h-12">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#171717] to-[#404040] flex items-center justify-center shadow-sm flex-shrink-0">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm flex-shrink-0">
               <img src={config.logo_url} alt="Softhooky" className="w-5 h-5" />
             </div>
             <span
@@ -39,18 +39,17 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
                 lineHeight: 1,
                 letterSpacing: '0.3px',
               }}
-              className="bg-gradient-to-r from-[#171717] via-[#404040] to-[#171717] bg-clip-text text-transparent"
+              className="text-white"
             >
               Softhooky
             </span>
           </div>
 
           <div className="flex items-center gap-3">
-            {/* 积分显示 */}
             {isAuthenticated && user && (
-              <div className="flex items-center gap-1.5 bg-amber-50 px-2.5 py-1 rounded-full">
-                <Coins size={13} className="text-amber-500" />
-                <span className="text-xs font-semibold text-amber-600">
+              <div className="flex items-center gap-1.5 bg-white/[0.08] px-2.5 py-1 rounded-full">
+                <Coins size={13} className="text-blue-400" />
+                <span className="text-xs font-semibold text-blue-400">
                   {Number(user.credits || 0).toFixed(1)}
                 </span>
               </div>
@@ -59,13 +58,13 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
         </div>
       </div>}
 
-      {/* 内容区域 - flex-1 自动填充剩余高度 */}
-      <main className="flex-1 min-h-0 overflow-y-auto bg-white">
+      {/* 内容区域 */}
+      <main className="flex-1 min-h-0 overflow-y-auto bg-[#0a0a0a]">
         {children}
       </main>
 
-      {/* 底部 Tab Bar - 在flex流中 */}
-      <div className="flex-shrink-0 bg-white border-t border-[#e5e5e5] pb-[env(safe-area-inset-bottom,0px)]">
+      {/* 底部 Tab Bar */}
+      <div className="flex-shrink-0 bg-[#0a0a0a] border-t border-white/[0.06] pb-[env(safe-area-inset-bottom,0px)]">
         <div className="h-14 flex items-center justify-around px-2">
           <BottomTabs
             activeTab={activeTab}

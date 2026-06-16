@@ -66,69 +66,53 @@ export default function DashboardPage({ token }: { token: string }) {
       </div>
 
       {/* 统计卡片 */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {/* 总用户 */}
-        <div className="bg-gradient-to-br from-[#6366F1] to-[#818CF8] rounded-3xl p-5 text-white">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
-              <Users size={24} />
+        <div className="bg-white rounded-2xl p-4 border border-[#E8ECF0]">
+          <div className="flex items-center gap-2.5 mb-3">
+            <div className="w-8 h-8 bg-[#EEF2FF] rounded-xl flex items-center justify-center">
+              <Users size={16} className="text-[#6366F1]" />
             </div>
-            <ArrowUp size={16} className="opacity-60" />
+            <p className="text-xs text-[#9CA3AF] font-medium">总用户数</p>
           </div>
-          <p className="text-[#C7D2FE] text-sm font-medium">总用户数</p>
-          <p className="text-3xl font-bold mt-1">{data.totalUsers}</p>
-          <div className="flex items-center gap-1 mt-2 text-[#C7D2FE] text-xs">
-            <TrendingUp size={12} />
-            <span>活跃增长中</span>
-          </div>
+          <p className="text-xl font-bold text-[#1A1D21]">{data.totalUsers}</p>
+          <p className="text-[10px] text-[#9CA3AF] mt-1">活跃增长中</p>
         </div>
 
         {/* 今日新用户 */}
-        <div className="bg-gradient-to-br from-[#10B981] to-[#34D399] rounded-3xl p-5 text-white">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
-              <Activity size={24} />
+        <div className="bg-white rounded-2xl p-4 border border-[#E8ECF0]">
+          <div className="flex items-center gap-2.5 mb-3">
+            <div className="w-8 h-8 bg-[#D1FAE5] rounded-xl flex items-center justify-center">
+              <Activity size={16} className="text-[#10B981]" />
             </div>
-            <span className="text-xs bg-white/20 px-2 py-1 rounded-full">今日</span>
+            <p className="text-xs text-[#9CA3AF] font-medium">今日新用户</p>
           </div>
-          <p className="text-[#A7F3D0] text-sm font-medium">今日新用户</p>
-          <p className="text-3xl font-bold mt-1">{data.todayNewUsers}</p>
-          <div className="flex items-center gap-1 mt-2 text-[#A7F3D0] text-xs">
-            <TrendingUp size={12} />
-            <span>较昨日 +{data.todayNewUsers}</span>
-          </div>
+          <p className="text-xl font-bold text-[#1A1D21]">{data.todayNewUsers}</p>
+          <p className="text-[10px] text-[#9CA3AF] mt-1">较昨日 +{data.todayNewUsers}</p>
         </div>
 
         {/* 总充值 */}
-        <div className="bg-gradient-to-br from-[#A855F7] to-[#C084FC] rounded-3xl p-5 text-white">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
-              <CreditCard size={24} />
+        <div className="bg-white rounded-2xl p-4 border border-[#E8ECF0]">
+          <div className="flex items-center gap-2.5 mb-3">
+            <div className="w-8 h-8 bg-[#F3E8FF] rounded-xl flex items-center justify-center">
+              <CreditCard size={16} className="text-[#A855F7]" />
             </div>
-            <ArrowUp size={16} className="opacity-60" />
+            <p className="text-xs text-[#9CA3AF] font-medium">总充值金额</p>
           </div>
-          <p className="text-[#DDD6FE] text-sm font-medium">总充值金额</p>
-          <p className="text-3xl font-bold mt-1">¥{data.totalRechargeAmount}</p>
-          <div className="flex items-center gap-1 mt-2 text-[#DDD6FE] text-xs">
-            <DollarSign size={12} />
-            <span>平台收入</span>
-          </div>
+          <p className="text-xl font-bold text-[#1A1D21]">¥{data.totalRechargeAmount}</p>
+          <p className="text-[10px] text-[#9CA3AF] mt-1">平台收入</p>
         </div>
 
         {/* 今日充值 */}
-        <div className="bg-gradient-to-br from-[#F59E0B] to-[#FBBF24] rounded-3xl p-5 text-white">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
-              <DollarSign size={24} />
+        <div className="bg-white rounded-2xl p-4 border border-[#E8ECF0]">
+          <div className="flex items-center gap-2.5 mb-3">
+            <div className="w-8 h-8 bg-[#FEF3C7] rounded-xl flex items-center justify-center">
+              <DollarSign size={16} className="text-[#F59E0B]" />
             </div>
-            <span className="text-xs bg-white/20 px-2 py-1 rounded-full">今日</span>
+            <p className="text-xs text-[#9CA3AF] font-medium">今日充值</p>
           </div>
-          <p className="text-[#FDE68A] text-sm font-medium">今日充值</p>
-          <p className="text-3xl font-bold mt-1">¥{data.todayRechargeAmount}</p>
-          <div className="flex items-center gap-1 mt-2 text-[#FDE68A] text-xs">
-            <TrendingUp size={12} />
-            <span>今日收入</span>
-          </div>
+          <p className="text-xl font-bold text-[#1A1D21]">¥{data.todayRechargeAmount}</p>
+          <p className="text-[10px] text-[#9CA3AF] mt-1">今日收入</p>
         </div>
       </div>
 

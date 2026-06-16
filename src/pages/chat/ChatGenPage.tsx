@@ -1,22 +1,21 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   X, Loader2, Plus, Send, Sparkles, Coins,
-  Calendar, Clock, Trash2, ZoomIn, ChevronDown, CornerDownRight, Download, Layers,
-  Image as ImageIcon
+  Clock, Trash2, CornerDownRight, Download,
+  Image as ImageIcon, RefreshCw,
+  Wand2, Monitor, Crop, ImagePlus, Zap, Crown
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { generateImage, editImage } from '../../services/imageService';
 import { getCurrentUser } from '../../services/authService';
-import { fileToDataUrl, uploadImageToCos } from '../../services/cosService';
+import { fileToDataUrl } from '../../services/cosService';
 import { getPricing } from '../../services/pricingService';
 import { CreditCheckModal } from '../../components/CreditCheckModal';
 import { ImagePreviewModal } from '../../components/ImagePreviewModal';
-import { SettingsPanel } from '../../components/canvas/SettingsPanel';
 import { imageLibraryService } from '../../services/imageLibraryService';
 import { getAvailableModels } from '../../services/modelService';
 import axios from 'axios';
 import { useAuth } from '../../contexts/AuthContext';
-import { convertImageToPsd } from '../../utils/psdConverter';
 
 interface ChatImage {
   url: string;
@@ -34,33 +33,32 @@ const getTodayKey = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-const formatDayLabel = (dateStr: string) => {
-  const today = getTodayKey();
-  const yesterday = (() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 1);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  })();
-  if (dateStr === today) return '今天';
-  if (dateStr === yesterday) return '昨天';
-  const parts = dateStr.split('-');
-  return `${parts[1]}月${parts[2]}日`;
-};
-
 const formatTime = (ts: number) => {
   const d = new Date(ts);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
-const groupByDay = (images: ChatImage[]) => {
-  const groups: Record<string, ChatImage[]> = {};
-  for (const img of images) {
-    const d = new Date(img.createdAt);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(img);
-  }
-  return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a));
+const ASPECT_RATIOS = [
+  { label: '智能', value: '智能', icon: 'A' },
+  { label: '1:1', value: '1:1', icon: '1:1' },
+  { label: '3:4', value: '3:4', icon: '3:4' },
+  { label: '4:3', value: '4:3', icon: '4:3' },
+  { label: '9:16', value: '9:16', icon: '9:16' },
+  { label: '16:9', value: '16:9', icon: '16:9' },
+  { label: '21:9', value: '21:9', icon: '21:9' },
+];
+
+const getRatioStyle = (value: string) => {
+  const map: Record<string, string> = {
+    '智能': 'w-4 h-4',
+    '1:1': 'w-3.5 h-3.5',
+    '3:4': 'w-3 h-4',
+    '9:16': 'w-2.5 h-5',
+    '4:3': 'w-4 h-3',
+    '16:9': 'w-5 h-2.5',
+    '21:9': 'w-6 h-2',
+  };
+  return map[value] || 'w-4 h-4';
 };
 
 export const ChatGenPage: React.FC = () => {
@@ -74,8 +72,34 @@ export const ChatGenPage: React.FC = () => {
   const savedSettings = getSavedSettings();
   const [images, setImages] = useState<ChatImage[]>([]);
   const [loadingImages, setLoadingImages] = useState(true);
+  const [prompt, setPrompt] = useState('');
+  const [uploadedImages, setUploadedImages] = useState<{ url: string; id: string }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [optimizing, setOptimizing] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('nanobann2');
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState(savedSettings.aspectRatio || '1:1');
+  const [resolution, setResolution] = useState(savedSettings.resolution || '2K');
+  const [generateCount, setGenerateCount] = useState(savedSettings.generateCount || 1);
+  const [showCreditModal, setShowCreditModal] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [generatePrice, setGeneratePrice] = useState(0.3);
+  const [enableOptimization, setEnableOptimization] = useState(savedSettings.enableOptimization ?? false);
+  const [isOptimized, setIsOptimized] = useState(false);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  // 从数据库加载图片（唯一数据源）
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const { user } = useAuth();
+
+  const displayImages = user ? images : [];
+  const generatedImages = displayImages.filter(img => img.type === 'generated');
+  const todayKey = getTodayKey();
+  const todayGenCount = generatedImages.filter(img => {
+    const d = new Date(img.createdAt);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` === todayKey;
+  }).length;
+
   const loadImagesFromDB = async () => {
     try {
       const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
@@ -105,50 +129,8 @@ export const ChatGenPage: React.FC = () => {
     }
   };
 
-  // 页面加载时从数据库获取图片
   useEffect(() => {
     loadImagesFromDB();
-  }, []);
-  const [prompt, setPrompt] = useState('');
-  const [uploadedImages, setUploadedImages] = useState<{ url: string; id: string }[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [pendingCount, setPendingCount] = useState(0);
-  const [psdLoading, setPsdLoading] = useState<string | null>(null);
-  const [optimizing, setOptimizing] = useState(false);
-  const [selectedModel, setSelectedModel] = useState('nanobann2');
-  const [selectedAspectRatio, setSelectedAspectRatio] = useState(savedSettings.aspectRatio || '1:1');
-  const [resolution, setResolution] = useState(savedSettings.resolution || '2K');
-  const [generateCount, setGenerateCount] = useState(savedSettings.generateCount || 1);
-  const [showCreditModal, setShowCreditModal] = useState(false);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
-  const [generatePrice, setGeneratePrice] = useState(0.3);
-  const [enableOptimization, setEnableOptimization] = useState(savedSettings.enableOptimization ?? false);
-  const [isOptimized, setIsOptimized] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [availableModels, setAvailableModels] = useState<{ value: string; label: string }[]>([
-    { value: 'gpt-image-2', label: 'GPT Image 2' },
-    { value: 'nanobann2', label: 'Nanobann2' },
-  ]);
-  const { user } = useAuth();
-
-  const todayKey = getTodayKey();
-  const displayImages = user ? images : [];
-  const generatedImages = displayImages.filter(img => img.type === 'generated');
-  let groupedGenerated = groupByDay(generatedImages);
-  // 如果今天有pending但没有已生成的图片，添加一个空的今天分组
-  if (pendingCount > 0 && !groupedGenerated.some(([key]) => key === todayKey)) {
-    groupedGenerated = [[todayKey, []], ...groupedGenerated];
-  }
-  const todayGenCount = generatedImages.filter(img => {
-    const d = new Date(img.createdAt);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` === todayKey;
-  }).length;
-
-  useEffect(() => {
-    getAvailableModels().then(m => setAvailableModels(m.map(x => ({ value: x.model_id, label: x.label }))));
   }, []);
 
   useEffect(() => {
@@ -185,19 +167,18 @@ export const ChatGenPage: React.FC = () => {
     const el = textareaRef.current;
     if (el) {
       el.style.height = 'auto';
-      el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+      el.style.height = Math.min(el.scrollHeight, 100) + 'px';
     }
   };
 
   useEffect(() => { autoResize(); }, [prompt]);
 
-  const scrollToBottom = () => {
-    setTimeout(() => {
-      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-    }, 100);
-  };
-
   const optimizePrompt = async (text: string, imageUrls?: string[]): Promise<string> => {
+    const user = getCurrentUser();
+    if (!user) {
+      window.dispatchEvent(new CustomEvent('show-auth-modal'));
+      throw new Error('请先登录');
+    }
     const API_TOKEN = 'sk-r5Clizar6aV39YsxLbHR3rW209LqmnYa5fLT1iePRBtfZT47';
     let imageDescriptions = '';
     if (imageUrls && imageUrls.length > 0) {
@@ -258,7 +239,7 @@ export const ChatGenPage: React.FC = () => {
     const files = e.target.files;
     if (!files) return;
     const filesArray = Array.from(files) as File[];
-    const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+    const MAX_FILE_SIZE = 20 * 1024 * 1024;
     const oversized = filesArray.find(f => f.size > MAX_FILE_SIZE);
     if (oversized) {
       alert(`图片"${oversized.name}"超过 20MB，请压缩后重新上传`);
@@ -301,7 +282,6 @@ export const ChatGenPage: React.FC = () => {
       return;
     }
 
-    // AI 优化：优化后自动重新触发生成
     if (enableOptimization && hasPrompt && !isOptimized) {
       setOptimizing(true);
       optimizePrompt(prompt, uploadedImages.map(img => img.url))
@@ -309,20 +289,17 @@ export const ChatGenPage: React.FC = () => {
           setPrompt(optimized);
           setIsOptimized(true);
           setOptimizing(false);
-          // 优化完成后自动提交生成
           setTimeout(() => handleGenerate(), 100);
         })
         .catch(() => setOptimizing(false));
       return;
     }
 
-    // 记录当前输入的快照
     const currentPrompt = prompt;
     const currentImages = uploadedImages.map(img => img.url);
     const currentCount = generateCount;
 
     setLoading(true);
-    // 异步执行生成，不阻塞UI
     (async () => {
       let result: any;
       try {
@@ -342,7 +319,7 @@ export const ChatGenPage: React.FC = () => {
         }));
         setImages(prev => [...newGenImages, ...prev]);
 
-        const savePromises = (result.data || []).map((item: any) =>
+        (result.data || []).forEach((item: any) => {
           imageLibraryService.saveToLibrary({
             image_url: item.url,
             prompt: currentPrompt || '',
@@ -350,15 +327,12 @@ export const ChatGenPage: React.FC = () => {
             aspect_ratio: selectedAspectRatio,
             resolution,
             type: 'chatgen'
-          })
-        );
-        await Promise.all(savePromises);
-        await loadImagesFromDB();
+          }).catch(err => console.error('[chatgen] 保存图片失败:', err));
+        });
 
         setPrompt('');
         setUploadedImages([]);
         setIsOptimized(false);
-        scrollToBottom();
       } catch (e: any) {
         console.error('[chatgen] 生成失败:', e);
         const hasImages = result && Array.isArray(result.data) && result.data.length > 0;
@@ -388,38 +362,15 @@ export const ChatGenPage: React.FC = () => {
     }
   };
 
-  const handlePsdConversion = async (url: string) => {
-    setPsdLoading(url);
-    try {
-      await convertImageToPsd(url);
-    } catch (err: any) {
-      console.error('PSD导出失败:', err);
-      alert(`PSD导出失败: ${err.message || '请检查图片并重试'}`);
-    } finally {
-      setPsdLoading(null);
-    }
-  };
-
   const handleDeleteImage = async (url: string) => {
-    // 先从UI中移除
     setImages(prev => prev.filter(img => img.url !== url));
-    // 从数据库中删除
     try {
       const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
       if (token) {
-        // 查找图片ID并删除
-        const res = await axios.get('/api/images/library', {
-          headers: { Authorization: `Bearer ${token}` },
-          params: { page: 1, pageSize: 500, filter: 'mine' }
-        });
-        if (res.data?.success && Array.isArray(res.data?.data)) {
-          const imgToDelete = res.data.data.find((img: any) => img.image_url === url);
-          if (imgToDelete) {
-            await axios.delete(`/api/images/library/${imgToDelete.id}`, {
-              headers: { Authorization: `Bearer ${token}` }
-            });
-          }
-        }
+        await axios.post('/api/images/delete-by-url',
+          { url },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
       }
     } catch (e) {
       console.error('[chatgen] 删除图片失败:', e);
@@ -441,206 +392,258 @@ export const ChatGenPage: React.FC = () => {
   };
 
   const MODEL_LABELS: Record<string, string> = {
-    nanobann2: 'Nano',
-    'gpt-image-2': 'GPT'
+    nanobann2: 'NanoBanana2',
+    'gpt-image-2': 'GPT-Image2'
   };
 
+  const examplePrompts = [
+    '一只戴着墨镜的柴犬坐在迈阿密海滩边的敞篷跑车里，复古胶片摄影风格',
+    '赛博朋克城市的霓虹雨夜，一个穿着长风衣的人站在天台',
+    '一杯冒着热气的拿铁咖啡放在窗台上，窗外是秋天的红叶',
+  ];
+
+  // 5大核心功能案例
+  const showcaseFeatures = [
+    {
+      title: '故事板',
+      subtitle: 'AI 分镜生成',
+      desc: '输入剧本，自动生成专业影视分镜画面',
+      image: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=professional+film+storyboard+frames+cinematic+shot+sequence+dark+background+blue+accent+lighting&image_size=landscape_4_3',
+      navId: 'storyboard',
+      color: 'from-violet-500 to-indigo-600',
+    },
+    {
+      title: '小红书种草',
+      subtitle: '一键生成笔记',
+      desc: '封面+文案+5张配图，完整种草笔记',
+      image: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=xiaohongshu+social+media+post+aesthetic+flat+lay+product+photography+pastel+colors+minimalist&image_size=landscape_4_3',
+      navId: 'xiaohongshu',
+      color: 'from-rose-500 to-pink-600',
+    },
+    {
+      title: '社媒POV出图',
+      subtitle: '第一视角场景图',
+      desc: '适配Ins/TikTok/FB，多平台一键出图',
+      image: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=social+media+content+creation+first+person+perspective+lifestyle+product+shot+modern+aesthetic+dark&image_size=landscape_4_3',
+      navId: 'social',
+      color: 'from-amber-500 to-orange-600',
+    },
+    {
+      title: '视频生成',
+      subtitle: '图片变营销视频',
+      desc: '上传图片，AI生成短视频广告',
+      image: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=product+video+production+cinematic+motion+graphics+marketing+video+dark+background+blue+neon+light&image_size=landscape_4_3',
+      navId: 'gemini-video',
+      color: 'from-emerald-500 to-teal-600',
+    },
+    {
+      title: 'TK带货图片',
+      subtitle: '产品商业大片',
+      desc: '上传产品图，AI生成TikTok风格带货海报',
+      image: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=tiktok+style+product+photography+commercial+photo+studio+lighting+modern+aesthetic+dark+background&image_size=landscape_4_3',
+      navId: 'chat-gen',
+      color: 'from-blue-500 to-cyan-500',
+    },
+  ];
+
+  // 真正的瀑布流：根据图片URL生成稳定的伪随机高度
+  const getRandomHeight = (url: string) => {
+    // 用URL的charCode之和作为种子，保证同一张图高度稳定
+    let hash = 0;
+    for (let i = 0; i < url.length; i++) {
+      hash = ((hash << 5) - hash) + url.charCodeAt(i);
+      hash |= 0;
+    }
+    const ratio = Math.abs(hash % 5);
+    const heights = ['aspect-[3/4]', 'aspect-square', 'aspect-[4/5]', 'aspect-[2/3]', 'aspect-[5/6]'];
+    return heights[ratio];
+  };
+
+  // 纯瀑布流布局，无网格模式
+  const masonryClass = 'columns-2 md:columns-3 lg:columns-4 gap-5 space-y-5';
+
   return (
-    <div className="flex-1 flex h-full bg-[#fafafa]">
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-full min-w-0">
-        {/* Header */}
-        <div className="flex-shrink-0 py-2.5 bg-white border-b border-gray-100 px-6">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-blue-500 flex items-center justify-center shadow-sm">
-              <ImageIcon size={15} className="text-white" />
+    <div className="min-h-0 flex-1 flex flex-col bg-gray-50">
+      {/* 顶部导航栏 */}
+      <header className="bg-white border-b border-gray-200 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center">
+                <Wand2 size={16} className="text-white" />
+              </div>
+              <h1 className="text-xl font-bold text-gray-900">创意生图</h1>
             </div>
-            <h1 className="text-sm font-bold text-[#171717]">创意生图</h1>
-            <div className="ml-auto flex items-center gap-2">
-              <button
-                onClick={() => loadImagesFromDB()}
-                className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
-                title="刷新图片"
-              >
-                <span className="text-xs font-semibold text-gray-600">刷新</span>
-              </button>
-              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 rounded-full">
-                <Coins size={12} className="text-amber-500" />
-                <span className="text-xs font-semibold text-amber-600">
-                  {Number(Math.max(0, user?.credits || 0)).toFixed(1)}
-                </span>
-              </div>
-              <div className="px-2.5 py-1 bg-blue-50 rounded-full">
-                <span className="text-xs font-semibold text-blue-600">今日 {todayGenCount} 张</span>
-              </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => loadImagesFromDB()}
+              className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+            >
+              <RefreshCw size={18} />
+            </button>
+            <div className="flex items-center gap-2 bg-amber-50 px-3 py-2 rounded-lg">
+              <Coins size={16} className="text-amber-500" />
+              <span className="text-sm font-medium text-amber-700">
+                {Number(Math.max(0, user?.credits || 0)).toFixed(1)}
+              </span>
+            </div>
+            <div className="text-sm text-gray-500">
+              今日生成: <span className="font-semibold text-blue-600">{todayGenCount}</span> 张
             </div>
           </div>
         </div>
+      </header>
 
-        {/* Scrollable Gallery */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-6 pt-4">
-          {/* Loading State */}
+      {/* 主内容区 */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* 左侧：图片展示区 */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-6">
           {loadingImages && (
-            <div className="flex flex-col items-center justify-center h-full">
-              <div className="w-20 h-20 rounded-[2rem] bg-white border border-gray-200 shadow-sm flex items-center justify-center mb-4">
-                <Loader2 size={32} className="text-gray-400 animate-spin" />
-              </div>
-              <p className="text-sm font-medium text-gray-400 mb-1">加载中...</p>
-              <p className="text-xs text-gray-300">正在从数据库加载图片</p>
+            <div className="flex items-center justify-center h-64">
+              <Loader2 size={32} className="text-blue-500 animate-spin" />
             </div>
           )}
 
-          {/* Empty State */}
-          {!loadingImages && displayImages.length === 0 && !loading && (
-            <div className="flex flex-col items-center justify-center h-full">
-              <div className="w-20 h-20 rounded-[2rem] bg-white border border-gray-200 shadow-sm flex items-center justify-center mb-4">
-                <ImageIcon size={32} className="text-gray-300" />
+          {!loadingImages && generatedImages.length === 0 && !loading && (
+            <div className="flex flex-col items-center justify-center min-h-[60vh]">
+              <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mb-6">
+                <Wand2 size={40} className="text-blue-500" />
               </div>
-              <p className="text-sm font-medium text-gray-400 mb-1">还没有生成过图片</p>
-              <p className="text-xs text-gray-300">在下方输入描述，开始创作</p>
-            </div>
-          )}
-
-          {/* Section 1: Generated Images by Day */}
-          {groupedGenerated.map(([dateKey, dayImages]) => (
-            <div key={dateKey} className="space-y-3 px-6">
-              {/* Day Header */}
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-full border border-gray-100 shadow-sm">
-                  <Calendar size={12} className="text-[#A3A3A3]" />
-                  <span className="text-xs font-semibold text-[#525252]">{formatDayLabel(dateKey)}</span>
-                  <span className="text-[10px] text-[#A3A3A3] bg-gray-100 px-1.5 py-0.5 rounded-full">{dayImages.length} 张</span>
-                </div>
-                <div className="flex-1 h-px bg-gray-200" />
-              </div>
-
-              {/* Images Grid */}
-              <div className="grid grid-cols-3 lg:grid-cols-5 xl:grid-cols-5 gap-2 lg:gap-3">
-                {/* Loading placeholders at top of today's group */}
-                {loading && dateKey === todayKey && Array.from({ length: generateCount }).map((_, i) => (
-                  <div key={`gen-loading-${i}`} className="relative bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
-                    <div className="relative aspect-[4/3]">
-                      <div className="absolute inset-0 bg-gradient-to-br from-gray-100 via-gray-50 to-gray-100 animate-pulse" />
-                      <div className="absolute inset-0 rounded-2xl border-2 border-blue-400/30 animate-pulse shadow-[0_0_12px_rgba(59,130,246,0.15)]" />
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-10 h-10 rounded-2xl bg-white/80 backdrop-blur-sm border border-gray-200 shadow-md flex items-center justify-center">
-                          <Loader2 size={20} className="text-blue-500 animate-spin" />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="px-3 py-2.5 flex items-center justify-between">
-                      <div className="w-12 h-3 bg-gray-200 rounded-full animate-pulse" />
-                      <div className="w-8 h-3.5 bg-gray-100 rounded-full animate-pulse" />
-                    </div>
-                  </div>
-                ))}
-                {dayImages.map((img) => (
-                  <motion.div
-                    key={img.url}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="group relative bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-200"
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">开始创作</h2>
+              <p className="text-gray-500 mb-8">输入描述，AI 为你生成精美图片</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl w-full">
+                {examplePrompts.map((ep, i) => (
+                  <motion.button
+                    key={i}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.1 }}
+                    onClick={() => { setPrompt(ep); setIsOptimized(false); }}
+                    className="p-4 bg-white rounded-xl border border-gray-200 hover:border-blue-300 hover:shadow-lg transition-all text-left"
                   >
-                    {/* Image - 3/4 */}
-                    <div className="relative aspect-[4/3]">
-                      <img
-                        src={img.url}
-                        alt=""
-                        className="w-full h-full object-contain cursor-pointer bg-[#FAFAFA]"
-                        onClick={() => setPreviewImage(img.url)}
-                        onError={(e) => { (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23d4d4d4%22 stroke-width=%222%22%3E%3Crect x=%223%22 y=%223%22 width=%2218%22 height=%2218%22 rx=%222%22/%3E%3Ccircle cx=%228.5%22 cy=%228.5%22 r=%221.5%22/%3E%3Cpolyline points=%2221 15 16 10 5 21%22/%3E%3C/svg%3E'; }}
-                      />
-                      {/* Hover overlay */}
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-200 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setPreviewImage(img.url); }}
-                        className="w-9 h-9 bg-white/90 rounded-xl flex items-center justify-center shadow-md hover:bg-white transition-colors"
-                      >
-                        <ZoomIn size={16} className="text-[#171717]" />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleUseAsReference(img.url); }}
-                        className="w-9 h-9 bg-white/90 rounded-xl flex items-center justify-center shadow-md hover:bg-emerald-500 hover:text-white transition-all"
-                        title="作为参考图"
-                      >
-                        <CornerDownRight size={14} className="text-[#171717]" />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handlePsdConversion(img.url); }}
-                        disabled={psdLoading === img.url}
-                        className="w-9 h-9 bg-white/90 rounded-xl flex items-center justify-center shadow-md hover:bg-purple-500 hover:text-white transition-all disabled:opacity-50"
-                        title="导出为PSD分层文件"
-                      >
-                        {psdLoading === img.url ? (
-                          <Loader2 size={14} className="animate-spin text-purple-500" />
-                        ) : (
-                          <Layers size={16} className="text-[#171717]" />
-                        )}
-                      </button>
-                      </div>
-                      {/* Delete button */}
-                      <button
-                        onClick={() => handleDeleteImage(img.url)}
-                        className="absolute top-2 right-2 w-7 h-7 bg-black/40 hover:bg-red-500 rounded-full flex items-center justify-center transition-colors opacity-0 group-hover:opacity-100 backdrop-blur-sm"
-                      >
-                        <Trash2 size={12} className="text-white" />
-                      </button>
-                    </div>
-                    {/* Time - 1/4 */}
-                    <div className="px-3 py-2.5 flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <Clock size={10} className="text-[#A3A3A3] flex-shrink-0" />
-                        <span className="text-[10px] text-[#A3A3A3]">{formatTime(img.createdAt)}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handlePsdConversion(img.url); }}
-                          disabled={psdLoading === img.url}
-                          className="w-6 h-6 rounded-md flex items-center justify-center hover:bg-purple-50 hover:text-purple-600 transition-colors disabled:opacity-40"
-                          title="导出为PSD分层文件"
-                        >
-                          {psdLoading === img.url ? (
-                            <Loader2 size={10} className="animate-spin text-purple-500" />
-                          ) : (
-                            <Layers size={10} className="text-[#A3A3A3]" />
-                          )}
-                        </button>
-                        {img.model && (
-                          <span className="text-[9px] text-[#A3A3A3] bg-gray-100 px-1.5 py-0.5 rounded-full flex-shrink-0">
-                            {MODEL_LABELS[img.model] || img.model}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </motion.div>
+                    <p className="text-sm text-gray-600 line-clamp-3">{ep}</p>
+                  </motion.button>
                 ))}
               </div>
             </div>
-          ))}
+          )}
 
-          {/* Bottom padding for input area */}
-          <div className="h-4 px-6" />
+          {!loadingImages && generatedImages.length > 0 && (
+            <div className={masonryClass}>
+              {generatedImages.map((img, idx) => (
+                <motion.div
+                  key={img.url}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: idx * 0.05 }}
+                  className={`group relative break-inside-avoid cursor-pointer ${getRandomHeight(img.url)} rounded-xl overflow-hidden bg-white transition-all duration-300`}
+                  onMouseEnter={() => setHoveredIndex(idx)}
+                  onMouseLeave={() => setHoveredIndex(null)}
+                  onClick={() => setPreviewImage(img.url)}
+                >
+                  <img
+                    src={img.url}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                  
+                  <AnimatePresence>
+                    {hoveredIndex === idx && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"
+                      >
+                        <div className="absolute bottom-0 left-0 right-0 p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Clock size={12} className="text-white/80" />
+                              <span className="text-xs text-white/80">{formatTime(img.createdAt)}</span>
+                            </div>
+                            {img.model && (
+                              <span className="text-xs px-2 py-1 bg-white/20 rounded-full text-white">
+                                {MODEL_LABELS[img.model] || img.model}
+                              </span>
+                            )}
+                          </div>
+                          {img.prompt && (
+                            <p className="text-xs text-white/60 mt-2 line-clamp-2">{img.prompt}</p>
+                          )}
+                        </div>
+                        
+                        <div className="absolute top-3 right-3 flex gap-2">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDownloadImage(img.url); }}
+                            className="w-8 h-8 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center hover:bg-white/40 transition-colors"
+                          >
+                            <Download size={14} className="text-white" />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleUseAsReference(img.url); }}
+                            className="w-8 h-8 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center hover:bg-white/40 transition-colors"
+                            title="作为参考图"
+                          >
+                            <CornerDownRight size={14} className="text-white" />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDeleteImage(img.url); }}
+                            className="w-8 h-8 bg-red-500/80 backdrop-blur-sm rounded-lg flex items-center justify-center hover:bg-red-600 transition-colors"
+                          >
+                            <Trash2 size={14} className="text-white" />
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              ))}
+            </div>
+          )}
+
+          {loading && (
+            <div className={masonryClass}>
+              {Array.from({ length: generateCount }).map((_, i) => (
+                <motion.div
+                  key={`loading-${i}`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="aspect-square rounded-xl bg-gray-200 animate-pulse flex items-center justify-center break-inside-avoid"
+                >
+                  <Loader2 size={24} className="text-gray-400 animate-spin" />
+                </motion.div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Input Area */}
-        <div className="flex-shrink-0 bg-white border-t border-[#E5E5E5] px-4 py-3">
-          <div className="w-full">
-            {/* Uploaded Images Row */}
-            {uploadedImages.length > 0 && (
-              <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-1">
+        {/* 右侧：控制面板 */}
+        <aside className="w-80 bg-white border-l border-gray-200 flex flex-col overflow-hidden">
+          {/* 标题 */}
+          <div className="p-4 border-b border-gray-200 flex-shrink-0">
+            <h2 className="font-semibold text-gray-900">创作设置</h2>
+          </div>
+
+          {/* 可滚动的设置区域 */}
+          <div className="flex-1 overflow-y-auto">
+            {/* 上传参考图 */}
+            <div className="p-4 border-b border-gray-200">
+              <label className="text-sm font-medium text-gray-700 mb-1 block">参考图片</label>
+              <p className="text-xs text-gray-500 mb-3">上传同一产品的多个细节图，AI 将综合分析后生成</p>
+              <div className="flex flex-wrap gap-2">
                 {uploadedImages.map((img, idx) => (
-                  <div key={img.id} className="relative group flex-shrink-0">
-                    <div className="w-16 h-16 rounded-xl overflow-visible">
-                      <img
-                        src={img.url}
-                        alt=""
-                        className="w-full h-full object-cover rounded-xl border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={() => setPreviewImage(img.url)}
-                      />
+                  <div key={img.id} className="relative group">
+                    <div className="w-16 h-16 rounded-lg overflow-hidden border-2 border-gray-200">
+                      <img src={img.url} alt="" className="w-full h-full object-cover" />
                     </div>
                     <button
                       onClick={() => removeUploadedImage(idx)}
-                      className="absolute -top-1 -right-1 w-5 h-5 bg-black/60 hover:bg-red-500 rounded-full flex items-center justify-center transition-colors z-10"
+                      className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                       <X size={10} className="text-white" />
                     </button>
@@ -649,17 +652,12 @@ export const ChatGenPage: React.FC = () => {
                 {uploadedImages.length < 4 && (
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-200 hover:border-gray-400 flex items-center justify-center flex-shrink-0 transition-all text-gray-400 hover:text-gray-600"
+                    className="w-16 h-16 rounded-lg border-2 border-dashed border-gray-300 hover:border-blue-400 flex items-center justify-center transition-colors"
                   >
-                    <Plus size={18} />
+                    <Plus size={20} className="text-gray-400" />
                   </button>
                 )}
               </div>
-            )}
-
-            {/* Input Row */}
-            <div className="flex items-end gap-2 bg-[#F5F5F5] rounded-2xl px-3 py-2">
-              {/* Left: Upload button */}
               <input
                 type="file"
                 ref={fileInputRef}
@@ -668,96 +666,209 @@ export const ChatGenPage: React.FC = () => {
                 multiple
                 className="hidden"
               />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploadedImages.length >= 4}
-                className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-200 transition-colors flex-shrink-0 disabled:opacity-30"
-                title="上传参考图"
-              >
-                <ImageIcon size={16} className="text-[#A3A3A3]" />
-              </button>
+            </div>
 
-              {/* Input */}
+            {/* 模型选择 */}
+            <div className="p-4 border-b border-gray-200">
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles size={14} className="text-blue-500" />
+                <span className="text-xs font-medium text-gray-600">生成模型</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setSelectedModel('nanobann2')}
+                  className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-all ${
+                    selectedModel === 'nanobann2'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                  }`}
+                >
+                  <span className="text-xs font-semibold">NanoBanana2</span>
+                </button>
+                <button
+                  onClick={() => setSelectedModel('gpt-image-2')}
+                  className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-all ${
+                    selectedModel === 'gpt-image-2'
+                      ? 'border-amber-500 bg-amber-50 text-amber-700'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                  }`}
+                >
+                  <span className="text-xs font-semibold">GPT-Image2</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 生图设置 */}
+            <div className="p-4 border-b border-gray-200 space-y-4">
+              {/* 分辨率 */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Monitor size={14} className="text-emerald-500" />
+                  <span className="text-xs font-medium text-gray-600">分辨率</span>
+                </div>
+                <div className="flex gap-2">
+                  {['2K', '4K'].map((res) => (
+                    <button
+                      key={res}
+                      onClick={() => setResolution(res)}
+                      className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
+                        resolution === res
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {res}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 图片比例 */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Crop size={14} className="text-amber-500" />
+                  <span className="text-xs font-medium text-gray-600">图片比例</span>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {ASPECT_RATIOS.map(size => (
+                    <button 
+                      key={size.value} 
+                      onClick={() => setSelectedAspectRatio(size.value)}
+                      className={`flex flex-col items-center justify-center gap-1 py-2.5 rounded-lg transition-all ${
+                        selectedAspectRatio === size.value
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      <div className={`border-[1.5px] rounded-sm ${
+                        selectedAspectRatio === size.value ? 'border-white/80' : 'border-gray-400'
+                      } ${getRatioStyle(size.value)}`} />
+                      <span className="text-[10px] font-medium">{size.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 生成张数 */}
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <ImagePlus size={14} className="text-violet-500" />
+                  <span className="text-xs font-medium text-gray-600">生成张数</span>
+                </div>
+                <select
+                  value={generateCount}
+                  onChange={(e) => setGenerateCount(Number(e.target.value))}
+                  className="w-full py-2 px-3 rounded-lg text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200 outline-none cursor-pointer hover:border-gray-300 focus:border-blue-400 focus:bg-white transition-all"
+                >
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
+                    <option key={num} value={num}>{num} 张</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* AI 优化开关 */}
+            <div className="p-4 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">AI 优化提示词</label>
+                  <p className="text-xs text-gray-500 mt-1">自动优化你的描述</p>
+                </div>
+                <button
+                  onClick={() => setEnableOptimization(!enableOptimization)}
+                  className={`w-12 h-6 rounded-full transition-colors ${
+                    enableOptimization ? 'bg-blue-600' : 'bg-gray-300'
+                  }`}
+                >
+                  <div className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform ${
+                    enableOptimization ? 'translate-x-6' : 'translate-x-0.5'
+                  }`} />
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          {/* 底部输入区域 */}
+          <div className="p-4 border-t border-gray-200 bg-white flex-shrink-0">
+            {uploadedImages.length > 0 && (
+              <div className="flex gap-2 mb-3 overflow-x-auto pb-2">
+                {uploadedImages.map((img, idx) => (
+                  <div key={img.id} className="relative flex-shrink-0 group">
+                    <img src={img.url} alt="" className="w-12 h-12 rounded-lg object-cover border border-gray-200" />
+                    <button
+                      onClick={() => removeUploadedImage(idx)}
+                      className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X size={8} className="text-white" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2">
               <textarea
                 ref={textareaRef}
                 value={prompt}
                 onChange={(e) => { setPrompt(e.target.value); setIsOptimized(false); autoResize(); }}
                 onKeyDown={handleKeyDown}
                 placeholder="描述你想要生成的图片..."
-                className="flex-1 bg-transparent text-sm text-[#171717] placeholder:text-[#BDBDBD] resize-none outline-none max-h-[150px] py-1"
-                rows={1}
+                className="flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                rows={2}
               />
-
-              {/* Right: Optimize toggle + Model + Send */}
-              <div className="flex items-center gap-1.5 flex-shrink-0">
-                <button
-                  onClick={() => setEnableOptimization(!enableOptimization)}
-                  className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
-                    enableOptimization ? 'bg-violet-100 text-violet-600' : 'hover:bg-gray-200 text-[#A3A3A3]'
-                  }`}
-                  title={enableOptimization ? 'AI优化已开启' : 'AI优化已关闭'}
-                >
-                  <Sparkles size={14} />
-                </button>
-                <button
-                  onClick={() => setShowSettings(true)}
-                  className="h-8 px-2.5 rounded-xl flex items-center gap-1.5 hover:bg-gray-200 transition-colors"
-                  title="生成设置"
-                >
-                  <span className="text-xs font-medium text-gray-600">
-                    {availableModels.find(m => m.value === selectedModel)?.label || 'Nano'}
-                  </span>
-                  <ChevronDown size={10} className="text-gray-400" />
-                </button>
-
-                <button
-                  onClick={handleGenerate}
-                  disabled={loading || optimizing || (!prompt.trim() && uploadedImages.length === 0)}
-                  className={`h-8 px-4 rounded-xl flex items-center gap-1.5 transition-all ${
-                    loading || optimizing
-                      ? 'bg-gray-300 cursor-wait'
-                      : 'bg-[#171717] text-white hover:bg-[#333] disabled:bg-[#D4D4D4] disabled:text-[#A3A3A3] disabled:cursor-not-allowed'
-                  }`}
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 size={14} className="animate-spin" />
-                      <span className="text-xs font-medium">生成中...</span>
-                    </>
-                  ) : optimizing ? (
-                    <>
-                      <Loader2 size={14} className="animate-spin" />
-                      <span className="text-xs font-medium">优化中...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-xs font-medium">生成</span>
-                      <Send size={13} />
-                    </>
-                  )}
-                </button>
-              </div>
+              <button
+                onClick={handleGenerate}
+                disabled={loading || optimizing || (!prompt.trim() && uploadedImages.length === 0)}
+                className="px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              >
+                {loading || optimizing ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  <Send size={18} />
+                )}
+              </button>
             </div>
-
+            <div className="flex items-center justify-between mt-2">
+              <span className="text-xs text-gray-500">Enter 发送 · Shift+Enter 换行</span>
+              <span className="text-xs text-gray-500">{selectedAspectRatio} · {resolution}</span>
+            </div>
           </div>
-        </div>
+        </aside>
       </div>
 
-      {/* Modals */}
+      {/* 全屏预览模态框 */}
+      <AnimatePresence>
+        {previewImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-8"
+            onClick={() => setPreviewImage(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
+              className="relative max-w-4xl max-h-[90vh]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <img src={previewImage} alt="" className="max-w-full max-h-[90vh] object-contain rounded-lg" />
+              <button
+                onClick={() => setPreviewImage(null)}
+                className="absolute top-4 right-4 w-10 h-10 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/40 transition-colors"
+              >
+                <X size={20} className="text-white" />
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 弹窗 */}
       <CreditCheckModal isOpen={showCreditModal} onClose={() => setShowCreditModal(false)} />
-      <ImagePreviewModal isOpen={!!previewImage} onClose={() => setPreviewImage(null)} imageUrl={previewImage || ''} />
-      <SettingsPanel
-        show={showSettings}
-        resolution={resolution}
-        aspectRatio={selectedAspectRatio}
-        generateCount={generateCount}
-        model={selectedModel}
-        onResolutionChange={setResolution}
-        onAspectRatioChange={setSelectedAspectRatio}
-        onGenerateCountChange={setGenerateCount}
-        onModelChange={setSelectedModel}
-        onClose={() => setShowSettings(false)}
-      />
+      <ImagePreviewModal isOpen={false} onClose={() => {}} imageUrl="" />
     </div>
   );
 };

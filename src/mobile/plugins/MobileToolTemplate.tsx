@@ -194,7 +194,7 @@ export const MobileToolTemplate: React.FC<MobileToolTemplateProps> = ({ config, 
   // Load pricing + models from server
   React.useEffect(() => {
     getGeneratePrice().then(setGeneratePrice);
-    getAvailableModels(['seedream']).then(m => {
+    getAvailableModels().then(m => {
       const sorted = m.filter(x => x.enabled).sort((a, b) => a.sort_order - b.sort_order);
       if (sorted.length > 0) {
         setAvailableModels(sorted.map(x => ({ value: x.model_id, label: x.label })));
@@ -340,17 +340,17 @@ export const MobileToolTemplate: React.FC<MobileToolTemplateProps> = ({ config, 
   const canGenerate = !!((!needsUpload || hasUploads) && (textInput.trim() || !config.textInputRequired));
 
   return (
-    <div className="flex flex-col h-full bg-[#FAFAFA]">
+    <div className="flex flex-col h-full bg-[#0a0a0a]">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-[#f0f0f0] bg-white flex-shrink-0">
-        <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-full bg-[#f5f5f5] mobile-tap">
-          <X size={16} className="text-[#737373]" />
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-[#0a0a0a] flex-shrink-0">
+        <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.06] mobile-tap">
+          <X size={16} className="text-white/40" />
         </button>
-        <h1 className="text-base font-bold text-[#171717]">{config.title}</h1>
+        <h1 className="text-base font-bold text-white">{config.title}</h1>
         {isAuthenticated && user && (
-          <div className="ml-auto flex items-center gap-1 bg-amber-50 px-2.5 py-1 rounded-full">
-            <Coins size={12} className="text-amber-500" />
-            <span className="text-xs font-semibold text-amber-600">{Number(user.credits || 0).toFixed(1)}</span>
+          <div className="ml-auto flex items-center gap-1 bg-blue-500/10 px-2.5 py-1 rounded-full">
+            <Coins size={12} className="text-blue-400" />
+            <span className="text-xs font-semibold text-blue-400">{Number(user.credits || 0).toFixed(1)}</span>
           </div>
         )}
       </div>
@@ -459,7 +459,7 @@ export const MobileToolTemplate: React.FC<MobileToolTemplateProps> = ({ config, 
                     return (
                       <button key={lang.value} onClick={() => setSelectedLang(lang.value)}
                         className={`mobile-tap flex-shrink-0 py-2.5 px-4 rounded-xl text-xs font-medium transition-all ${
-                          isActive ? 'bg-[#171717] text-white shadow-sm' : 'bg-white text-[#737373] border border-[#eee]'
+                          isActive ? 'bg-blue-500 text-white shadow-sm shadow-blue-200/50' : 'bg-white text-[#737373] border border-[#eee]'
                         }`}>{lang.label}</button>
                     );
                   })}
@@ -505,8 +505,8 @@ export const MobileToolTemplate: React.FC<MobileToolTemplateProps> = ({ config, 
                       return (
                         <button key={r.value} onClick={() => setSelectedRatios(prev =>
                           prev.includes(r.value) ? prev.filter(v => v !== r.value) : [...prev, r.value]
-                        )} className={`mobile-tap flex items-center gap-3 px-4 py-3 rounded-2xl text-sm transition-all ${
-                          isOn ? 'bg-[#171717] text-white shadow-sm' : 'bg-white text-[#525252] border border-[#eee]'
+                        )                        } className={`mobile-tap flex items-center gap-3 px-4 py-3 rounded-2xl text-sm transition-all ${
+                          isOn ? 'bg-blue-500 text-white shadow-sm shadow-blue-200/50' : 'bg-white text-[#525252] border border-[#eee]'
                         }`}>
                           <div className={`flex-shrink-0 rounded border-2 transition-colors ${
                             isWide ? 'w-6 h-4' : 'w-4 h-6'
@@ -560,7 +560,7 @@ export const MobileToolTemplate: React.FC<MobileToolTemplateProps> = ({ config, 
                   {[{ value: '2K', label: '2K' }, { value: '4K', label: '4K' }].map(q => (
                     <button key={q.value} onClick={() => setSelectedQuality(q.value)}
                       className={`mobile-tap flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                        selectedQuality === q.value ? 'bg-[#171717] text-white shadow-sm' : 'bg-white text-[#737373] border border-[#eee]'
+                        selectedQuality === q.value ? 'bg-blue-500 text-white shadow-sm shadow-blue-200/50' : 'bg-white text-[#737373] border border-[#eee]'
                       }`}>{q.label}</button>
                   ))}
                 </div>
@@ -603,7 +603,7 @@ export const MobileToolTemplate: React.FC<MobileToolTemplateProps> = ({ config, 
                   <button
                     onClick={isAuthenticated ? handleGenerate : () => window.dispatchEvent(new Event('mobile-auth-required'))}
                     disabled={isAuthenticated ? isGenerating : false}
-                    className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-sm font-bold bg-[#171717] text-white active:bg-[#333] transition-all shadow-sm disabled:opacity-40"
+                    className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-sm font-bold bg-gradient-to-r from-blue-500 to-blue-600 text-white active:from-blue-600 active:to-blue-700 transition-all shadow-sm shadow-blue-200/50 disabled:opacity-40"
                   >
                     {!isAuthenticated ? (
                       <><AlertTriangle size={16} /> 登录后使用</>
@@ -622,7 +622,7 @@ export const MobileToolTemplate: React.FC<MobileToolTemplateProps> = ({ config, 
               <button
                 onClick={isAuthenticated ? handleGenerate : () => window.dispatchEvent(new Event('mobile-auth-required'))}
                 disabled={isAuthenticated ? (isGenerating || !canGenerate) : false}
-                className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-sm font-bold bg-[#171717] text-white active:bg-[#333] transition-all shadow-sm disabled:opacity-40"
+                className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-sm font-bold bg-gradient-to-r from-blue-500 to-blue-600 text-white active:from-blue-600 active:to-blue-700 transition-all shadow-sm shadow-blue-200/50 disabled:opacity-40"
               >
                 {!isAuthenticated ? (
                   <><AlertTriangle size={16} /> 登录后使用</>

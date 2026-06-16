@@ -125,14 +125,14 @@ const DeepSeekModelSelector: React.FC<{
               }`}
             >
               {/* Header with gradient */}
-              <div className={`relative rounded-t-2xl bg-gradient-to-r ${m.color} px-5 py-3 overflow-hidden`}>
+              <div className={`relative rounded-t-2xl bg-gradient-to-r ${m.color} px-5 py-3.5 overflow-hidden`}>
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-10">
                   <Icon size={56} className="text-white" />
                 </div>
                 <div className="flex items-center gap-2">
                   <Icon size={18} className="text-white" />
                   <span className="text-white font-bold text-sm tracking-tight">{m.label}</span>
-                  <span className={`ml-auto text-[10px] font-semibold text-white px-2 py-0.5 rounded-full bg-white/20`}>
+                  <span className="ml-auto text-[10px] font-semibold text-white px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm">
                     {m.tag}
                   </span>
                 </div>
@@ -197,11 +197,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
     subtitle: string;
     color: string;
   }> = {
-    seedream: {
-      icon: Cpu,
-      subtitle: '创意灵感',
-      color: 'from-amber-500 to-orange-600',
-    },
     nanobann2: {
       icon: ImageIcon,
       subtitle: '极速生成',
@@ -246,7 +241,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <div className="pt-5 md:pt-6 px-6 pb-4 border-b border-[#F0F0F0]">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-[#171717] rounded-full flex items-center justify-center shadow-md">
+                      <div className="w-10 h-10 bg-gradient-to-br from-[#171717] to-[#404040] rounded-full flex items-center justify-center shadow-md">
                         <Cpu size={18} className="text-white" />
                       </div>
                       <div>
@@ -254,7 +249,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         <p className="text-xs text-[#9E9E9E] mt-0.5">配置图片生成参数</p>
                       </div>
                     </div>
-                    <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#F5F5F5] transition-colors">
+                    <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-[#F5F5F5] transition-all">
                       <X size={18} className="text-[#9E9E9E]" />
                     </button>
                   </div>
@@ -264,26 +259,28 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   {/* Model Selection */}
                   <div>
                     <div className="flex items-center gap-2 mb-3">
-                      <ImageIcon size={14} className="text-[#9E9E9E]" />
-                      <span className="text-xs font-medium text-[#9E9E9E] uppercase tracking-wide">模型选择</span>
+                      <div className="w-5 h-5 rounded-md bg-blue-50 flex items-center justify-center">
+                        <ImageIcon size={12} className="text-blue-500" />
+                      </div>
+                      <span className="text-xs font-semibold text-[#525252]">模型选择</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 gap-2.5">
                       {(availableModels.length > 0 ? availableModels : [{ value: 'nanobann2', label: 'Nanobann2' }]).map(m => {
                         const config = MODEL_CONFIGS[m.value];
                         const Icon = config?.icon || ImageIcon;
                         const isSelected = model === m.value;
                         return (
                           <button key={m.value} onClick={() => onModelChange(m.value)}
-                            className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all ${
+                            className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
                               isSelected
-                                ? 'border-blue-500 bg-blue-50 shadow-md'
-                                : 'border-[#E5E5E5] bg-white hover:border-[#D4D4D4] hover:shadow-sm'
+                                ? 'border-blue-500 bg-gradient-to-b from-blue-50 to-white shadow-md shadow-blue-100/50'
+                                : 'border-[#E8E8E8] bg-white hover:border-[#D0D0D0] hover:shadow-sm'
                             }`}
                           >
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              isSelected ? 'bg-blue-500' : 'bg-gradient-to-br ' + (config?.color || 'from-gray-400 to-gray-500')
+                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                              isSelected ? 'bg-gradient-to-br from-blue-500 to-blue-600 shadow-md shadow-blue-200/50' : 'bg-gradient-to-br ' + (config?.color || 'from-gray-400 to-gray-500')
                             }`}>
-                              <Icon size={18} className="text-white" />
+                              <Icon size={20} className="text-white" />
                             </div>
                             <span className={`text-xs font-semibold text-center leading-tight ${
                               isSelected ? 'text-blue-600' : 'text-[#333]'
@@ -298,18 +295,20 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   {/* Resolution */}
                   <div>
                     <div className="flex items-center gap-2 mb-3">
-                      <Monitor size={14} className="text-[#9E9E9E]" />
-                      <span className="text-xs font-medium text-[#9E9E9E] uppercase tracking-wide">分辨率</span>
+                      <div className="w-5 h-5 rounded-md bg-emerald-50 flex items-center justify-center">
+                        <Monitor size={12} className="text-emerald-500" />
+                      </div>
+                      <span className="text-xs font-semibold text-[#525252]">分辨率</span>
                     </div>
                     <div className="flex gap-2">
                       {['2K', '4K'].map((res) => (
                         <button
                           key={res}
                           onClick={() => onResolutionChange(res)}
-                          className={`flex-1 py-2.5 rounded-full text-sm font-semibold transition-all ${
+                          className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-all ${
                             resolution === res
-                              ? 'bg-blue-500 text-white shadow-md'
-                              : 'bg-[#F7F7F7] text-[#525252] hover:bg-[#F0F0F0]'
+                              ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md shadow-blue-200/50'
+                              : 'bg-[#F7F7F7] text-[#525252] hover:bg-[#F0F0F0] border border-[#E8E8E8]'
                           }`}
                         >
                           {res}
@@ -321,16 +320,20 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   {/* Aspect Ratio */}
                   <div>
                     <div className="flex items-center gap-2 mb-3">
-                      <Crop size={14} className="text-[#9E9E9E]" />
-                      <span className="text-xs font-medium text-[#9E9E9E] uppercase tracking-wide">图片比例</span>
+                      <div className="w-5 h-5 rounded-md bg-amber-50 flex items-center justify-center">
+                        <Crop size={12} className="text-amber-500" />
+                      </div>
+                      <span className="text-xs font-semibold text-[#525252]">图片比例</span>
                     </div>
                     <div className="grid grid-cols-7 gap-1.5">
                       {ratios.map(size => (
                         <button key={size.value} onClick={() => onAspectRatioChange(size.value)}
-                          className={`flex flex-col items-center justify-center gap-1 py-2 rounded-lg transition-all ${
-                            aspectRatio === size.value ? 'bg-blue-500 text-white shadow-sm' : 'bg-[#F7F7F7] text-[#525252] hover:bg-[#F0F0F0]'
+                          className={`flex flex-col items-center justify-center gap-1.5 py-2.5 rounded-xl transition-all ${
+                            aspectRatio === size.value
+                              ? 'bg-gradient-to-b from-blue-500 to-blue-600 text-white shadow-md shadow-blue-200/50'
+                              : 'bg-[#F7F7F7] text-[#525252] hover:bg-[#F0F0F0] border border-transparent hover:border-[#E8E8E8]'
                           }`}>
-                          <div className={`border-2 rounded-sm ${aspectRatio === size.value ? 'border-white' : 'border-[#D4D4D4]'} ${getRatioStyle(size.value)}`} />
+                          <div className={`border-2 rounded-sm ${aspectRatio === size.value ? 'border-white/80' : 'border-[#D4D4D4]'} ${getRatioStyle(size.value)}`} />
                           <span className="text-[9px] font-medium">{size.label}</span>
                         </button>
                       ))}
@@ -340,18 +343,20 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   {/* Generate Count */}
                   <div>
                     <div className="flex items-center gap-2 mb-3">
-                      <ImagePlus size={14} className="text-[#9E9E9E]" />
-                      <span className="text-xs font-medium text-[#9E9E9E] uppercase tracking-wide">生成张数</span>
+                      <div className="w-5 h-5 rounded-md bg-violet-50 flex items-center justify-center">
+                        <ImagePlus size={12} className="text-violet-500" />
+                      </div>
+                      <span className="text-xs font-semibold text-[#525252]">生成张数</span>
                     </div>
                     <select
                       value={generateCount}
                       onChange={(e) => onGenerateCountChange(Number(e.target.value))}
-                      className="w-full py-2.5 px-4 rounded-full text-sm font-semibold bg-[#F7F7F7] text-[#525252] border border-[#E5E5E5] outline-none cursor-pointer hover:border-[#D4D4D4] focus:border-[#171717] transition-colors appearance-none"
+                      className="w-full py-3 px-4 rounded-xl text-sm font-semibold bg-[#F7F7F7] text-[#525252] border border-[#E8E8E8] outline-none cursor-pointer hover:border-[#D0D0D0] focus:border-blue-400 focus:bg-white transition-all appearance-none"
                       style={{
                         backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1.5l5 5 5-5' stroke='%23A3A3A3' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
                         backgroundRepeat: 'no-repeat',
-                        backgroundPosition: 'right 12px center',
-                        paddingRight: '32px',
+                        backgroundPosition: 'right 14px center',
+                        paddingRight: '36px',
                       }}
                     >
                       {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
@@ -362,7 +367,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 </div>
 
                 <div className="px-6 pb-6">
-                  <button onClick={onClose} className="w-full py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-full text-sm font-semibold transition-colors shadow-md">
+                  <button onClick={onClose} className="w-full py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl text-sm font-semibold transition-all shadow-md shadow-blue-200/50 hover:shadow-lg">
                     应用设置
                   </button>
                 </div>

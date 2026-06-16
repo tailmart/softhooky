@@ -1,15 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Copy, Layers, ImageIcon, FileImage, Layout, Share2, ShoppingCart, Hand, Film, Coins } from 'lucide-react';
+import { Sparkles, Copy, Layers, ImageIcon, FileImage, Layout, ShoppingCart, Hand, Coins, User, Boxes, Wand2, Globe } from 'lucide-react';
 import { LeftSidebar } from '../components/LeftSidebar';
 import { AuthModal } from '../components/AuthModal';
 import { useAuth } from '../contexts/AuthContext';
 import { RechargeModal, PaymentRecordsModal } from './RechargePage';
-const XiaohongshuPage = React.lazy(() => import('./plugins/XiaohongshuPage').then(m => ({ default: m.XiaohongshuPage })));
-const SocialMediaPage = React.lazy(() => import('./plugins/SocialMediaPage').then(m => ({ default: m.SocialMediaPage })));
-const CarouselPage = React.lazy(() => import('./plugins/CarouselPage').then(m => ({ default: m.CarouselPage })));
-const AmazonCarouselPage = React.lazy(() => import('./plugins/AmazonCarouselPage').then(m => ({ default: m.AmazonCarouselPage })));
+
+const AmazonImageGenPage = React.lazy(() => import('./plugins/AmazonImageGenPage').then(m => ({ default: m.AmazonImageGenPage })));
 const BannerPage = React.lazy(() => import('./plugins/BannerPage').then(m => ({ default: m.BannerPage })));
 const DetailPage2 = React.lazy(() => import('./plugins/DetailPage2').then(m => ({ default: m.DetailPage2 })));
 const HandheldPage = React.lazy(() => import('./plugins/HandheldPage').then(m => ({ default: m.HandheldPage })));
@@ -18,13 +16,18 @@ const ProductFusionPage = React.lazy(() => import('./plugins/ProductFusionPage')
 const ProductRefinePage = React.lazy(() => import('./plugins/ProductRefinePage').then(m => ({ default: m.ProductRefinePage })));
 const GeminiVideoPage = React.lazy(() => import('./plugins/GeminiVideoPage').then(m => ({ default: m.GeminiVideoPage })));
 const ImageLibraryPage = React.lazy(() => import('./plugins/ImageLibraryPage').then(m => ({ default: m.ImageLibraryPage })));
-const StoryboardPage = React.lazy(() => import('./plugins/StoryboardPage').then(m => ({ default: m.StoryboardPage })));
+const ImageEditRegionPage = React.lazy(() => import('./plugins/ImageEditRegionPage').then(m => ({ default: m.ImageEditRegionPage })));
+const ImageTranslatePage = React.lazy(() => import('./plugins/ImageTranslatePage').then(m => ({ default: m.ImageTranslatePage })));
+
 const ThreeViewPage = React.lazy(() => import('./plugins/ThreeViewPage').then(m => ({ default: m.ThreeViewPage })));
 const Veo31VideoPage = React.lazy(() => import('./plugins/Veo31VideoPage').then(m => ({ default: m.Veo31VideoPage })));
-const TikTokVideoPage = React.lazy(() => import('./plugins/TikTokVideoPage').then(m => ({ default: m.TikTokVideoPage })));
+
 const PosterPage = React.lazy(() => import('./plugins/PosterPage').then(m => ({ default: m.PosterPage })));
-const DeepseekChatPageWrapper = React.lazy(() => import('./chat/DeepseekChatPageWrapper').then(m => ({ default: m.DeepseekChatPageWrapper })));
+const EcommercePosterPage = React.lazy(() => import('./plugins/EcommercePosterPage').then(m => ({ default: m.EcommercePosterPage })));
+const ProductTryonPage = React.lazy(() => import('./plugins/ProductTryonPage').then(m => ({ default: m.ProductTryonPage })));
+const Product9GridPage = React.lazy(() => import('./plugins/Product9GridPage').then(m => ({ default: m.Product9GridPage })));
 const ChatGenPageWrapper = React.lazy(() => import('./chat/ImageGenPageWrapper').then(m => ({ default: m.ChatGenPageWrapper })));
+const WorkflowPage = React.lazy(() => import('./plugins/WorkflowPage').then(m => ({ default: m.WorkflowPage })));
 import { getDefaultModel } from '../services/modelService';
 import { imageLibraryService } from '../services/imageLibraryService';
 
@@ -102,71 +105,67 @@ const loadState = () => {
 };
 
 const NAV_IDS = {
-  DEEPSEEK_CHAT: 'deepseek-chat',
   CHAT_GEN: 'chat-gen',
-  XIAOHONGSHU: 'xiaohongshu',
-  SOCIAL: 'social',
-  CAROUSEL: 'carousel',
-  AMAZON: 'amazon-carousel',
+  AMAZON_IMAGE_GEN: 'amazon-image-gen',
   BANNER: 'banner',
   DETAIL2: 'detail2',
   DETAIL_CLONE: 'detailClone',
   HANDHELD: 'handheld',
   PRODUCT_FUSION: 'productFusion',
+  PRODUCT_9_GRID: 'product-9grid',
 
   IMAGE_LIBRARY: 'image-library',
-  STORYBOARD: 'storyboard',
+  IMAGE_EDIT_REGION: 'image-edit-region',
   THREE_VIEW: 'three-view',
   LANDING: 'landing',
   GEMINI_VIDEO: 'gemini-video',
   VEO31: 'veo31',
-  TK_VIDEO: 'tk-video',
 } as const;
 
 const PLUGIN_LABELS: Record<string, string> = {
-  'deepseek-chat': '电商文案助手',
   'chat-gen': '创意生图',
-  xiaohongshu: 'XiaoHongShu',
-  social: 'Social Media',
-  carousel: '独立站轮播图',
-  'amazon-carousel': '亚马逊轮播图',
+  'amazon-image-gen': '亚马逊生图',
   banner: 'Banner设计',
   detail2: '详情页设计',
   handheld: 'Handheld Product',
-  detailClone: '设计风格迁移',
-  productFusion: 'AI产品视觉',
+  detailClone: '智能设计克隆',
+  productFusion: '场景融合',
   productRefine: '产品精修',
+  productTryon: '产品穿搭',
+  'product-9grid': '产品展示图',
 
   'image-library': 'Image Library',
-  storyboard: '故事板',
+  'image-edit-region': '区域编辑',
+  'image-translate': '图片转译',
   'gemini-video': 'Gemini Omini视频',
   'three-view': '三视图生成',
-  poster: '智能海报设计',
-  'veo31': 'Veo3.1视频生成',
-  'tk-video': 'TK视频脚本',
+  poster: '营销海报设计',
+  'ecommerce-poster': '电商海报设计',
+  'veo31': 'Veo.1视频生成',
+  workflow: '工作流生图',
 };
 
 const PLUGIN_COMPONENTS: Record<string, React.FC> = {
-  'deepseek-chat': DeepseekChatPageWrapper,
   'chat-gen': ChatGenPageWrapper,
-  xiaohongshu: XiaohongshuPage,
-  social: SocialMediaPage,
-  carousel: CarouselPage,
-  'amazon-carousel': AmazonCarouselPage,
+  'amazon-image-gen': AmazonImageGenPage,
   banner: BannerPage,
   detail2: DetailPage2,
   handheld: HandheldPage,
   detailClone: DetailClonePage,
   productFusion: ProductFusionPage,
   productRefine: ProductRefinePage,
+  productTryon: ProductTryonPage,
+  'product-9grid': Product9GridPage,
 
   'image-library': ImageLibraryPage,
-  storyboard: StoryboardPage,
+  'image-edit-region': ImageEditRegionPage,
+  'image-translate': ImageTranslatePage,
   'three-view': ThreeViewPage,
   'veo31': Veo31VideoPage,
-  'tk-video': TikTokVideoPage,
   poster: PosterPage,
+  'ecommerce-poster': EcommercePosterPage,
   'gemini-video': GeminiVideoPage,
+  workflow: WorkflowPage,
 };
 
 export const CanvasPage: React.FC = () => {
@@ -377,17 +376,20 @@ export const CanvasPage: React.FC = () => {
   }, []);
 
   const TOOLS = [
-    { id: 'productFusion', icon: Layers, label: 'AI产品视觉', desc: '场景融合 · 模特穿搭 · 海报设计，一站式AI产品视觉生成', color: 'from-[#171717] to-[#404040]' },
-    { id: 'detailClone', icon: Layout, label: '设计风格迁移', desc: '上传模板参考图，AI提取设计语言并迁移到你的产品上，智能适配优化', color: 'from-[#171717] to-[#404040]' },
-    { id: 'storyboard', icon: Film, label: '故事板', desc: '上传剧本生成影视级故事板分镜', color: 'from-[#171717] to-[#404040]' },
+    { id: 'chat-gen', icon: Sparkles, label: '创意生图', desc: '上传产品图，AI智能生成电商素材', color: 'from-[#171717] to-[#404040]' },
+    { id: 'workflow', icon: Boxes, label: '工作流生图', desc: '可视化节点连线，灵活定制生图流程', color: 'from-[#4338CA] to-[#6D28D9]' },
+    { id: 'productFusion', icon: Layers, label: '场景融合', desc: '场景融合 · 海报设计，一站式AI产品视觉生成', color: 'from-[#171717] to-[#404040]' },
+    { id: 'productTryon', icon: User, label: '产品穿搭', desc: '模特+产品，AI自动生成穿搭效果展示图', color: 'from-[#171717] to-[#404040]' },
+    { id: 'product-9grid', icon: Layout, label: '产品展示图', desc: '6种不同角度，AI生成产品多视角展示拼接图', color: 'from-[#171717] to-[#404040]' },
+    { id: 'detailClone', icon: Layout, label: '智能设计克隆', desc: '上传模板参考图，AI提取设计语言并迁移到你的产品上，智能适配优化', color: 'from-[#171717] to-[#404040]' },
     { id: 'banner', icon: FileImage, label: 'Banner设计', desc: '一键生成电商首屏Banner轮播图', color: 'from-[#171717] to-[#404040]' },
-    { id: 'social', icon: Share2, label: '社媒POV出图', desc: '第一视角POV生活场景图，适配Ins/TikTok/FB/Pinterest多比例批量出图', color: 'from-[#171717] to-[#404040]' },
-    { id: 'xiaohongshu', icon: FileImage, label: '小红书种草图文', desc: 'AI分析产品生成封面关键词、文案正文+5张配图，一站式小红书笔记', color: 'from-[#171717] to-[#404040]' },
-    { id: 'carousel', icon: ShoppingCart, label: '独立站轮播图', desc: '独立站详情页轮播图，多角度展示、细节特写、功能卖点介绍', color: 'from-[#171717] to-[#404040]' },
-    { id: 'amazon-carousel', icon: ShoppingCart, label: '亚马逊轮播图', desc: '主图 · A+页面 · 海报，一站式亚马逊视觉生成', color: 'from-[#FF9900] to-[#232F3E]' },
+    { id: 'amazon-image-gen', icon: ShoppingCart, label: '亚马逊生图', desc: '主图 · A+页面 · 海报，亚马逊产品视觉生成', color: 'from-[#FF9900] to-[#232F3E]' },
     { id: 'handheld', icon: Hand, label: '手持产品', desc: '产品手持展示场景图生成', color: 'from-[#171717] to-[#404040]' },
     { id: 'three-view', icon: Layout, label: '三视图生成', desc: '上传产品图，生成正面+侧面+背面三视图', color: 'from-[#171717] to-[#404040]' },
-    { id: 'poster', icon: Layout, label: '智能海报设计', desc: '上传图片和文案，AI设计营销海报', color: 'from-[#171717] to-[#404040]' },
+    { id: 'image-edit-region', icon: Wand2, label: '区域编辑', desc: '圈选图片区域，AI智能修改内容或替换产品', color: 'from-[#6366F1] to-[#8B5CF6]' },
+    { id: 'image-translate', icon: Globe, label: '图片转译', desc: '上传海报图片，AI自动提取文案并翻译替换为多语言版本', color: 'from-[#171717] to-[#404040]' },
+    { id: 'poster', icon: Layout, label: '营销海报设计', desc: '上传图片和文案，AI设计营销海报', color: 'from-[#171717] to-[#404040]' },
+    { id: 'ecommerce-poster', icon: Layout, label: '电商海报设计', desc: '上传产品图，AI分析后自动生成电商海报', color: 'from-[#171717] to-[#404040]' },
   ];
 
   const renderPluginView = () => {
@@ -447,11 +449,11 @@ export const CanvasPage: React.FC = () => {
     const PluginComponent = PLUGIN_COMPONENTS[activeNav];
     if (PluginComponent) {
       return (
-        <div className="relative flex-1 flex">
+        <div className="relative flex-1 min-h-0 flex">
           <React.Suspense fallback={<div className="flex-1 flex items-center justify-center"><div className="w-8 h-8 border-2 border-[#E5E5E5] border-t-[#171717] rounded-full animate-spin" /></div>}>
             <PluginComponent />
           </React.Suspense>
-          {activeNav !== 'chat-gen' && activeNav !== 'image-library' && activeNav !== 'deepseek-chat' && credits > 0 && (
+          {activeNav !== 'chat-gen' && activeNav !== 'image-library' && credits > 0 && (
             <div className="absolute top-4 right-6 z-10 flex items-center gap-1.5 px-3 py-1.5 bg-white/90 backdrop-blur-sm rounded-full border border-gray-200 shadow-sm">
               <Coins size={13} className="text-amber-500" />
               <span className="text-xs font-bold text-amber-600">{credits.toFixed(1)}</span>
@@ -489,7 +491,14 @@ export const CanvasPage: React.FC = () => {
         onDeleteConversation={handleDeleteConversation}
       />
 
-      {!isLoaded ? (
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* 全局提示横幅 */}
+        <div className="flex-shrink-0 bg-blue-50 border-b border-blue-100 px-4 py-2 flex items-center justify-center gap-2">
+          <Globe size={13} className="text-blue-500 flex-shrink-0" />
+          <span className="text-xs text-blue-600">海外 AI 模型生成中，出图约需 50~100 秒，精品值得等待</span>
+        </div>
+
+        {!isLoaded ? (
         <div className="flex-1 flex items-center justify-center bg-white">
           <div className="flex flex-col items-center gap-3">
             <div className="w-8 h-8 border-2 border-[#E5E5E5] border-t-[#171717] rounded-full animate-spin" />
@@ -497,6 +506,7 @@ export const CanvasPage: React.FC = () => {
           </div>
         </div>
       ) : renderPluginView()}
+      </div>
 
       <AuthModal
         isOpen={showAuthModal}

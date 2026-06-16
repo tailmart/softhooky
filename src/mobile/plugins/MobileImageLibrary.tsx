@@ -14,6 +14,7 @@ const getThumbUrl = (url: string): string => {
 const isVideoUrl = (url: string): boolean => url.includes('.mp4') || url.includes('video') || url.includes('/videos/');
 
 const getExpiresIn = (expiresAt: string): string => {
+  if (!expiresAt) return '';
   const diff = new Date(expiresAt).getTime() - Date.now();
   if (diff <= 0) return '已过期';
   const hours = Math.floor(diff / 3600000);
@@ -60,19 +61,17 @@ export const MobileImageLibrary: React.FC<MobileImageLibraryProps> = ({ onBack }
 
   const handleBatchDelete = useCallback(async () => {
     if (selected.size === 0) return;
+    const selectedImages = images.filter(img => selected.has(img.id));
     try {
-      for (const id of selected) {
-        const img = images.find(i => i.id === id);
-        if (img) {
-          await imageLibraryService.deleteImage(id);
-          imageLibraryService.trackDeletedImageUrl(img.image_url);
-        }
-      }
+      await imageLibraryService.batchDeleteImages(Array.from(selected));
+      selectedImages.forEach(img => imageLibraryService.trackDeletedImageUrl(img.image_url));
       setImages(prev => prev.filter(img => !selected.has(img.id)));
       setSelected(new Set());
       setSelMode(false);
-    } catch {}
-  }, [selected, images]);
+    } catch {
+      loadImages(page);
+    }
+  }, [selected, images, page, loadImages]);
 
   const handleDownload = useCallback(async (url: string) => {
     try {
@@ -87,29 +86,29 @@ export const MobileImageLibrary: React.FC<MobileImageLibraryProps> = ({ onBack }
   }, []);
 
   return (
-    <div className="flex flex-col h-full bg-[#FAFAFA]">
+    <div className="flex flex-col h-full bg-[#0a0a0a]">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-[#f0f0f0] bg-white flex-shrink-0">
-        <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-full bg-[#f5f5f5] mobile-tap"><X size={16} className="text-[#737373]" /></button>
-        <h1 className="text-base font-bold text-[#171717]">图片图库</h1>
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-[#0a0a0a] flex-shrink-0">
+        <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.06] mobile-tap"><X size={16} className="text-white/40" /></button>
+        <h1 className="text-base font-bold text-white">图片图库</h1>
         {isAuthenticated && user && (
-          <div className="flex items-center gap-1 bg-amber-50 px-2.5 py-1 rounded-full">
-            <Coins size={12} className="text-amber-500" />
-            <span className="text-xs font-semibold text-amber-600">{Number(user.credits || 0).toFixed(1)}</span>
+          <div className="flex items-center gap-1 bg-blue-500/10 px-2.5 py-1 rounded-full">
+            <Coins size={12} className="text-blue-400" />
+            <span className="text-xs font-semibold text-blue-400">{Number(user.credits || 0).toFixed(1)}</span>
           </div>
         )}
         <div className="ml-auto flex items-center gap-2">
           {selMode && (
             <button onClick={handleBatchDelete} disabled={selected.size === 0}
-              className="text-xs font-medium text-red-500 px-3 py-1.5 rounded-full bg-red-50">
+              className="text-xs font-medium text-red-400 px-3 py-1.5 rounded-full bg-red-500/10">
               删除{selected.size > 0 ? ` (${selected.size})` : ''}
             </button>
           )}
           <button onClick={() => { setSelMode(!selMode); setSelected(new Set()); }}
-            className="text-xs font-medium text-[#737373] px-3 py-1.5 rounded-full bg-[#f5f5f5]">
+            className="text-xs font-medium text-white/40 px-3 py-1.5 rounded-full bg-white/[0.06]">
             {selMode ? '完成' : '选择'}
           </button>
-          <span className="text-[11px] text-[#a3a3a3]">{total}</span>
+          <span className="text-[11px] text-white/30">{total}</span>
         </div>
       </div>
 
@@ -118,18 +117,18 @@ export const MobileImageLibrary: React.FC<MobileImageLibraryProps> = ({ onBack }
         {loading ? (
           <div className="grid grid-cols-3 gap-1 p-1">
             {Array.from({ length: 9 }).map((_, i) => (
-              <div key={i} className="aspect-square bg-white rounded-lg overflow-hidden">
+              <div key={i} className="aspect-square bg-white/[0.04] rounded-lg overflow-hidden">
                 <div className="w-full h-full mobile-shimmer" />
               </div>
             ))}
           </div>
         ) : images.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20">
-            <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center mb-3 shadow-sm border border-[#f0f0f0]">
-              <ImageIcon size={28} className="text-[#d4d4d4]" />
+            <div className="w-16 h-16 rounded-2xl bg-white/[0.04] flex items-center justify-center mb-3 shadow-sm border border-white/[0.06]">
+              <ImageIcon size={28} className="text-white/20" />
             </div>
-            <p className="text-sm font-medium text-[#a3a3a3]">暂无图片</p>
-            <button onClick={() => loadImages(page)} className="mt-3 flex items-center gap-1.5 text-xs text-[#737373] px-4 py-2 rounded-full bg-white border border-[#eee]">
+            <p className="text-sm font-medium text-white/30">暂无图片</p>
+            <button onClick={() => loadImages(page)} className="mt-3 flex items-center gap-1.5 text-xs text-white/40 px-4 py-2 rounded-full bg-white/[0.04] border border-white/[0.06]">
               <RefreshCw size={12} /> 刷新
             </button>
           </div>
@@ -139,20 +138,20 @@ export const MobileImageLibrary: React.FC<MobileImageLibraryProps> = ({ onBack }
               {images.map(img => {
                 const isSel = selected.has(img.id);
                 const expiresIn = getExpiresIn(img.expires_at);
-                const expiringSoon = new Date(img.expires_at).getTime() - Date.now() < 86400000;
+                const expiringSoon = img.expires_at && new Date(img.expires_at).getTime() - Date.now() < 86400000;
                 return (
-                  <div key={img.id} className="relative aspect-square bg-white overflow-hidden"
+                  <div key={img.id} className="relative aspect-square bg-white/[0.04] overflow-hidden"
                     onClick={() => { if (selMode) { setSelected(p => { const n = new Set(p); if (n.has(img.id)) n.delete(img.id); else n.add(img.id); return n; }); } else { setExpandedImg(img); setImgLoaded(false); } }}>
                     {selMode && (
                       <div className="absolute top-1.5 right-1.5 z-10">
-                        <div className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center ${isSel ? 'bg-[#171717] border-[#171717]' : 'bg-white/90 border-[#ddd]'}`}>
+                        <div className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center ${isSel ? 'bg-blue-500 border-blue-500' : 'bg-white/90 border-white/20'}`}>
                           {isSel && <Check size={11} className="text-white" />}
                         </div>
                       </div>
                     )}
                     {isVideoUrl(img.image_url) ? (
-                      <div className="w-full h-full flex items-center justify-center bg-[#f5f5f5]">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#a3a3a3" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                      <div className="w-full h-full flex items-center justify-center bg-white/[0.06]">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeOpacity="0.3" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
                       </div>
                     ) : (
                       <img src={getThumbUrl(img.image_url)} alt={img.prompt || ''} loading="lazy"
@@ -184,10 +183,10 @@ export const MobileImageLibrary: React.FC<MobileImageLibraryProps> = ({ onBack }
             {totalPages > 1 && (
               <div className="flex items-center justify-center gap-4 px-4 py-5">
                 <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
-                  className="px-5 py-2.5 rounded-xl bg-white border border-[#eee] text-xs font-medium text-[#737373] disabled:opacity-40">上一页</button>
-                <span className="text-xs text-[#a3a3a3]">{page} / {totalPages}</span>
+                  className="px-5 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-xs font-medium text-white/40 disabled:opacity-40">上一页</button>
+                <span className="text-xs text-white/30">{page} / {totalPages}</span>
                 <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
-                  className="px-5 py-2.5 rounded-xl bg-white border border-[#eee] text-xs font-medium text-[#737373] disabled:opacity-40">下一页</button>
+                  className="px-5 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-xs font-medium text-white/40 disabled:opacity-40">下一页</button>
               </div>
             )}
           </>

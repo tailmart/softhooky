@@ -2,19 +2,19 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, X, Loader2, Plus, Layout, Images, Download, Wand2, ChevronDown } from 'lucide-react';
 import { fileToDataUrl } from '../../services/r2Service';
 import { editImage } from '../../services/imageService';
-import { analyzeImage } from '../../services/aiChatService';
 import { imageLibraryService } from '../../services/imageLibraryService';
+import { analyzeImage } from '../../services/aiChatService';
 import { requireAuth } from '../../utils/authCheck';
 import { getAvailableModels } from '../../services/modelService';
 import { ImagePreviewModal } from '../../components/ImagePreviewModal';
 import { ReEditModal } from '../../components/ReEditModal';
 import { ModelSpeedNote } from '../../components/ModelSpeedNote';
-import { PsdExportButton } from '../../components/PsdExportButton';
+import { LANGUAGES, getSavedLanguage, saveLanguage } from '../../constants/languages';
 
 export const ThreeViewPage: React.FC = () => {
   const [models, setModels] = useState<{ value: string; label: string }[]>([]);
   useEffect(() => {
-    getAvailableModels(['seedream']).then(m => {
+    getAvailableModels().then(m => {
       const sorted = m.filter(x => x.enabled).sort((a, b) => a.sort_order - b.sort_order);
       setModels(sorted.map(x => ({ value: x.model_id, label: x.label })));
       if (sorted.length > 0) setSelectedModel(sorted[0].model_id);
@@ -22,6 +22,7 @@ export const ThreeViewPage: React.FC = () => {
   }, []);
   const [uploadedImages, setUploadedImages] = useState<{ file: File; preview: string }[]>([]);
   const [selectedModel, setSelectedModel] = useState('');
+  const [language, setLanguage] = useState(getSavedLanguage());
   const [isProcessing, setIsProcessing] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [quality, setQuality] = useState('2K');
@@ -113,6 +114,7 @@ ${hint}
         const imgUrl = resp.data?.[0]?.url || resp.image_url || resp.url || '';
         if (imgUrl) {
           setResults([{ url: imgUrl, idx: 1 }]);
+          imageLibraryService.saveToLibrary({ image_url: imgUrl, prompt: personPrompt, model: String(selectedModel || 'nanobann2'), aspect_ratio: String('16:9'), resolution: String(quality || '2K'), type: 'edited' });
         }
       } catch {}
     } catch (err: any) { console.error('生成失败:', err); }
@@ -181,6 +183,17 @@ ${hint}
             </div>
           </div>
 
+          <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <Wand2 size={14} className="text-blue-500" />
+              <span className="text-sm font-semibold text-[#171717]">语言</span>
+            </div>
+            <select value={language} onChange={(e) => { setLanguage(e.target.value); saveLanguage(e.target.value); }}
+              className="w-full bg-gray-100 px-3 py-2.5 rounded-xl text-sm text-[#171717] border-0 focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer">
+              {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+            </select>
+          </div>
+
           {!isProcessing && (
             <button onClick={handleGenerate} disabled={uploadedImages.length === 0}
               className="w-full bg-[#171717] text-white py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-[#27272A] transition-all disabled:bg-gray-200 disabled:text-gray-400 shadow-sm">
@@ -236,7 +249,7 @@ ${hint}
                           <div className="flex gap-1">
                             <button onClick={() => setReEditImage(item.url)} className="w-7 h-7 flex items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-[#171717]"><Wand2 size={14} /></button>
                             <button onClick={() => handleDownload(item.url)} className="w-7 h-7 flex items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-[#171717]"><Download size={14} /></button>
-                            <PsdExportButton imageUrl={item.url} />
+
                           </div>
                         </div>
                       </div>

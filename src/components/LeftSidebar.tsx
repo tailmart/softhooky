@@ -1,42 +1,44 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Coins, CreditCard, History, Users, Image as ImageIcon, FileImage, Video, Share2, ShoppingCart, Layout, User, Wand2, Hand, ChevronDown, ChevronRight, Copy, Layers, MessageCircle, Film, Bell, Mail, FileText, Shield, X, Gift, Clapperboard, ChevronsLeft, ChevronsRight, TrendingUp } from 'lucide-react';
+import { Coins, CreditCard, History, Users, Image as ImageIcon, FileImage, Video, Share2, ShoppingCart, Layout, User, Wand2, Hand, ChevronDown, ChevronRight, Copy, Layers, MessageCircle, Film, Bell, Mail, FileText, Shield, X, Gift, Clapperboard, ChevronsLeft, ChevronsRight, TrendingUp, Sparkles, ShoppingBag, Megaphone, Boxes, Languages } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
+
 import { SubAccountManager } from './SubAccountManager';
 import { TermsModal } from './TermsModal';
 import { PrivacyModal } from './PrivacyModal';
 import { CouponClaimModal } from './CouponClaimModal';
-import { UpdateButton } from './UpdateButton';
+
 import { getPricing } from '../services/pricingService';
 import { getAvailableNavItems } from '../services/navService';
 import { useSiteConfig } from '../contexts/SiteConfigContext';
 
 const ICON_MAP: Record<string, React.ElementType> = {
-  'deepseek-chat': MessageCircle,
   'chat-gen': MessageCircle,
   xiaohongshu: FileImage,
   social: Share2,
   detailClone: Copy,
   banner: Layout,
-  carousel: ShoppingCart,
-  'amazon-carousel': ShoppingCart,
+  'amazon-image-gen': ShoppingCart,
   detail2: FileImage,
   poster: Wand2,
   handheld: Hand,
   productFusion: Layers,
+  productTryon: User,
+  'product-9grid': Layout,
   storyboard: Film,
   'gemini-video': Video,
   'veo31': Film,
   'tk-video': Clapperboard,
   'three-view': Layout,
+  workflow: Boxes,
+  'image-edit-region': Wand2,
+  'image-translate': Languages,
+  'ecommerce-poster': Layout,
 };
 
 const CATEGORIES = [
-  { key: '素材工作台', label: '创作' },
-  { key: '店铺上架素材', label: '电商' },
-  { key: '社媒图文引流', label: '社媒' },
-  { key: '短视频带货引流', label: '视频' },
-  { key: 'AI辅助工具', label: '工具' },
+  { key: '素材工作台', label: '创作', icon: Sparkles, color: 'text-blue-500' },
+  { key: '店铺上架素材', label: '电商', icon: ShoppingBag, color: 'text-emerald-500' },
 ];
 
 interface LeftSidebarProps {
@@ -64,7 +66,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   const [generatePrice, setGeneratePrice] = useState(0.3);
   const [navItems, setNavItems] = useState<{ id: string; icon: React.ElementType; label: string; category: string }[]>([]);
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(
-    new Set(['社媒图文引流', '短视频带货引流', 'AI辅助工具'])
+    new Set(['社媒图文引流', '短视频带货引流'])
   );
   const [showMenu, setShowMenu] = useState(false);
   const [notifications, setNotifications] = useState<Array<{ id: number; title: string; content: string; created_at: string }>>([]);
@@ -88,8 +90,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   useEffect(() => {
     const fetchNotifs = async () => {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || '';
-        const res = await fetch(`${apiUrl}/api/notifications`);
+        const res = await fetch('/api/notifications');
         const data = await res.json();
         if (data.success) setNotifications(data.data || []);
       } catch {}
@@ -138,7 +139,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
   useEffect(() => {
     const CATEGORY_MAP: Record<string, string> = {
-      'AI对话': 'AI辅助工具',
       '营销工具': '社媒图文引流',
       '电商': '店铺上架素材',
       '创意': '店铺上架素材',
@@ -146,21 +146,41 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
     };
     const NAV_CATEGORY_OVERRIDE: Record<string, string> = {
       'chat-gen': '素材工作台',
+      'workflow': '素材工作台',
       'three-view': '素材工作台',
       'productFusion': '素材工作台',
       'productRefine': '素材工作台',
+      'product-9grid': '素材工作台',
     };
     getAvailableNavItems().then(items => {
-      const filtered = items.filter(n => n.enabled !== false).filter(n => !['styleCopy', 'tryon'].includes(n.nav_id)).map(n => ({
+      const filtered = items.filter(n => n.enabled !== false).filter(n => !['styleCopy', 'tryon', 'carousel', 'amazon-carousel', 'workflow', 'deepseek-chat'].includes(n.nav_id)).map(n => ({
         id: n.nav_id,
         icon: ICON_MAP[n.nav_id] || ImageIcon,
-        label: ({ xiaohongshu: '小红书种草图文', social: '社媒POV出图', 'chat-gen': '创意生图', productFusion: 'AI产品视觉', productRefine: '产品精修', detailClone: '设计风格迁移', carousel: '独立站轮播图', 'amazon-carousel': '亚马逊轮播图' })[n.nav_id] || n.label,
+        label: ({ xiaohongshu: '小红书种草图文', social: '社媒POV出图', 'chat-gen': '创意生图', workflow: '工作流生图', productFusion: '场景融合', productTryon: '产品穿搭', productRefine: '产品精修', 'product-9grid': '产品展示图', detailClone: '智能设计克隆', 'amazon-image-gen': '亚马逊生图', 'image-edit-region': '区域编辑', 'image-translate': '图片转译', 'ecommerce-poster': '电商海报设计' })[n.nav_id] || n.label,
         category: NAV_CATEGORY_OVERRIDE[n.nav_id] || CATEGORY_MAP[n.category] || n.category
       }));
-      // 确保亚马逊轮播图始终存在（后端可能未同步）
-      if (!filtered.some(n => n.id === 'amazon-carousel')) {
+      // 确保亚马逊生图始终存在（后端可能未同步）
+      if (!filtered.some(n => n.id === 'amazon-image-gen')) {
         filtered.push({
-          id: 'amazon-carousel', icon: ShoppingCart, label: '亚马逊轮播图', category: '店铺上架素材'
+          id: 'amazon-image-gen', icon: ShoppingCart, label: '亚马逊生图', category: '店铺上架素材'
+        });
+      }
+      // 确保区域编辑始终存在（后端可能未同步）
+      if (!filtered.some(n => n.id === 'image-edit-region')) {
+        filtered.push({
+          id: 'image-edit-region', icon: Wand2, label: '区域编辑', category: '素材工作台'
+        });
+      }
+      // 确保图片转译始终存在（后端可能未同步）
+      if (!filtered.some(n => n.id === 'image-translate')) {
+        filtered.push({
+          id: 'image-translate', icon: Languages, label: '图片转译', category: '店铺上架素材'
+        });
+      }
+      // 确保电商海报设计始终存在（后端可能未同步）
+      if (!filtered.some(n => n.id === 'ecommerce-poster')) {
+        filtered.push({
+          id: 'ecommerce-poster', icon: Layout, label: '电商海报设计', category: '店铺上架素材'
         });
       }
       setNavItems(filtered);
@@ -209,12 +229,12 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   return (
     <>
       <div
-        className={`h-screen bg-white flex flex-col flex-shrink-0 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] border-r border-[#f0f0f0]
+        className={`h-screen bg-white flex flex-col flex-shrink-0 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] border-r border-gray-200/60
           ${sidebarCollapsed ? 'w-[68px]' : 'w-[220px]'}
         `}
       >
         {/* Header */}
-        <div className={`flex items-center h-14 flex-shrink-0 ${sidebarCollapsed ? 'justify-center' : 'justify-between px-4'}`}>
+        <div className={`flex items-center h-14 flex-shrink-0 border-b border-gray-100 ${sidebarCollapsed ? 'justify-center' : 'justify-between px-4'}`}>
           {!sidebarCollapsed && (
             <div className="flex items-center gap-2.5">
               <img src={config.logo_url} alt="" className="w-5 h-5" />
@@ -249,19 +269,20 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
             return (
               <div key={cat.key} className="mb-0.5">
                 {!sidebarCollapsed && (
-                  <div className="flex items-center gap-2 px-1.5 pt-3 pb-1">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#999]">{cat.label}</span>
-                    <div className="flex-1 h-px bg-[#ddd]" />
+                  <div className="flex items-center gap-2 px-2 pt-3.5 pb-1.5 group">
+                    <cat.icon size={11} className={`${cat.color} flex-shrink-0`} strokeWidth={2} />
+                    <span className="text-[11px] font-semibold tracking-wide text-[#666]">{cat.label}</span>
+                    <div className="flex-1 h-px bg-gradient-to-r from-gray-200 to-transparent" />
                     <button
                       onClick={() => toggleCat(cat.key)}
-                      className="w-3.5 h-3.5 flex items-center justify-center rounded hover:bg-gray-100 transition-colors"
+                      className="w-4 h-4 flex items-center justify-center rounded-md hover:bg-gray-100 transition-colors opacity-60 group-hover:opacity-100"
                     >
-                      <ChevronDown size={9} className={`text-[#bbb] transition-transform duration-300 ${isCollapsed ? '-rotate-90' : ''}`} />
+                      <ChevronDown size={10} className={`text-[#999] transition-transform duration-300 ${isCollapsed ? '-rotate-90' : ''}`} />
                     </button>
                   </div>
                 )}
 
-                <div className={sidebarCollapsed ? 'space-y-1 pt-2' : ''}>
+                <div className={sidebarCollapsed ? 'space-y-0.5 pt-2' : ''}>
                   {cat.items.map(item => {
                     const isActive = activeNav === item.id;
 
@@ -272,12 +293,15 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                             onClick={() => onSelectNav?.(item.id)}
                             onMouseEnter={(e) => setHoveredNav({ label: item.label, top: e.currentTarget.getBoundingClientRect().top + e.currentTarget.offsetHeight / 2 })}
                             onMouseLeave={() => setHoveredNav(null)}
-                            className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${
+                            className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-200 relative ${
                               isActive
-                                ? 'text-blue-500'
-                                : 'text-[#555] hover:text-[#1a1a1a] hover:bg-gray-100'
+                                ? 'text-blue-500 bg-blue-50 shadow-sm shadow-blue-100/50'
+                                : 'text-[#555] hover:text-[#1a1a1a] hover:bg-gray-50'
                             }`}
                           >
+                            {isActive && (
+                              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 bg-blue-500 rounded-r-full" />
+                            )}
                             <item.icon size={17} strokeWidth={isActive ? 2 : 1.5} />
                           </button>
                         </div>
@@ -288,23 +312,23 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                       <button
                         key={item.id}
                         onClick={() => onSelectNav?.(item.id)}
-                        className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl transition-all group ${
+                        className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl transition-all duration-200 group relative ${
                           isActive
-                            ? 'text-[#1a1a1a] bg-blue-50'
-                            : 'text-[#444] hover:text-[#1a1a1a] hover:bg-gray-50'
+                            ? 'text-[#1a1a1a] bg-blue-50/80 shadow-sm shadow-blue-100/50'
+                            : 'text-[#444] hover:text-[#1a1a1a] hover:bg-gray-50/80'
                         }`}
                       >
-                        <div className={`w-7 h-7 flex items-center justify-center rounded-lg flex-shrink-0 transition-all ${
+                        {isActive && (
+                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 bg-blue-500 rounded-r-full" />
+                        )}
+                        <div className={`w-7 h-7 flex items-center justify-center rounded-lg flex-shrink-0 transition-all duration-200 ${
                           isActive
-                            ? 'text-blue-500'
-                            : 'text-[#555]'
+                            ? 'bg-blue-500 text-white shadow-sm shadow-blue-200'
+                            : 'text-[#555] bg-gray-100/50 group-hover:bg-gray-100'
                         }`}>
-                          <item.icon size={13} strokeWidth={isActive ? 2.5 : 1.5} />
+                          <item.icon size={13} strokeWidth={isActive ? 2 : 1.5} />
                         </div>
                         <span className={`text-[13px] truncate ${isActive ? 'font-medium' : ''}`}>{item.label}</span>
-                        {item.id === 'productFusion' && (
-                          <span className="ml-auto text-[9px] font-bold text-white bg-gradient-to-r from-blue-500 to-purple-500 px-1.5 py-0.5 rounded-full flex-shrink-0">推荐</span>
-                        )}
                       </button>                    
                     );
                   })}
@@ -316,23 +340,23 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
         {/* Tooltip for collapsed sidebar */}
         {sidebarCollapsed && hoveredNav && (
-          <div className="fixed px-3 py-2 bg-[#1a1a1a] text-white text-xs font-medium rounded-lg shadow-lg z-[9999] whitespace-nowrap pointer-events-none"
+          <div className="fixed px-3 py-2 bg-[#1a1a1a]/95 backdrop-blur-sm text-white text-xs font-medium rounded-lg shadow-lg z-[9999] whitespace-nowrap pointer-events-none"
             style={{ left: '78px', top: hoveredNav.top, transform: 'translateY(-50%)' }}>
             {hoveredNav.label}
-            <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-0 h-0 border-y-[4px] border-y-transparent border-r-[4px] border-r-[#1a1a1a]" />
+            <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-0 h-0 border-y-[4px] border-y-transparent border-r-[4px] border-r-[#1a1a1a]/95" />
           </div>
         )}
 
         {/* Bottom Section */}
-        <div className={`border-t border-[#f0f0f0] ${sidebarCollapsed ? 'px-2.5 py-3' : 'px-2.5 py-2.5'}`}>
+        <div className={`border-t border-gray-100 ${sidebarCollapsed ? 'px-2.5 py-3' : 'px-2.5 py-2.5'}`}>
           {isLoggedIn ? (
             <div className="relative">
               <button
                 onClick={() => setShowMenu(!showMenu)}
-                className={`w-full flex items-center rounded-xl transition-all group hover:bg-gray-50
+                className={`w-full flex items-center rounded-xl transition-all duration-200 group hover:bg-gray-50/80
                   ${sidebarCollapsed ? 'justify-center p-2' : 'gap-2.5 px-2.5 py-2'}`}
               >
-                <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center flex-shrink-0 shadow-sm">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center flex-shrink-0 shadow-sm shadow-blue-200/50">
                   <span className="text-white text-[11px] font-bold">{getInitial(user.email)}</span>
                 </div>
                 {!sidebarCollapsed && (
@@ -347,83 +371,88 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
               {showMenu && (
                 <div className="fixed inset-0 z-[999] flex items-start justify-center pt-[8vh]" onClick={() => setShowMenu(false)}>
-                  <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" />
+                  <div className="absolute inset-0 bg-black/20 backdrop-blur-[6px]" />
                   <div
-                    className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl shadow-black/15 overflow-hidden animate-slide-up"
+                    className="relative w-[380px] bg-white rounded-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.18)] overflow-hidden animate-slide-up"
                     onClick={(e) => e.stopPropagation()}
                   >
                     {/* Header */}
-                    <div className="px-6 pt-6 pb-4 flex items-center justify-between border-b border-gray-100">
-                      <div className="flex items-center gap-3">
-                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm flex-shrink-0">
-                          <span className="text-white text-base font-bold">{getInitial(user.email)}</span>
+                    <div className="relative px-5 pt-5 pb-4">
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center flex-shrink-0 ring-2 ring-white shadow-md">
+                          <span className="text-white text-lg font-semibold">{getInitial(user.email)}</span>
                         </div>
-                        <div>
-                          <p className="text-base font-semibold text-gray-900">{user.email}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{user.email}</p>
                           <div className="flex items-center gap-1.5 mt-1">
-                            <Coins size={14} className="text-amber-500" />
-                            <span className="text-sm font-bold text-amber-600">{Number(credits).toFixed(1)}</span>
-                            <span className="text-xs text-gray-400">积分</span>
-                            {couponInfo.total > 0 && (
-                              <span className="text-[10px] text-pink-600 bg-pink-50 px-1.5 py-0.5 rounded-lg ml-1">
-                                {couponInfo.total.toFixed(1)} 积分通过优惠券获得
-                                {couponInfo.expiresAt && `，请在 ${Math.ceil((new Date(couponInfo.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} 天内用完`}
-                              </span>
-                            )}
+                            <Coins size={13} className="text-amber-500" />
+                            <span className="text-[13px] font-semibold text-amber-600">{Number(credits).toFixed(1)}</span>
+                            <span className="text-[11px] text-gray-400">积分</span>
                           </div>
                         </div>
+                        <button onClick={() => setShowMenu(false)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors flex-shrink-0">
+                          <X size={13} className="text-gray-400" />
+                        </button>
                       </div>
-                      <button onClick={() => setShowMenu(false)} className="w-7 h-7 flex items-center justify-center rounded-xl hover:bg-gray-100 transition-colors flex-shrink-0">
-                        <X size={14} className="text-gray-400" />
-                      </button>
+                      {couponInfo.total > 0 && (
+                        <div className="mt-3 flex items-center gap-2 bg-amber-50 rounded-xl px-3 py-2">
+                          <Sparkles size={12} className="text-amber-500 flex-shrink-0" />
+                          <span className="text-[11px] text-amber-700 leading-snug">
+                            {couponInfo.total.toFixed(1)} 积分通过优惠券获得
+                            {couponInfo.expiresAt && `，请在 ${Math.ceil((new Date(couponInfo.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} 天内用完`}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
+                    <div className="h-px bg-gray-100 mx-5" />
+
                     {/* Menu Items */}
-                    <div className="p-4 space-y-1">
+                    <div className="p-2">
                       {!user?.isSubUser && !user?.recharge_disabled && (
                         <button onClick={() => { onOpenRecharge(); setShowMenu(false); }}
-                          className="w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl hover:bg-blue-50 transition-all">
-                          <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0"><CreditCard size={18} className="text-blue-600" /></div>
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors group">
+                          <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0 group-hover:bg-blue-100 transition-colors"><CreditCard size={16} className="text-blue-500" /></div>
                           <div className="flex-1 text-left">
-                            <p className="text-sm font-semibold text-gray-900">充值</p>
-                            <p className="text-xs text-gray-400 mt-0.5">购买积分，解锁更多创作能力</p>
+                            <p className="text-[13px] font-medium text-gray-800">充值</p>
                           </div>
+                          <ChevronRight size={14} className="text-gray-300" />
                         </button>
                       )}
                       <button onClick={() => { onOpenRecords(); setShowMenu(false); }}
-                        className="w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl hover:bg-purple-50 transition-all">
-                        <div className="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center flex-shrink-0"><History size={18} className="text-purple-600" /></div>
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors group">
+                        <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center flex-shrink-0 group-hover:bg-purple-100 transition-colors"><History size={16} className="text-purple-500" /></div>
                         <div className="flex-1 text-left">
-                          <p className="text-sm font-semibold text-gray-900">记录</p>
-                          <p className="text-xs text-gray-400 mt-0.5">查看充值与消费明细</p>
+                          <p className="text-[13px] font-medium text-gray-800">记录</p>
                         </div>
+                        <ChevronRight size={14} className="text-gray-300" />
                       </button>
                       {!user?.isSubUser && (
                         <button onClick={() => { setIsSubAccountModalOpen(true); setShowMenu(false); }}
-                          className="w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl hover:bg-emerald-50 transition-all">
-                          <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0"><Users size={18} className="text-emerald-600" /></div>
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors group">
+                          <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 transition-colors"><Users size={16} className="text-emerald-500" /></div>
                           <div className="flex-1 text-left">
-                            <p className="text-sm font-semibold text-gray-900">子账号</p>
-                            <p className="text-xs text-gray-400 mt-0.5">创建和管理子账号</p>
+                            <p className="text-[13px] font-medium text-gray-800">子账号</p>
                           </div>
+                          <ChevronRight size={14} className="text-gray-300" />
                         </button>
                       )}
                       <button onClick={() => { onSelectNav?.('image-library'); setShowMenu(false); }}
-                        className="w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl hover:bg-amber-50 transition-all">
-                        <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0"><ImageIcon size={18} className="text-amber-600" /></div>
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors group">
+                        <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center flex-shrink-0 group-hover:bg-amber-100 transition-colors"><ImageIcon size={16} className="text-amber-500" /></div>
                         <div className="flex-1 text-left">
-                          <p className="text-sm font-semibold text-gray-900">图库</p>
-                          <p className="text-xs text-gray-400 mt-0.5">查看和管理生成的图片</p>
+                          <p className="text-[13px] font-medium text-gray-800">图库</p>
                         </div>
+                        <ChevronRight size={14} className="text-gray-300" />
                       </button>
                       {!user?.isSubUser && (
                         <button onClick={() => { setShowCouponModal(true); setShowMenu(false); }}
-                          className="w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl hover:bg-pink-50 transition-all">
-                          <div className="w-9 h-9 rounded-xl bg-pink-100 flex items-center justify-center flex-shrink-0"><Gift size={18} className="text-pink-600" /></div>
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors group">
+                          <div className="w-8 h-8 rounded-lg bg-pink-50 flex items-center justify-center flex-shrink-0 group-hover:bg-pink-100 transition-colors"><Gift size={16} className="text-pink-500" /></div>
                           <div className="flex-1 text-left">
-                            <p className="text-sm font-semibold text-gray-900">领券</p>
-                            <p className="text-xs text-gray-400 mt-0.5">输入优惠券码兑换积分</p>
+                            <p className="text-[13px] font-medium text-gray-800">领券</p>
                           </div>
+                          <ChevronRight size={14} className="text-gray-300" />
                         </button>
                       )}
                       {(() => {
@@ -431,35 +460,33 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                         return !!u.is_agent;
                       })() && (
                         <a href="/agent"
-                          className="w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl hover:bg-indigo-50 transition-all">
-                          <div className="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center flex-shrink-0"><TrendingUp size={18} className="text-indigo-600" /></div>
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-gray-50 transition-colors group">
+                          <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-100 transition-colors"><TrendingUp size={16} className="text-indigo-500" /></div>
                           <div className="flex-1 text-left">
-                            <p className="text-sm font-semibold text-gray-900">佣金中心</p>
-                            <p className="text-xs text-gray-400 mt-0.5">邀请好友赚取佣金</p>
+                            <p className="text-[13px] font-medium text-gray-800">佣金中心</p>
                           </div>
+                          <ChevronRight size={14} className="text-gray-300" />
                         </a>
                       )}
                     </div>
 
+                    <div className="h-px bg-gray-100 mx-5" />
+
                     {/* Footer */}
-                    <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
-                      <div className="flex items-center gap-4">
+                    <div className="px-5 py-3 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
                         <button onClick={() => { setShowTermsModal(true); setShowMenu(false); }}
-                          className="text-xs text-gray-400 hover:text-gray-600 transition-colors">使用条款</button>
+                          className="text-[11px] text-gray-400 hover:text-gray-600 transition-colors">使用条款</button>
                         <span className="w-px h-3 bg-gray-200" />
                         <button onClick={() => { setShowPrivacyModal(true); setShowMenu(false); }}
-                          className="text-xs text-gray-400 hover:text-gray-600 transition-colors">隐私政策</button>
-                        {typeof window !== 'undefined' && (window as any).tauriAPI?.isTauri && (
-                          <>
-                            <span className="w-px h-3 bg-gray-200" />
-                            <UpdateButton compact />
-                          </>
-                        )}
+                          className="text-[11px] text-gray-400 hover:text-gray-600 transition-colors">隐私政策</button>
                       </div>
                       <button onClick={() => { logout(); setShowMenu(false); }}
-                          className="flex items-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-medium text-red-500 hover:bg-red-50 transition-all">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                          className="flex items-center gap-1.5 py-1 px-2.5 rounded-lg text-[12px] text-red-500 hover:bg-red-50 transition-colors">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+                          <polyline points="16 17 21 12 16 7" />
+                          <line x1="21" y1="12" x2="9" y2="12" />
                         </svg>
                         退出
                       </button>
@@ -471,7 +498,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
           ) : (
             <button
               onClick={onOpenAuth}
-              className={`flex items-center justify-center rounded-xl bg-blue-500 text-white hover:bg-blue-600 transition-all text-[13px] font-medium shadow-sm ${sidebarCollapsed ? 'w-10 h-10 mx-auto' : 'w-full py-2.5'}`}
+              className={`flex items-center justify-center rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 transition-all duration-200 text-[13px] font-medium shadow-sm shadow-blue-200/50 ${sidebarCollapsed ? 'w-10 h-10 mx-auto' : 'w-full py-2.5'}`}
             >
               {sidebarCollapsed ? <User size={16} /> : '登录'}
             </button>

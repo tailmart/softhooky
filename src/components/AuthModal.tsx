@@ -46,6 +46,108 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
     setDismissed(true);
   };
 
+  const handleOAuthLogin = async (type: string) => {
+    try {
+      setError('');
+      // 打开 OAuth 登录弹窗
+      const width = 600;
+      const height = 700;
+      const left = window.screenX + (window.innerWidth - width) / 2;
+      const top = window.screenY + (window.innerHeight - height) / 2;
+
+      // 先获取 OAuth URL
+      const res = await axios.get('/api/auth/oauth/login', {
+        params: { type, redirect: window.location.href }
+      });
+
+      if (!res.data?.success || !res.data?.data?.url) {
+        setError(res.data?.message || '获取登录链接失败');
+        return;
+      }
+
+      const popup = window.open(
+        res.data.data.url,
+        'oauth-login',
+        `width=${width},height=${height},left=${left},top=${top}`
+      );
+
+      if (!popup) {
+        setError('弹窗被拦截，请允许弹出窗口');
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || '发起OAuth登录失败');
+    }
+  };
+
+  // 监听 OAuth 回调消息（来自弹窗）
+  useEffect(() => {
+    let handled = false;
+
+    const processOAuthResult = (token: string, user: any) => {
+      if (handled) return;
+      handled = true;
+      sessionStorage.setItem('authToken', token);
+      sessionStorage.setItem('user', JSON.stringify(user));
+      localStorage.removeItem('oauth_login_result');
+      localStorage.removeItem('oauth_login_ts');
+      window.dispatchEvent(new Event('credits-updated'));
+      window.dispatchEvent(new Event('auth-state-changed'));
+      onLoginSuccess?.();
+      onClose();
+    };
+
+    const processOAuthError = (message: string) => {
+      if (handled) return;
+      handled = true;
+      setError(message);
+      localStorage.removeItem('oauth_login_error');
+    };
+
+    // 方式1: postMessage（弹窗 opener 可用时）
+    const handleOAuthMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'OAUTH_LOGIN_SUCCESS') {
+        const { token, user } = event.data.payload;
+        if (token && user) processOAuthResult(token, user);
+      } else if (event.data?.type === 'OAUTH_LOGIN_ERROR') {
+        processOAuthError(event.data.payload?.message || '登录失败');
+      }
+    };
+    window.addEventListener('message', handleOAuthMessage);
+
+    // 方式2: storage 事件（opener 丢失时的回退）
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === 'oauth_login_result' && event.newValue) {
+        try {
+          const data = JSON.parse(event.newValue);
+          if (data.token && data.user) processOAuthResult(data.token, data.user);
+        } catch(e) {}
+      } else if (event.key === 'oauth_login_error' && event.newValue) {
+        processOAuthError(event.newValue);
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    // 方式3: 轮询 localStorage（storage 事件在同源 popup 中不触发时的最终回退）
+    const pollTimer = setInterval(() => {
+      if (handled) { clearInterval(pollTimer); return; }
+      try {
+        const result = localStorage.getItem('oauth_login_result');
+        if (result) {
+          const data = JSON.parse(result);
+          if (data.token && data.user) processOAuthResult(data.token, data.user);
+        }
+        const errMsg = localStorage.getItem('oauth_login_error');
+        if (errMsg) processOAuthError(errMsg);
+      } catch(e) {}
+    }, 500);
+
+    return () => {
+      window.removeEventListener('message', handleOAuthMessage);
+      window.removeEventListener('storage', handleStorage);
+      clearInterval(pollTimer);
+    };
+  }, [onLoginSuccess, onClose]);
+
   const sendCode = async () => {
     if (!email || !email.includes('@')) {
       setError('请先输入有效的邮箱地址');
@@ -258,16 +360,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" onClick={onClose}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
           <div
-            className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
+            className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
           {/* Header */}
-          <div className="relative px-6 pt-6 pb-4">
+          <div className="relative px-6 pt-5 pb-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <img src={config.logo_url} alt="Softhooky" className="w-12 h-12 rounded-2xl" />
+                <img src={config.logo_url} alt="Softhooky" className="w-10 h-10 rounded-xl" />
                 <div>
-                  <h2 className="text-xl font-bold text-[#171717]">
+                  <h2 className="text-lg font-bold text-[#171717]">
                     {mode === 'sub-login' ? '子账号登录' : mode === 'forgot-password' ? '找回密码' : '欢迎回来'}
                   </h2>
                   <p className="text-xs text-gray-500 mt-0.5">
@@ -280,13 +382,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
 
           {/* Tab Switcher - Enhanced */}
           {mode !== 'forgot-password' && mode !== 'sub-login' && (
-            <div className="px-6 pb-4">
-              <div className="flex bg-gray-100 p-1.5 rounded-2xl">
+            <div className="px-6 pb-3">
+              <div className="flex bg-gray-100 p-1 rounded-xl">
                 <button
                   onClick={() => { setMode('login'); setError(''); }}
-                  className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                  className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-200 ${
                     mode === 'login'
-                      ? 'bg-white text-[#171717] shadow-md'
+                      ? 'bg-white text-[#171717] shadow-sm'
                       : 'text-gray-500 hover:text-gray-700'
                   }`}
                 >
@@ -294,9 +396,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
                 </button>
                 <button
                   onClick={() => { setMode('register'); setError(''); }}
-                  className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                  className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-200 ${
                     mode === 'register'
-                      ? 'bg-white text-[#171717] shadow-md'
+                      ? 'bg-white text-[#171717] shadow-sm'
                       : 'text-gray-500 hover:text-gray-700'
                   }`}
                 >
@@ -308,10 +410,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
 
           {/* Animated Error Banner */}
           {animatedError && (
-            <div className="mx-6 mb-2">
-              <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-2xl text-red-600 text-sm animate-shake">
-                <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                  <AlertCircle size={16} />
+            <div className="mx-6 mb-1">
+              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-xs animate-shake">
+                <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                  <AlertCircle size={13} />
                 </div>
                 <span className="flex-1">{animatedError}</span>
               </div>
@@ -319,39 +421,39 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="px-6 pb-6 space-y-4">
+          <form onSubmit={handleSubmit} className="px-6 pb-6 space-y-3">
             {/* Sub-account Login */}
             {mode === 'sub-login' && (
               <>
-                <div className="space-y-4">
+                <div className="space-y-2.5">
                   <div className="relative">
-                    <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="请输入邮箱"
                       ref={emailInputRef}
-                      className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-[#171717]/20 focus:border-blue-300 transition-all"
+                      className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#171717]/20 focus:border-blue-300 transition-all"
                       required
                     />
                   </div>
                   <div className="relative">
-                    <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="请输入密码"
-                      className="w-full pl-12 pr-12 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-[#171717]/20 focus:border-blue-300 transition-all"
+                      className="w-full pl-11 pr-11 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#171717]/20 focus:border-blue-300 transition-all"
                       required
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                     >
-                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
                 </div>
@@ -369,18 +471,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-[#171717] text-white py-4 rounded-2xl text-sm font-semibold disabled:opacity-50 hover:bg-[#27272A] transition-all shadow-lg shadow-black/10 flex items-center justify-center gap-2"
+                  className="w-full bg-[#171717] text-white py-3 rounded-xl text-sm font-semibold disabled:opacity-50 hover:bg-[#27272A] transition-all shadow-lg shadow-black/10 flex items-center justify-center gap-1.5"
                 >
                   {loading ? (
-                    <><Loader2 size={18} className="animate-spin" />登录中...</>
+                    <><Loader2 size={15} className="animate-spin" />登录中...</>
                   ) : (
-                    <>登录子账号 <Shield size={16} className="ml-1" /></>
+                    <>登录子账号 <Shield size={14} /></>
                   )}
                 </button>
                 <button
                   type="button"
                   onClick={() => setMode('login')}
-                  className="w-full text-center py-3 text-sm text-gray-500 hover:text-gray-700 flex items-center justify-center gap-1"
+                  className="w-full text-center py-2 text-xs text-gray-500 hover:text-gray-700 flex items-center justify-center gap-1"
                 >
                   <span>←</span> 返回主账号登录
                 </button>
@@ -393,24 +495,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
                 {forgotStep === 'email' && (
                   <>
                     <div className="relative">
-                      <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="请输入邮箱地址"
-                        className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-[#171717]/20 focus:border-blue-300 transition-all"
+                        className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#171717]/20 focus:border-blue-300 transition-all"
                         required
                       />
                     </div>
                     <TianaiCaptchaButton key={captchaKey} onSuccess={(token) => setCaptchaToken(token)} />
-                    <button
-                      type="submit"
-                      disabled={loading || !captchaToken}
-                      className="w-full bg-[#171717] text-white py-4 rounded-2xl text-sm font-semibold disabled:opacity-50 hover:bg-[#27272A] transition-all shadow-lg shadow-black/10 flex items-center justify-center gap-2"
-                    >
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-[#171717] text-white py-3.5 rounded-xl text-base font-semibold disabled:opacity-50 hover:bg-[#27272A] transition-all shadow-lg shadow-black/10 flex items-center justify-center gap-1.5"
+                >
                       {loading ? (
-                        <><Loader2 size={18} className="animate-spin" />发送中...</>
+                        <><Loader2 size={15} className="animate-spin" />发送中...</>
                       ) : (
                         <>发送验证码</>
                       )}
@@ -419,7 +521,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
                 )}
                 {forgotStep === 'verify' && (
                   <>
-                    <div className="flex gap-3">
+                    <div className="flex gap-2">
                       <div className="relative flex-1">
                         <input
                           type="text"
@@ -427,14 +529,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
                           onChange={(e) => setCode(e.target.value.toUpperCase())}
                           placeholder="验证码"
                           maxLength={6}
-                          className="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm uppercase text-center tracking-[0.3em] focus:outline-none focus:ring-2 focus:ring-[#171717]/20 focus:border-blue-300 transition-all"
+                          className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm uppercase text-center tracking-[0.25em] focus:outline-none focus:ring-2 focus:ring-[#171717]/20 focus:border-blue-300 transition-all"
                         />
                       </div>
                       <button
                         type="button"
                         onClick={sendCode}
                         disabled={countdown > 0 || !email.includes('@')}
-                        className="px-6 bg-[#171717] text-white rounded-2xl text-sm font-medium disabled:opacity-50 hover:bg-[#27272A] transition-all whitespace-nowrap"
+                        className="px-4 bg-[#171717] text-white rounded-xl text-xs font-medium disabled:opacity-50 hover:bg-[#27272A] transition-all whitespace-nowrap"
                       >
                         {countdown > 0 ? `${countdown}s` : '重新发送'}
                       </button>
@@ -442,7 +544,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
                     <button
                       type="submit"
                       disabled={loading}
-                      className="w-full bg-[#171717] text-white py-4 rounded-2xl text-sm font-semibold disabled:opacity-50 hover:bg-[#27272A] transition-all shadow-lg shadow-black/10"
+                      className="w-full bg-[#171717] text-white py-3 rounded-xl text-sm font-semibold disabled:opacity-50 hover:bg-[#27272A] transition-all shadow-lg shadow-black/10"
                     >
                       {loading ? '验证中...' : '验证'}
                     </button>
@@ -451,45 +553,45 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
                 {forgotStep === 'reset' && (
                   <>
                     <div className="relative">
-                      <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
                         type={showPassword ? 'text' : 'password'}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="请输入新密码"
-                        className="w-full pl-12 pr-12 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-[#171717]/20 focus:border-blue-300 transition-all"
+                        className="w-full pl-11 pr-11 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#171717]/20 focus:border-blue-300 transition-all"
                         required
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                       >
-                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
                     <div className="relative">
-                      <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
                         type={showConfirmPassword ? 'text' : 'password'}
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         placeholder="请再次输入密码"
-                        className="w-full pl-12 pr-12 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-[#171717]/20 focus:border-blue-300 transition-all"
+                        className="w-full pl-11 pr-11 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#171717]/20 focus:border-blue-300 transition-all"
                         required
                       />
                       <button
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                       >
-                        {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
                     <button
                       type="submit"
                       disabled={loading}
-                      className="w-full bg-[#171717] text-white py-4 rounded-2xl text-sm font-semibold disabled:opacity-50 hover:bg-[#27272A] transition-all shadow-lg shadow-black/10"
+                      className="w-full bg-[#171717] text-white py-3 rounded-xl text-sm font-semibold disabled:opacity-50 hover:bg-[#27272A] transition-all shadow-lg shadow-black/10"
                     >
                       {loading ? '重置中...' : '重置密码'}
                     </button>
@@ -498,7 +600,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
                 <button
                   type="button"
                   onClick={() => { setMode('login'); setForgotStep('email'); }}
-                  className="w-full text-center py-3 text-sm text-gray-500 hover:text-gray-700 flex items-center justify-center gap-1"
+                  className="w-full text-center py-2 text-xs text-gray-500 hover:text-gray-700 flex items-center justify-center gap-1"
                 >
                   <span>←</span> 返回登录
                 </button>
@@ -508,35 +610,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
             {/* Login Form */}
             {mode === 'login' && (
               <>
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   <div className="relative">
-                    <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="请输入邮箱"
                       ref={emailInputRef}
-                      className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-[#171717]/20 focus:border-blue-300 transition-all"
+                      className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#171717]/20 focus:border-blue-300 transition-all"
                       required
                     />
                   </div>
                   <div className="relative">
-                    <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="请输入密码"
-                      className="w-full pl-12 pr-12 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-[#171717]/20 focus:border-blue-300 transition-all"
+                      className="w-full pl-11 pr-11 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#171717]/20 focus:border-blue-300 transition-all"
                       required
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                     >
-                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
                 </div>
@@ -567,103 +669,85 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-[#171717] text-white py-4 rounded-2xl text-sm font-semibold disabled:opacity-50 hover:bg-[#27272A] transition-all shadow-lg shadow-black/10 flex items-center justify-center gap-2"
+                  className="w-full bg-[#171717] text-white py-3 rounded-xl text-sm font-semibold disabled:opacity-50 hover:bg-[#27272A] transition-all shadow-lg shadow-black/10 flex items-center justify-center gap-1.5"
                 >
                   {loading ? (
-                    <><Loader2 size={18} className="animate-spin" />登录中...</>
+                    <><Loader2 size={15} className="animate-spin" />登录中...</>
                   ) : (
                     <>登录</>
                   )}
                 </button>
 
-                {/* Divider */}
-                <div className="relative py-2">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-gray-200" />
-                  </div>
-                  <div className="relative flex justify-center">
-                    <span className="bg-white px-4 text-xs text-gray-400">其他登录方式</span>
-                  </div>
-                </div>
-
-                {/* Sub-account login button */}
-                <button
-                  type="button"
-                  onClick={() => setMode('sub-login')}
-                  className="w-full py-3.5 border-2 border-gray-200 rounded-2xl text-sm font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition-all flex items-center justify-center gap-2"
-                >
-                  <User size={16} />
-                  子账号登录
-                </button>
+                {/* Sub-account login & OAuth 第三方登录 - 已隐藏 */}
               </>
             )}
 
             {/* Register Form */}
             {mode === 'register' && (
               <>
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   <div className="relative">
-                    <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="请输入邮箱"
                       ref={emailInputRef}
-                      className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-[#171717]/20 focus:border-blue-300 transition-all"
+                      className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#171717]/20 focus:border-blue-300 transition-all"
                       required
                     />
                   </div>
-                  <div className="flex gap-3">
+                  <div className="flex gap-2">
                     <input
                       type="text"
                       value={code}
                       onChange={(e) => setCode(e.target.value.toUpperCase())}
                       placeholder="验证码"
                       maxLength={6}
-                      className="flex-1 px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm uppercase text-center tracking-[0.2em] focus:outline-none focus:ring-2 focus:ring-[#171717]/20 focus:border-blue-300 transition-all"
+                      className="flex-1 min-w-0 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm uppercase text-center tracking-[0.2em] focus:outline-none focus:ring-2 focus:ring-[#171717]/20 focus:border-blue-300 transition-all"
                     />
                     <button
                       type="button"
                       onClick={sendCode}
                       disabled={countdown > 0 || sendingCode || !email.includes('@') || (mode === 'register' && !captchaToken)}
-                      className="px-5 bg-[#171717] text-white rounded-2xl text-sm font-medium disabled:opacity-50 hover:bg-[#27272A] transition-all whitespace-nowrap"
+                      className="px-3 py-2 bg-[#171717] text-white rounded-xl text-xs font-medium disabled:opacity-50 hover:bg-[#27272A] transition-all whitespace-nowrap shrink-0"
                     >
                       {countdown > 0 ? `${countdown}s` : '获取验证码'}
                     </button>
                   </div>
                   <div className="relative">
-                    <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="请输入密码（至少6位）"
-                      className="w-full pl-12 pr-12 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-[#171717]/20 focus:border-blue-300 transition-all"
+                      className="w-full pl-11 pr-11 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#171717]/20 focus:border-blue-300 transition-all"
                       required
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                     >
-                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
                   {inviteCode ? (
-                    <div className="px-4 py-2.5 bg-green-50 border border-green-200 rounded-2xl text-sm text-green-700 flex items-center gap-2">
-                      <Shield size={16} />
+                    <div className="px-4 py-2.5 bg-green-50 border border-green-200 rounded-xl text-xs text-green-700 flex items-center gap-1.5">
+                      <Shield size={14} />
                       邀请码：<strong>{inviteCode}</strong>（自动填写）
                     </div>
                   ) : (
                     <div className="relative">
-                      <Shield size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <Shield size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
                         type="text"
                         value={inviteCode}
                         onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
                         placeholder="邀请码（可选）"
-                        className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-[#171717]/20 focus:border-blue-300 transition-all"
+                        className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#171717]/20 focus:border-blue-300 transition-all"
                       />
                     </div>
                   )}
@@ -672,10 +756,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-[#171717] text-white py-4 rounded-2xl text-sm font-semibold disabled:opacity-50 hover:bg-[#27272A] transition-all shadow-lg shadow-black/10 flex items-center justify-center gap-2"
+                  className="w-full bg-[#171717] text-white py-3 rounded-xl text-sm font-semibold disabled:opacity-50 hover:bg-[#27272A] transition-all shadow-lg shadow-black/10 flex items-center justify-center gap-1.5"
                 >
                   {loading ? (
-                    <><Loader2 size={18} className="animate-spin" />注册中...</>
+                    <><Loader2 size={15} className="animate-spin" />注册中...</>
                   ) : (
                     <>注册</>
                   )}
@@ -683,18 +767,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
               </>
             )}
 
-            <p className="text-xs text-center text-gray-400 pt-2">
+            <p className="text-xs text-center text-gray-400 pt-1">
               登录即表示同意{' '}
               <button type="button" onClick={() => setShowTermsModal(true)} className="underline hover:text-gray-600">使用条款</button>
               {' '}和{' '}
               <button type="button" onClick={() => setShowPrivacyModal(true)} className="underline hover:text-gray-600">隐私政策</button>
             </p>
             {!dismissed && (
-              <div className="flex justify-center pt-4">
+              <div className="flex justify-center pt-3">
                 <button
                   type="button"
                   onClick={handleDismiss}
-                  className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
+                  className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
                 >
                   稍后登录
                 </button>
@@ -708,5 +792,34 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
       {showTermsModal && <TermsModal onClose={() => setShowTermsModal(false)} />}
       {showPrivacyModal && <PrivacyModal onClose={() => setShowPrivacyModal(false)} />}
     </>
+  );
+};
+
+// OAuth 第三方登录按钮组件
+const OAuthButton = ({ label, icon, bgClass, onClick }: { label: string; icon: React.ReactNode; bgClass: string; onClick: () => void }) => {
+  const [oauthLoading, setOauthLoading] = React.useState(false);
+
+  const handleClick = () => {
+    setOauthLoading(true);
+    onClick();
+    setTimeout(() => setOauthLoading(false), 30000);
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={oauthLoading}
+      className={`w-11 h-11 rounded-xl flex items-center justify-center text-white shadow-sm hover:shadow-md transform hover:scale-105 transition-all duration-200 ${oauthLoading ? 'opacity-60' : ''}`}
+      title={label}
+    >
+      {oauthLoading ? (
+        <Loader2 size={18} className="animate-spin" />
+      ) : (
+        <div className={`w-full h-full rounded-2xl flex items-center justify-center ${bgClass}`}>
+          {icon}
+        </div>
+      )}
+    </button>
   );
 };

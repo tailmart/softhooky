@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getCurrentUser } from './authService';
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -34,6 +35,15 @@ export interface ChatCompletionResponse {
 const API_URL = 'https://cdn.xgapi.top/v1/chat/completions';
 const API_KEY = 'sk-r5Clizar6aV39YsxLbHR3rW209LqmnYa5fLT1iePRBtfZT47';
 
+const requireLogin = () => {
+  const user = getCurrentUser();
+  if (!user) {
+    window.dispatchEvent(new CustomEvent('show-auth-modal'));
+    throw new Error('请先登录后再使用');
+  }
+  return user;
+};
+
 /**
  * AI 文本对话
  */
@@ -45,6 +55,7 @@ export const chatCompletion = async (
     maxTokens?: number;
   }
 ): Promise<string> => {
+  requireLogin();
   try {
     const response = await axios.post<ChatCompletionResponse>(
       API_URL,
@@ -81,6 +92,7 @@ export const analyzeImage = async (
     maxTokens?: number;
   }
 ): Promise<string> => {
+  requireLogin();
   try {
     const response = await axios.post<ChatCompletionResponse>(
       API_URL,
@@ -132,6 +144,7 @@ export const analyzeMultipleImages = async (
     maxTokens?: number;
   }
 ): Promise<string> => {
+  requireLogin();
   const doRequest = async (): Promise<string> => {
     const content: Array<{ type: 'text' | 'image_url'; text?: string; image_url?: { url: string } }> = [
       { type: 'text', text: prompt }

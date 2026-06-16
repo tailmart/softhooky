@@ -1,24 +1,28 @@
 {
-  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-utils/schema.json",
+  "$schema": "https://raw.githubusercontent.com/nicegram/nicegram-tauri/refs/heads/main/crates/tauri-cli/schema.json",
   "productName": "Softhooky",
-  "version": "1.0.5",
-  "identifier": "com.softhooky.app",
+  "version": "1.1.0",
+  "identifier": "com.softhooky.desktop",
   "build": {
-    "frontendDist": "../dist",
-    "devUrl": "http://localhost:3001",
-    "beforeDevCommand": "",
-    "beforeBuildCommand": "npm run build"
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:3000",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
-        "title": "Softhooky",
-        "width": 1280,
-        "height": 800,
-        "minWidth": 960,
-        "minHeight": 600,
-        "decorations": false,
-        "center": true
+        "title": "Softhooky - 智能设计平台",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 700,
+        "center": true,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "transparent": false,
+        "visible": true
       }
     ],
     "security": {
@@ -35,45 +39,29 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": [
-      "../server.cjs",
-      "../dist/**/*",
-      "../.env*",
-      "../*.traineddata"
-    ],
+    "resources": [],
     "windows": {
-      "wix": null,
       "nsis": {
-        "installMode": "currentUser",
+        "displayLanguageSelector": false,
         "installerIcon": "icons/icon.ico",
-        "headerImage": "icons/128x128.png",
-        "sidebarImage": "icons/128x128@2x.png",
         "languages": ["SimpChinese", "English"]
       }
     },
     "macOS": {
-      "minimumSystemVersion": "12.0"
+      "dmg": {
+        "appPosition": { "x": 180, "y": 170 },
+        "applicationFolderPosition": { "x": 480, "y": 170 },
+        "windowSize": { "width": 660, "height": 400 }
+      },
+      "minimumSystemVersion": "10.15"
     }
   },
   "plugins": {
-    "shell": {
-      "open": true,
-      "scope": [
-        {
-          "name": "node",
-          "cmd": "node",
-          "args": [
-            { "validator": "\\S+" }
-          ]
-        }
-      ]
-    },
     "updater": {
-      "active": true,
       "endpoints": [
-        "http://43.143.213.221/updates/target.json"
+        "http://43.161.228.92:3001/api/tauri/update"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNCMTJCNDBEOUE0NkFCQTkKUldTcHEwYWFEYlFTTzVOLzdJS041M0dUQmptUUZ5SSs0YlZkWmZBZzVBaHVPNFBqTkN2Rmt2disK"
+      "pubkey": ""
     }
   }
 }

@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Images, RefreshCw, Trash2, Download, Loader2, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { imageLibraryService, GeneratedImage } from '../../services/imageLibraryService';
 
@@ -24,6 +24,7 @@ const ImageCard: React.FC<{
   const isVideoUrl = (url: string): boolean => url.includes('.mp4') || url.includes('video') || url.includes('/videos/');
 
   const getExpiresIn = (expiresAt: string): string => {
+    if (!expiresAt) return '';
     const now = new Date();
     const expires = new Date(expiresAt);
     const diff = expires.getTime() - now.getTime();
@@ -36,7 +37,7 @@ const ImageCard: React.FC<{
   };
 
   const expiresIn = getExpiresIn(image.expires_at);
-  const isExpiringSoon = new Date(image.expires_at).getTime() - Date.now() < 24 * 60 * 60 * 1000;
+  const isExpiringSoon = image.expires_at && new Date(image.expires_at).getTime() - Date.now() < 24 * 60 * 60 * 1000;
 
   const handleDownload = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -122,6 +123,7 @@ const ImageCard: React.FC<{
               <div className="flex items-center gap-1 mt-2 text-xs text-white/60">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 倒计时 {(() => {
+                  if (!image.expires_at) return '';
                   const diff = new Date(image.expires_at).getTime() - Date.now();
                   if (diff <= 0) return '已过期';
                   const hours = Math.floor(diff / (1000 * 60 * 60));

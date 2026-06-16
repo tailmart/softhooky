@@ -1,5 +1,5 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
-import { Sparkles, X, Loader2, Plus, Layers, Image as ImageIcon, Zap, Check, ChevronDown, Download, Eye, Wand2, User } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Sparkles, X, Loader2, Plus, Layers, Image as ImageIcon, Zap, Check, ChevronDown, Download, Eye, Wand2 } from 'lucide-react';
 import { fileToDataUrl } from '../../services/r2Service';
 import { editImage } from '../../services/imageService';
 import { analyzeImage } from '../../services/aiChatService';
@@ -9,7 +9,7 @@ import { getAvailableModels } from '../../services/modelService';
 import { ImagePreviewModal } from '../../components/ImagePreviewModal';
 import { ReEditModal } from '../../components/ReEditModal';
 import { ModelSpeedNote } from '../../components/ModelSpeedNote';
-import { PsdExportButton } from '../../components/PsdExportButton';
+import { LANGUAGES, getSavedLanguage, saveLanguage } from '../../constants/languages';
 
 const RATIOS = ['自动', '1:1', '3:4', '9:16', '16:9'];
 const QUALITIES = ['2K', '4K'];
@@ -19,19 +19,19 @@ const DEFAULT_SCENES = ['简约纯色背景', '室内摄影棚', '户外场景',
 export const ProductFusionPage: React.FC = () => {
   const [models, setModels] = useState<{ value: string; label: string }[]>([]);
   useEffect(() => {
-    getAvailableModels(['seedream']).then(m => {
+    getAvailableModels().then(m => {
       const sorted = m.filter(x => x.enabled).sort((a, b) => a.sort_order - b.sort_order);
       setModels(sorted.map(x => ({ value: x.model_id, label: x.label })));
       if (sorted.length > 0) setSelectedModel(sorted[0].model_id);
     });
   }, []);
   const [productFiles, setProductFiles] = useState<{ file: File; preview: string }[]>([]);
-  const [productScenes, setProductScenes] = useState<{ recommended: string[]; selected: string[]; productDesc?: string; modelEnabled?: boolean; modelGender?: string; modelBody?: string; modelAge?: string; posterEnabled?: boolean; posterTitle?: string; posterDesc?: string }[]>([]);
+  const [productScenes, setProductScenes] = useState<{ recommended: string[]; selected: string[]; productDesc?: string; posterEnabled?: boolean; posterTitle?: string; posterDesc?: string }[]>([]);
   const [aspectRatio, setAspectRatio] = useState('自动');
   const [quality, setQuality] = useState('2K');
   const [batchCount, setBatchCount] = useState(1);
   const [selectedModel, setSelectedModel] = useState('');
-  const [language, setLanguage] = useState('zh');
+  const [language, setLanguage] = useState(getSavedLanguage());
   const [isProcessing, setIsProcessing] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
@@ -55,45 +55,17 @@ export const ProductFusionPage: React.FC = () => {
     });
   };
 
-  const toggleModel = (productIndex: number) => {
-    setProductScenes(prev => {
-      const updated = [...prev];
-      if (!updated[productIndex]) return prev;
-      const wasOn = updated[productIndex].modelEnabled;
-      updated[productIndex] = {
-        ...updated[productIndex],
-        modelEnabled: !wasOn,
-        modelGender: !wasOn ? '女' : updated[productIndex].modelGender,
-        modelBody: !wasOn ? '全身' : updated[productIndex].modelBody,
-        modelAge: !wasOn ? '欧美人' : updated[productIndex].modelAge,
-      };
-      return updated;
-    });
-  };
-
   const togglePoster = (productIndex: number) => {
     setProductScenes(prev => {
       const updated = [...prev];
       if (!updated[productIndex]) return prev;
       const wasOn = updated[productIndex].posterEnabled;
-      // 开启海报时自动切到9:16，关闭时回到智能
-      if (!wasOn) setAspectRatio('9:16');
-      else setAspectRatio('自动');
       updated[productIndex] = { ...updated[productIndex], posterEnabled: !wasOn };
       return updated;
     });
   };
 
   const updatePosterField = (productIndex: number, key: 'posterTitle' | 'posterDesc', value: string) => {
-    setProductScenes(prev => {
-      const updated = [...prev];
-      if (!updated[productIndex]) return prev;
-      updated[productIndex] = { ...updated[productIndex], [key]: value };
-      return updated;
-    });
-  };
-
-  const updateModelConfig = (productIndex: number, key: 'modelGender' | 'modelBody' | 'modelAge', value: string) => {
     setProductScenes(prev => {
       const updated = [...prev];
       if (!updated[productIndex]) return prev;
@@ -213,8 +185,7 @@ export const ProductFusionPage: React.FC = () => {
         if (ps?.posterEnabled) {
           setUploadProgress(`正在分析产品并优化海报文案...`);
           try {
-            const langLabelMap: Record<string, string> = { zh: '简体中文', en: 'English', ja: '日本語', ko: '한국어', th: 'ไทย', vi: 'Tiếng Việt' };
-          const langLabel = langLabelMap[language] || '简体中文';
+          const langLabel = LANGUAGES.find(l => l.value === language)?.label || '简体中文';
           const analysisResp = await analyzeImage(
               productUrls[p],
               `你是一位资深的电商海报文案策划师。分析这张产品图片，结合以下用户提供的标题和描述，生成一套全新的、更适合该产品的海报标题和副标题描述。
@@ -248,28 +219,21 @@ export const ProductFusionPage: React.FC = () => {
             currentIndex++;
             setUploadProgress(`${currentIndex}/${totalCount} 生成中 ${p + 1} ${scene}`);
             try {
-              const modelGender = ps?.modelGender || '女';
-              const modelBody = ps?.modelBody || '全身';
-              const modelFace = ps?.modelAge || '欧美人';
-              const genderLabel = modelGender === '男' ? '男' : '女';
-              const faceDetail = getFaceDetail(modelFace, modelGender);
-
-              const ageLabel = '25岁左右';
-              const modelDesc = `${ageLabel}${modelFace}${genderLabel}模特`;
-
               let scenePrompt: string;
               const productDesc = ps?.productDesc ? `${ps.productDesc}，` : '';
               const isSolidBg = scene.includes('纯色背景') || scene.includes('简约背景') || scene.includes('简约纯色');
-              const naturalLight = '自然窗光/柔光板散射光，非影棚人工补光，无AI光感，光影过渡真实自然，像真人实拍照片';
 
-              // 产品一致性约束（所有模式通用）
-              const productConsistency = '**产品图片必须严格保持不变**：产品造型、颜色、材质、纹理、尺寸比例、文字图案完全不变，仅更换场景/背景/模特，产品本身不能有任何变形或变化；即使语言翻译了，产品本身也不能改变';
-              // 海报模式：走海报生成逻辑
+              // 产品一致性约束
+              const productConsistency = '**产品图片必须严格保持不变**：产品造型、颜色、材质、纹理、尺寸比例、文字图案完全不变，仅更换场景/背景，产品本身不能有任何变形或变化；即使语言翻译了，产品本身也不能改变';
+              
+              // 收集需要生成的prompt列表
+              const promptsToGenerate: { prompt: string; ratio: string }[] = [];
+              
+              // 海报模式
               if (ps?.posterEnabled && posterCopy) {
-                const langLabelMap: Record<string, string> = { zh: '简体中文', en: 'English', ja: '日本語', ko: '한국어', th: 'ไทย', vi: 'Tiếng Việt' };
-                const langLabel = langLabelMap[language] || '简体中文';
+                const langLabel = LANGUAGES.find(l => l.value === language)?.label || '简体中文';
                 const isEnglish = language === 'en';
-                scenePrompt = `商业海报设计。
+                const posterPrompt = `商业海报设计。
 
 主标题：${posterCopy.title}
 副标题：${posterCopy.desc}
@@ -287,39 +251,26 @@ export const ProductFusionPage: React.FC = () => {
 🔥 画质要求
 ${isEnglish ? '8K ultra-high resolution, commercial advertising photography standard, photorealistic rendering, sharp focus, rich details, accurate color reproduction, no distortion, no deformation, strictly maintain the original product appearance and structure' : '8K 超高清画质，商业广告摄影标准，呈现逼真的照片效果，画面清晰聚焦，细节丰富，色彩还原度高，无失真、无变形，始终保持产品原有的外观和结构'}。
 ${productConsistency}`;
-              } else if (ps?.modelEnabled) {
-                // 模特模式
-                if (isSolidBg) {
-                  scenePrompt = `真人实拍风格，${productDesc}${modelDesc}，${faceDetail}，身穿该产品的${modelBody}展示照，纯白色/浅灰色干净背景，产品在画面中完整呈现${modelBody}效果所有细节清晰可见不被遮挡不被裁剪，产品占画面主要位置，${naturalLight}，高分辨率。${productConsistency}`;
-                } else if (scene.includes('全身展示') || scene.includes('全身站立') || scene.includes('全身搭配') || scene.includes('全身穿搭')) {
-                  scenePrompt = `真人实拍风格，${productDesc}${modelDesc}，${faceDetail}，身穿该产品的${modelBody}展示照，产品在画面中完整呈现${modelBody}效果所有细节清晰可见不被遮挡不被裁剪，产品占画面主要位置，${naturalLight}。${productConsistency}`;
-                } else if (scene.includes('特写') || scene.includes('近景')) {
-                  scenePrompt = `${productDesc}该产品${scene}，产品完整清晰展示在画面中，产品100%可见不被遮挡不被裁剪，产品细节纹理清晰，${naturalLight}。${productConsistency}`;
-                } else if (scene.includes('脚部')) {
-                  scenePrompt = `真人实拍风格，${productDesc}${modelDesc}穿上该产品的脚部展示，${faceDetail}，鞋子完整可见细节清晰，${naturalLight}。${productConsistency}`;
-                } else if (scene.includes('头部')) {
-                  scenePrompt = `真人实拍风格，${productDesc}${modelDesc}佩戴该产品的头部展示，${faceDetail}，产品完整清晰可见，${naturalLight}。${productConsistency}`;
-                } else if (scene.includes('背') || scene.includes('提')) {
-                  scenePrompt = `真人实拍风格，${productDesc}${modelDesc}背/提该产品的展示照，${faceDetail}，产品完整可见，${naturalLight}。${productConsistency}`;
-                } else {
-                  scenePrompt = `真人实拍风格，${productDesc}${modelDesc}身穿/使用该产品的${scene}，${faceDetail}，产品在画面中完整清晰展示处于主要位置，所有细节可见不被遮挡不被裁剪，${naturalLight}。${productConsistency}`;
-                }
-              } else {
-                // 普通产品模式
-                if (isSolidBg) {
-                  scenePrompt = `${productDesc}该产品放在纯白色/浅灰色干净背景上居中展示，产品完整清晰细节纹理可见，自然均匀布光，商业产品摄影，高分辨率。${productConsistency}`;
-                } else {
-                  scenePrompt = `将${productDesc}产品图融入${scene}场景中，保持产品清晰完整细节可见，产品主色100%保留，高品质商业摄影，精准边缘识别，避免摩尔纹。${productConsistency}`;
-                }
+                promptsToGenerate.push({ prompt: posterPrompt, ratio: '9:16' });
               }
-              const prompt = scenePrompt;
-              // 海报模式自动使用9:16，非海报模式自动使用1:1
-              const useRatio = ps?.posterEnabled ? '9:16' : (aspectRatio === '自动' ? '1:1' : aspectRatio);
-              const response = await editImage({ prompt, images: [productUrls[p]], aspectRatio: useRatio, resolution: quality, model: selectedModel });
-              if (response.data?.[0]?.url) {
-                const finalUrl = response.data[0].url;
-                await imageLibraryService.saveToLibrary({ image_url: finalUrl, prompt: `AI产品视觉 - ${scene}`, model: selectedModel, aspect_ratio: aspectRatio, resolution: quality, type: 'edited' });
-                setResults(prev => [finalUrl, ...prev]);
+              
+              // 背景生成模式
+              if (isSolidBg) {
+                scenePrompt = `${productDesc}该产品放在纯白色/浅灰色干净背景上居中展示，产品完整清晰细节纹理可见，自然均匀布光，商业产品摄影，高分辨率。${productConsistency}`;
+              } else {
+                scenePrompt = `将${productDesc}产品图融入${scene}场景中，保持产品清晰完整细节可见，产品主色100%保留，高品质商业摄影，精准边缘识别，避免摩尔纹。${productConsistency}`;
+              }
+              const normalRatio = aspectRatio === '自动' ? '1:1' : aspectRatio;
+              promptsToGenerate.push({ prompt: scenePrompt, ratio: normalRatio });
+              
+              // 生成所有prompt对应的图片
+              for (const { prompt: finalPrompt, ratio: useRatio } of promptsToGenerate) {
+                const response = await editImage({ prompt: finalPrompt, images: [productUrls[p]], aspectRatio: useRatio, resolution: quality, model: selectedModel });
+                if (response.data?.[0]?.url) {
+                  const finalUrl = response.data[0].url;
+                  setResults(prev => [finalUrl, ...prev]);
+                  imageLibraryService.saveToLibrary({ image_url: finalUrl, prompt: finalPrompt, model: String(selectedModel || 'nanobann2'), aspect_ratio: String(useRatio), resolution: String(quality || '2K'), type: 'edited' });
+                }
               }
             } catch {}
           }
@@ -340,40 +291,6 @@ ${productConsistency}`;
     } catch { window.open(url, '_blank'); }
   };
 
-  // 面孔细节描述映射
-  const FACE_DETAILS: Record<string, Record<string, string>> = {
-    western: {
-      female: '窄长椭圆脸，轮廓纤细，深棕弯眉，毛流自然，狭长杏眼，深眼窝，宽双眼皮，浅榛色/浅绿眼眸，目光微偏差，细直高鼻，鼻梁微不对称，唇形饱满，嘴角不对称，冷调白皮，淡红血丝，知性时尚模特感，原生毛孔，自然肌理，轻微肤色不均，无磨皮，真人抓拍感，五官轻微不对称，拒绝完美对称脸，非网红脸，无塑胶质感',
-      male: '窄长方脸，骨骼立体，深棕剑眉，毛量浓密，细长眼型，深眼窝高眉骨，深棕/藏蓝瞳色，眼神锐利，高直宽鼻，鼻头偏钝，薄唇线条利落，暖调肤色，浅胡茬，细微纹路，少量痘印，硬朗成熟男模气质，原生毛孔，自然肌理，轻微肤色不均，无磨皮，真人抓拍感，五官轻微不对称，拒绝完美对称脸，非网红脸，无塑胶质感',
-    },
-    russian: {
-      female: '长菱形脸，棱角冷冽，浅金/浅棕挑眉，眉峰锐利，狭长狐狸眼，极深眼窝，冰蓝/灰蓝眼眸，眼神冷冽，微弧高鼻，鼻尖锋利，上薄下厚唇，嘴角不对称，冷调瓷白肤，浅雀斑，冷艳孤傲，气场强烈，原生毛孔，自然肌理，轻微肤色不均，无磨皮，真人抓拍感，五官轻微不对称，拒绝完美对称脸，非网红脸，无塑胶质感',
-      male: '宽长方脸，骨骼粗犷，浓金/深棕粗眉，粗直眉形，长眼型，深眼窝，灰蓝/深棕眼眸，眼神深沉，高宽鼻梁，鼻头圆厚，厚唇，冷调白肤，明显细纹，浓密胡茬，肤色不均，冷峻硬汉风格，原生毛孔，自然肌理，轻微肤色不均，无磨皮，真人抓拍感，五官轻微不对称，拒绝完美对称脸，非网红脸，无塑胶质感',
-    },
-    eastAsian: {
-      female: '圆润鹅蛋脸，线条柔和，浅平骨骼，黑棕柔眉，毛流自然杂乱，圆杏眼，浅眼窝，内双/窄双眼皮，深黑瞳色，目光柔和有偏差，低平小巧鼻，鼻头圆润，唇形小巧，嘴角微不对称，自然黄调肤色，脸颊轻微泛红，温婉东方气质，原生毛孔，自然肌理，轻微肤色不均，无磨皮，真人抓拍感，五官轻微不对称，拒绝完美对称脸，非网红脸，无塑胶质感',
-      male: '国字脸/清瘦长脸，立体度偏低，浓黑平眉，毛流杂乱，单眼皮/窄双眼皮，浅眼窝，乌黑眼眸，眼神自然涣散，鼻梁适中，鼻头敦厚，唇形朴实，嘴角不对称，自然黄皮，浅胡茬，面部细纹，脸颊泛红，沉稳温润气质，原生毛孔，自然肌理，轻微肤色不均，无磨皮，真人抓拍感，五官轻微不对称，拒绝完美对称脸，非网红脸，无塑胶质感',
-    },
-    mixed: {
-      female: '窄长鹅蛋脸，立体精致，深棕挑眉，深邃大眼，双眼皮，浅褐瞳色，高挺鼻梁，饱满唇形，暖白肤，混血气质，高级感，原生毛孔，自然肌理，轻微肤色不均，无磨皮，真人抓拍感，五官轻微不对称，拒绝完美对称脸，非网红脸，无塑胶质感',
-      male: '方中带尖脸型，立体分明，浓眉深目，眼窝深邃，棕褐瞳色，高挺鼻梁，薄唇，暖棕肤色，混血男模气质，浅胡茬，硬朗有型，原生毛孔，自然肌理，轻微肤色不均，无磨皮，真人抓拍感，五官轻微不对称，拒绝完美对称脸，非网红脸，无塑胶质感',
-    },
-  };
-
-  const getFaceDetail = (face: string, gender: string): string => {
-    const isWestern = face === '欧美人';
-    const isRussian = face === '俄罗斯人';
-    const isEastAsian = ['中国人', '韩国人', '日本人'].includes(face);
-    const isMixed = face === '混血';
-    const g = gender === '男' ? 'male' : 'female';
-
-    if (isWestern) return FACE_DETAILS.western[g];
-    if (isRussian) return FACE_DETAILS.russian[g];
-    if (isEastAsian) return FACE_DETAILS.eastAsian[g];
-    if (isMixed) return FACE_DETAILS.mixed[g];
-    return FACE_DETAILS.eastAsian[g];
-  };
-
   return (
     <div className="flex-1 flex flex-col bg-white min-w-0">
       {/* Header */}
@@ -381,7 +298,7 @@ ${productConsistency}`;
         <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#171717] to-[#404040] flex items-center justify-center">
           <Layers size={16} className="text-white" />
         </div>
-        <h1 className="text-base font-semibold text-[#171717]">AI产品视觉</h1>
+        <h1 className="text-base font-semibold text-[#171717]">场景融合</h1>
       </div>
 
       <div className="flex-1 flex overflow-hidden">
@@ -434,57 +351,7 @@ ${productConsistency}`;
                       <span className="text-sm font-semibold text-[#171717] block">产品{idx + 1}</span>
                       <span className="text-xs text-[#A3A3A3]">已选{ps.selected.length}/{ps.recommended.length + 1}个场景</span>
                     </div>
-                    {/* 每个产品的模特开关 */}
-                    <button
-                      onClick={() => toggleModel(idx)}
-                      className={`relative w-11 h-6 rounded-full transition-all flex-shrink-0 ${ps.modelEnabled ? 'bg-blue-500' : 'bg-[#E5E5E5]'}`}
-                      title={ps.modelEnabled ? '模特穿搭已开启' : '模特穿搭已关闭'}
-                    >
-                      <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all ${ps.modelEnabled ? 'left-[22px]' : 'left-0.5'}`} />
-                    </button>
                   </div>
-                  {/* 模特模式开启时显示模特配置 */}
-                  {ps.modelEnabled && (
-                    <div className="mb-3 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl border border-blue-100 overflow-hidden">
-                      <div className="flex items-center gap-2 px-4 pt-3 pb-2 border-b border-blue-100/50">
-                        <User size={15} className="text-blue-500" />
-                        <span className="text-xs font-semibold text-blue-600">模特穿搭配置</span>
-                      </div>
-                      <div className="p-4 space-y-3">
-                        {/* 性别 */}
-                        <div>
-                          <label className="text-xs text-[#525252] font-medium block mb-1.5">性别</label>
-                          <select value={ps.modelGender || '女'} onChange={(e) => updateModelConfig(idx, 'modelGender', e.target.value)}
-                            className="w-full bg-white px-3 py-2.5 rounded-xl text-sm text-[#171717] border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer">
-                            <option value="男">男</option>
-                            <option value="女">女</option>
-                          </select>
-                        </div>
-                        {/* 半身/全身 */}
-                        <div>
-                          <label className="text-xs text-[#525252] font-medium block mb-1.5">展示方式</label>
-                          <select value={ps.modelBody || '全身'} onChange={(e) => updateModelConfig(idx, 'modelBody', e.target.value)}
-                            className="w-full bg-white px-3 py-2.5 rounded-xl text-sm text-[#171717] border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer">
-                            <option value="全身">全身</option>
-                            <option value="半身">半身</option>
-                          </select>
-                        </div>
-                        {/* 面孔 */}
-                        <div>
-                          <label className="text-xs text-[#525252] font-medium block mb-1.5">模特面孔</label>
-                          <select value={ps.modelAge || '欧美人'} onChange={(e) => updateModelConfig(idx, 'modelAge', e.target.value)}
-                            className="w-full bg-white px-3 py-2.5 rounded-xl text-sm text-[#171717] border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer">
-                            <option value="欧美人">欧美人</option>
-                            <option value="中国人">中国人</option>
-                            <option value="韩国人">韩国人</option>
-                            <option value="日本人">日本人</option>
-                            <option value="俄罗斯人">俄罗斯人</option>
-                            <option value="混血">混血</option>
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                   <div className="grid grid-cols-2 gap-2">
                     {/* 固定的简约纯色背景选项 */}
                     {(() => {
@@ -556,14 +423,9 @@ ${productConsistency}`;
                 </div>
                 <div>
                   <label className="text-xs font-medium text-[#A3A3A3] mb-1.5 block">语言</label>
-                  <select value={language} onChange={(e) => setLanguage(e.target.value)}
+                  <select value={language} onChange={(e) => { setLanguage(e.target.value); saveLanguage(e.target.value); }}
                     className="w-full bg-[#F5F5F5] px-4 py-3 rounded-xl text-sm text-[#171717] border-0 focus:outline-none focus:ring-2 focus:ring-[#171717]/10 appearance-none cursor-pointer">
-                    <option value="zh">简体中文</option>
-                    <option value="en">English</option>
-                    <option value="ja">日本語</option>
-                    <option value="ko">한국어</option>
-                    <option value="th">ไทย</option>
-                    <option value="vi">Tiếng Việt</option>
+                    {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
                   </select>
                 </div>
                 <div>
@@ -624,18 +486,6 @@ ${productConsistency}`;
 
                   <div className="bg-white rounded-2xl p-4 border border-[#E5E5E5] shadow-sm">
                     <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500 to-pink-400 flex items-center justify-center flex-shrink-0">
-                        <User size={16} className="text-white" />
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-semibold text-[#171717]">模特穿搭</h3>
-                        <p className="text-xs text-[#A3A3A3]">可选择模特 · 全身/半身 · 多面孔风格 · 真人级质感</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-2xl p-4 border border-[#E5E5E5] shadow-sm">
-                    <div className="flex items-center gap-3 mb-2">
                       <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500 to-orange-400 flex items-center justify-center flex-shrink-0">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
                       </div>
@@ -650,7 +500,7 @@ ${productConsistency}`;
                 <div className="mt-6 bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl p-4 border border-blue-100">
                   <p className="text-xs text-[#737373] leading-relaxed">
                     💡 左侧上传产品图 → 点击 <strong>AI智能分析场景</strong> → 选择场景 →
-                    <br />开启 <strong>模特</strong> 或 <strong>海报</strong> 模式 →
+                    <br />开启 <strong>海报</strong> 模式（可选） →
                     <br />点击 <strong>开始生成</strong> 即可出图
                   </p>
                 </div>
@@ -739,7 +589,7 @@ ${productConsistency}`;
                             <button onClick={() => setPreviewImage(url)} className="w-7 h-7 flex items-center justify-center rounded-xl text-[#A3A3A3] hover:bg-[#F0F0F0] hover:text-[#171717] transition-colors" title="预览"><Eye size={14} /></button>
                             <button onClick={() => setReEditImage(url)} className="w-7 h-7 flex items-center justify-center rounded-xl text-[#A3A3A3] hover:bg-[#F0F0F0] hover:text-[#171717] transition-colors" title="微调"><Wand2 size={14} /></button>
                             <button onClick={() => handleDownload(url)} className="w-7 h-7 flex items-center justify-center rounded-xl text-[#A3A3A3] hover:bg-[#F0F0F0] hover:text-[#171717] transition-colors flex-shrink-0" title="下载"><Download size={14} /></button>
-                            <PsdExportButton imageUrl={url} />
+
                           </div>
                         </div>
                       </div>

@@ -20,7 +20,8 @@ export async function cleanupExpiredImages() {
 
   try {
     const [expiredImages] = await pool.execute(
-      'SELECT id, user_id, image_url, model FROM generated_images WHERE expires_at <= NOW()'
+      `SELECT id, user_id, image_url, model FROM generated_images
+       WHERE expires_at <= NOW() OR (expires_at IS NULL AND created_at < DATE_SUB(NOW(), INTERVAL 3 DAY))`
     );
 
     const images = expiredImages as any[];

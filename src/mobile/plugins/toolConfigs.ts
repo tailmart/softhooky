@@ -226,6 +226,91 @@ export const XIAOHONGSHU_CONFIG: ToolConfig = {
   autoGenerate: true,
 };
 
+export const PRODUCT_9GRID_CONFIG: ToolConfig = {
+  id: 'product-9grid',
+  title: '产品展示图',
+  description: '上传产品图，AI 生成标准六宫格（6种角度白底展示）或九宫格细节特写',
+  uploadType: 'product',
+  maxUploads: 2,
+  hasAnalysis: true,
+  analysisPrompt: `You are analyzing product photos (front and back views). Carefully examine ALL visible details and return a detailed product analysis in Chinese.
+
+First, identify if the product is shown as a flat/layout item (平铺) or a 3D/stereoscopic item (立体). If flat, describe how it would look as a 3D object with depth and form.
+
+Then analyze and describe these aspects based ONLY on what is actually visible in the photos:
+
+1. 产品基本信息：品类、颜色、材质（如磨砂塑料/金属/皮革/布料等）
+2. 正面细节：品牌Logo/标识、功能按键/触控区、接缝/拼接工艺、屏幕/显示区域、任何正面装饰元素
+3. 背面细节：材质纹理、接口/充电口、孔位/通风口、装饰线条/纹理、标签/文字信息
+4. 侧面/边缘：边缘圆角弧度、厚度变化、材质过渡、按键/开关位置
+5. 核心功能部件：针对该品类最核心的功能部件的细节描述
+
+IMPORTANT: Only describe details that are ACTUALLY VISIBLE in the photos. Do NOT invent or imagine details that don't exist.
+
+Return as a structured analysis in Chinese, 200-400 words.`,
+  defaultModel: 'gpt-image-2',
+  models: COMMON_MODELS,
+  aspectRatios: [
+    { value: '4:3', label: '4:3 六宫格' },
+    { value: '16:9', label: '16:9 细节图' },
+  ],
+  defaultAspectRatio: '4:3',
+  hasCountSelector: true,
+  hideCountSelector: true,
+  defaultCount: 1,
+  maxCount: 2,
+  promptSuffix: `基于以上产品分析，生成一组高质量产品展示图。产品造型、颜色、材质必须与参考图完全一致。纯白色背景，无文字水印，无AI标识。商业产品摄影级别，8K超高清，专业柔光立体打光。`,
+  resultType: 'image',
+  autoGenerate: true,
+};
+
+export const IMAGE_TRANSLATE_CONFIG: ToolConfig = {
+  id: 'image-translate',
+  title: '图片转译',
+  description: '上传海报/图片，AI 自动识别所有文案区域，翻译为目标语言并替换',
+  uploadType: 'product',
+  maxUploads: 5,
+  hasAnalysis: true,
+  analysisPrompt: `你是一位专业的平面设计师和多语言翻译专家。请仔细分析这张海报/图片，完成以下任务：
+
+1. **提取所有文案区域**：识别图片中每一个包含文字的区域，包括标题、副标题、正文、按钮文字、标签、水印等所有文字内容。
+2. **分析字体风格**：对每个文案区域，描述其视觉风格（如：艺术字、卡通字体、手写体、粗体、衬线体、无衬线体、渐变色、描边、阴影、立体效果等）。
+3. **翻译文案**：将每个文案区域的文字翻译为目标语言，保持原意的同时考虑目标语言的表达习惯。
+
+## 输出格式 - 严格按以下 JSON 格式输出，不要包含任何其他文字：
+{
+  "textBlocks": [
+    {
+      "originalText": "原文案内容",
+      "translatedText": "翻译后的文案",
+      "style": "字体风格描述（如：白色粗体无衬线字，带黑色描边）",
+      "position": "在图片中的位置描述（如：图片顶部居中，约占宽度60%）"
+    }
+  ]
+}
+
+## 注意事项
+- 必须提取图片中所有可见文字，不遗漏
+- 翻译要自然流畅，适合目标语言的读者
+- 字体风格描述要详细，包括颜色、大小、效果等
+- 位置描述要具体，便于后续图片编辑`,
+  defaultModel: 'gpt-image-2',
+  models: COMMON_MODELS,
+  aspectRatios: [
+    { value: '智能', label: '智能适配' },
+    ...COMMON_RATIOS,
+  ],
+  defaultAspectRatio: '智能',
+  languages: LANGUAGES,
+  hasCountSelector: true,
+  hideCountSelector: true,
+  defaultCount: 1,
+  maxCount: 1,
+  promptSuffix: `请对这张图片进行文字替换编辑。将图片中所有文字翻译替换为目标语言，保持原有的字体风格、颜色、大小和视觉效果，仅更换文字内容。产品原图上的文字保持原样，仅翻译新增的营销文案。`,
+  resultType: 'image',
+  autoGenerate: true,
+};
+
 export const SOCIAL_CONFIG: ToolConfig = {
   id: 'social',
   title: '社媒POV出图',
@@ -345,7 +430,7 @@ export const POSTER_CONFIG: ToolConfig = {
 
 export const PRODUCT_FUSION_CONFIG: ToolConfig = {
   id: 'productFusion',
-  title: '产品融图',
+  title: '场景融合',
   description: '把产品放入各种场景，看不同环境里的呈现效果',
   uploadType: 'product',
   maxUploads: 10,
@@ -397,7 +482,7 @@ export const PRODUCT_REFINE_CONFIG: ToolConfig = {
 
 export const DETAIL_CLONE_CONFIG: ToolConfig = {
   id: 'detailClone',
-  title: '版式裂变',
+  title: '智能设计克隆',
   description: '参考模板版式风格，生成相似但有创意的裂变设计',
   uploadType: 'both',
   maxUploads: 5,

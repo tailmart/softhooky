@@ -1,6 +1,6 @@
 import React from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import { LogOut, BarChart3, Users, ShoppingCart, Settings, Bell, DollarSign, Tag, Shield } from 'lucide-react'
+import { LogOut, BarChart3, Users, ShoppingCart, Settings, Bell, DollarSign, Tag, Shield, Image } from 'lucide-react'
 import { useSiteConfig } from '../../contexts/SiteConfigContext'
 
 interface User {
@@ -60,6 +60,7 @@ export default function AdminLayout({ user, onLogout }: AdminLayoutProps) {
           <NavLink to="/admin/pricing" icon={DollarSign} label="价格配置" />
           <NavLink to="/admin/coupons" icon={Tag} label="优惠券管理" />
           <NavLink to="/admin/agents" icon={Shield} label="代理管理" />
+          <NavLink to="/admin/model-library" icon={Image} label="模特库" />
           <NavLink to="/admin/settings" icon={Settings} label="系统设置" />
         </nav>
 

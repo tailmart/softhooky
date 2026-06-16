@@ -1,7 +1,8 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, X, Loader2, Plus, Video, Download, Wand2, ChevronDown } from 'lucide-react';
 import { fileToDataUrl } from '../../services/r2Service';
 import { editImage } from '../../services/imageService';
+import { imageLibraryService } from '../../services/imageLibraryService';
 import { analyzeMultipleImages } from '../../services/aiChatService';
 import { requireAuth } from '../../utils/authCheck';
 import { getAvailableModels } from '../../services/modelService';
@@ -117,13 +118,13 @@ const SCRIPTS = [
 
 const LANGUAGES = [
   { value: 'zh', label: '简体中文', region: '中国大陆', people: '东亚面孔（中国人）' },
-  { value: 'en', label: 'English', region: '欧美', people: '欧美人面孔' },
-  { value: 'ja', label: '日本語', region: '日本', people: '东亚面孔（日本人）' },
-  { value: 'ko', label: '한국어', region: '韩国', people: '东亚面孔（韩国人）' },
-  { value: 'ru', label: 'Русский', region: '俄罗斯', people: '俄罗斯面孔（东斯拉夫人）' },
-  { value: 'th', label: 'ไทย', region: '泰国', people: '东南亚面孔（泰国人）' },
-  { value: 'ms', label: 'Bahasa Melayu', region: '马来西亚/印尼', people: '东南亚面孔（马来人）' },
-  { value: 'vi', label: 'Tiếng Việt', region: '越南', people: '东南亚面孔（越南人）' },
+  { value: 'en', label: '英语', region: '欧美', people: '欧美人面孔' },
+  { value: 'ja', label: '日语', region: '日本', people: '东亚面孔（日本人）' },
+  { value: 'ko', label: '韩语', region: '韩国', people: '东亚面孔（韩国人）' },
+  { value: 'ru', label: '俄语', region: '俄罗斯', people: '俄罗斯面孔（东斯拉夫人）' },
+  { value: 'th', label: '泰语', region: '泰国', people: '东南亚面孔（泰国人）' },
+  { value: 'ms', label: '马来语', region: '马来西亚/印尼', people: '东南亚面孔（马来人）' },
+  { value: 'vi', label: '越南语', region: '越南', people: '东南亚面孔（越南人）' },
 ];
 
 interface SceneData {
@@ -168,7 +169,7 @@ export const TikTokVideoPage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    getAvailableModels(['seedream']).then(m => {
+    getAvailableModels().then(m => {
       const sorted = m.filter(x => x.enabled).sort((a, b) => a.sort_order - b.sort_order);
       setModels(sorted.map(x => ({ value: x.model_id, label: x.label })));
       if (sorted.length > 0) setSelectedModel('gpt-image-2');
@@ -333,7 +334,10 @@ ${scenesDesc}
         try {
           const resp = await editImage({ prompt: genTasks[i].prompt, images: b64s, aspectRatio: '16:9', resolution: quality, model: selectedModel });
           const url = resp.data?.[0]?.url || resp.image_url || resp.url || '';
-          if (url) setResults(prev => [url, ...prev]);
+          if (url) {
+            setResults(prev => [url, ...prev]);
+            imageLibraryService.saveToLibrary({ image_url: url, prompt: genTasks[i].prompt, model: String(selectedModel || 'nanobann2'), aspect_ratio: String('16:9'), resolution: String(quality || '2K'), type: 'edited' });
+          }
         } catch (e) { console.error(`生成第${i + 1}张失败:`, e); }
       }
     } catch (err: any) {

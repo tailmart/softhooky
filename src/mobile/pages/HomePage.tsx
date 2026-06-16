@@ -1,77 +1,83 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Sparkles, Image as ImageIcon, Layers, FileImage, Layout,
-  ShoppingCart, Share2, Film, Wand2, Hand, MessageCircle,
-  ChevronRight, Zap, Clock, Bell, X, ArrowRight, Star, Users, TrendingUp,
-  Camera, Palette, MonitorPlay, Type, ShoppingBag, Play
+  Sparkles, Bell, X, ArrowRight, ChevronRight,
+  Film, Video, Camera, Image as ImageIcon, Layers,
+  Zap, Star, TrendingUp, Play
 } from 'lucide-react';
-import { getAvailableNavItems } from '../../services/navService';
 import { useAuth } from '../../contexts/AuthContext';
 
-// 场景化入口 - 站在用户角度
-const SCENES = [
+// ============ 5大核心功能 ============
+const CORE_FEATURES = [
   {
-    id: 'xiaohongshu',
-    icon: '📱',
-    title: '做小红书',
-    desc: '封面+文案+配图，一键出笔记',
-    color: 'bg-[#FFF5F5]'
-  },
-  {
-    id: 'banner',
-    icon: '🖼️',
-    title: '做电商图',
-    desc: 'Banner、轮播图、详情页全搞定',
-    color: 'bg-[#F5F8FF]'
+    id: 'storyboard',
+    title: '故事板',
+    subtitle: 'AI 分镜生成',
+    description: '输入剧本，自动生成专业影视分镜画面',
+    icon: Film,
+    gradient: 'from-violet-600 to-indigo-700',
+    accent: '#8b5cf6',
+    caseImage: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=professional+film+storyboard+frames+cinematic+shot+sequence+dark+background+blue+accent+lighting&image_size=landscape_4_3',
   },
   {
     id: 'nano-gen',
-    icon: '🎨',
-    title: '创意生图',
-    desc: '上传产品图，AI生成商业大片',
-    color: 'bg-[#F5FFF5]'
+    title: 'TK带货图片',
+    subtitle: '产品商业大片',
+    description: '上传产品图，AI生成TikTok风格带货海报',
+    icon: Camera,
+    gradient: 'from-blue-600 to-cyan-600',
+    accent: '#3b82f6',
+    caseImage: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=tiktok+style+product+photography+commercial+photo+studio+lighting+modern+aesthetic+dark+background&image_size=landscape_4_3',
   },
   {
-    id: 'productFusion',
-    icon: '📸',
-    title: '场景融图',
-    desc: '产品放入任意场景，真实自然',
-    color: 'bg-[#FFF8F0]'
+    id: 'gemini-video',
+    title: '视频生成',
+    subtitle: '图片变营销视频',
+    description: '上传图片，AI生成短视频广告',
+    icon: Video,
+    gradient: 'from-emerald-600 to-teal-700',
+    accent: '#10b981',
+    caseImage: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=product+video+production+cinematic+motion+graphics+marketing+video+dark+background+blue+neon+light&image_size=landscape_4_3',
+  },
+  {
+    id: 'xiaohongshu',
+    title: '小红书种草',
+    subtitle: '一键生成笔记',
+    description: '封面+文案+5张配图，完整种草笔记',
+    icon: Star,
+    gradient: 'from-rose-600 to-pink-700',
+    accent: '#f43f5e',
+    caseImage: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=xiaohongshu+social+media+post+aesthetic+flat+lay+product+photography+pastel+colors+minimalist&image_size=landscape_4_3',
   },
   {
     id: 'social',
-    icon: '✨',
-    title: '社媒出图',
-    desc: 'POV第一视角，适配各平台',
-    color: 'bg-[#F8F5FF]'
-  },
-  {
-    id: 'storyboard',
-    icon: '🎬',
-    title: '做短视频',
-    desc: '剧本自动生成分镜脚本',
-    color: 'bg-[#F5FFFA]'
+    title: '社媒POV出图',
+    subtitle: '第一视角场景图',
+    description: '适配Ins/TikTok/FB，多平台一键出图',
+    icon: Layers,
+    gradient: 'from-amber-600 to-orange-700',
+    accent: '#f59e0b',
+    caseImage: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=social+media+content+creation+first+person+perspective+lifestyle+product+shot+modern+aesthetic+dark&image_size=landscape_4_3',
   },
 ];
 
-// 热门效果展示
-const SHOWCASES = [
-  { id: 1, tag: '小红书爆款', desc: '3分钟出一篇种草笔记' },
-  { id: 2, tag: '电商首图', desc: '专业级Banner设计' },
-  { id: 3, tag: '产品融图', desc: '产品放入场景中' },
+// ============ 使用场景数据 ============
+const USE_CASES = [
+  { label: '电商卖家', desc: '产品图批量生成', icon: '🛍️' },
+  { label: '内容创作者', desc: '社媒素材批量出', icon: '📱' },
+  { label: '品牌营销', desc: '短视频广告制作', icon: '🎬' },
+  { label: '独立站', desc: '详情页/Banner', icon: '🌐' },
 ];
 
 interface HomePageProps {
   onNavigateToTool: (toolId: string) => void;
-  onNavigateToChat: () => void;
   onNavigateToPlugin: (pluginId: string) => void;
   onSwitchTab?: (tab: string) => void;
 }
 
-export const HomePage: React.FC<HomePageProps> = ({ onNavigateToTool, onNavigateToChat, onNavigateToPlugin, onSwitchTab }) => {
+export const HomePage: React.FC<HomePageProps> = ({ onNavigateToTool, onNavigateToPlugin, onSwitchTab }) => {
   const { isAuthenticated, user } = useAuth();
-  const [notifications, setNotifications] = useState<Array<{ id: number; title: string; content: string; created_at: string }>>([]);
   const [showNotifModal, setShowNotifModal] = useState(false);
+  const [notifications, setNotifications] = useState<Array<{ id: number; title: string; content: string; created_at: string }>>([]);
   const [notifDismissed, setNotifDismissed] = useState<Set<number>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('notif_dismissed') || '[]')); } catch { return new Set(); }
   });
@@ -81,211 +87,210 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigateToTool, onNavigate
   }, [notifDismissed]);
 
   useEffect(() => {
-    const fetchNotifs = async () => {
-      try {
-        const res = await fetch('/api/notifications');
-        const data = await res.json();
-        if (data.success) setNotifications(data.data || []);
-      } catch {}
-    };
-    fetchNotifs();
+    fetch('/api/notifications').then(r => r.json()).then(d => {
+      if (d.success) setNotifications(d.data || []);
+    }).catch(() => {});
   }, []);
 
   const unreadNotifs = notifications.filter(n => !notifDismissed.has(n.id)).length;
 
   return (
-    <div className="min-h-screen bg-white animate-mobile-fade-in">
-      {/* 顶部状态栏 */}
-      <div className="flex items-center justify-between px-5 pt-3 pb-2">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-green-500" />
-          <span className="text-xs text-[#a3a3a3]">AI 就绪</span>
+    <div className="min-h-screen bg-[#0a0a0a] animate-mobile-fade-in">
+      {/* ===== Hero 区域 ===== */}
+      <div className="px-4 pt-4 pb-2">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-[13px] text-white/40 font-medium">
+              {isAuthenticated ? `Hi, ${user?.email?.split('@')[0] || ''}` : '欢迎回来'}
+            </p>
+            <h1 className="text-[22px] font-extrabold text-white mt-0.5">
+              AI 创作工作台
+            </h1>
+          </div>
+          <div className="flex items-center gap-2">
+            {isAuthenticated && user && (
+              <button onClick={() => onNavigateToPlugin('recharge')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20">
+                <Sparkles size={12} className="text-blue-400" />
+                <span className="text-[12px] font-bold text-blue-400">{Number(user.credits || 0).toFixed(0)}</span>
+              </button>
+            )}
+            {unreadNotifs > 0 && (
+              <button onClick={() => setShowNotifModal(true)} className="relative w-9 h-9 flex items-center justify-center rounded-full bg-white/[0.05]">
+                <Bell size={17} className="text-white/40" />
+                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] flex items-center justify-center text-[8px] font-bold bg-blue-500 text-white rounded-full">
+                  {unreadNotifs > 9 ? '9+' : unreadNotifs}
+                </span>
+              </button>
+            )}
+          </div>
         </div>
-        {unreadNotifs > 0 && (
-          <button 
-            onClick={() => setShowNotifModal(true)}
-            className="relative w-8 h-8 flex items-center justify-center"
+
+        {/* 快捷入口 - 登录/体验 */}
+        {!isAuthenticated && (
+          <button
+            onClick={() => window.dispatchEvent(new Event('mobile-auth-required'))}
+            className="w-full mb-4 p-4 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-700 relative overflow-hidden"
           >
-            <Bell size={18} className="text-[#737373]" />
-            <span className="absolute top-1 right-1 w-4 h-4 flex items-center justify-center text-[9px] font-bold bg-[#ef4444] text-white rounded-full">
-              {unreadNotifs > 9 ? '9+' : unreadNotifs}
-            </span>
+            <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
+            <div className="relative flex items-center justify-between">
+              <div className="text-left">
+                <p className="text-[15px] font-bold text-white">立即登录，开始创作</p>
+                <p className="text-[12px] text-white/50 mt-1">新用户注册即送免费积分</p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center">
+                <ArrowRight size={18} className="text-white" />
+              </div>
+            </div>
           </button>
         )}
       </div>
 
-      {/* 核心价值主张 - 第一屏 */}
-      <div className="px-5 pt-6 pb-8">
-        <h1 className="text-[28px] font-bold text-[#171717] leading-tight mb-3">
-          {isAuthenticated ? '欢迎回来' : '上传产品图'}
-          <br />
-          <span className="text-[#a3a3a3]">AI 自动生成大片</span>
-        </h1>
-        <p className="text-sm text-[#a3a3a3] mb-6">
-          不会设计？没关系。上传一张图，AI帮你搞定所有电商视觉
-        </p>
-
-        {/* 主CTA按钮 */}
-        <button
-          onClick={() => onNavigateToTool('nano-gen')}
-          className="mobile-tap w-full bg-[#171717] text-white rounded-xl py-4 flex items-center justify-center gap-2 mb-4"
-        >
-          <Sparkles size={18} />
-          <span className="text-[15px] font-semibold">免费试一张</span>
-        </button>
-
-        {/* 信任数据 */}
-        <div className="flex items-center justify-center gap-5">
-          <div className="flex items-center gap-1.5">
-            <Users size={14} className="text-[#d4d4d4]" />
-            <span className="text-xs text-[#a3a3a3]">10万+用户</span>
-          </div>
-          <div className="w-1 h-1 rounded-full bg-[#e5e5e5]" />
-          <div className="flex items-center gap-1.5">
-            <ImageIcon size={14} className="text-[#d4d4d4]" />
-            <span className="text-xs text-[#a3a3a3]">100万+张已生成</span>
-          </div>
+      {/* ===== 核心功能 - 5大工具 ===== */}
+      <div className="px-4 pb-2">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-[15px] font-bold text-white">核心功能</h2>
+          <button onClick={() => onSwitchTab?.('tools')}
+            className="flex items-center gap-1 text-[11px] text-white/30 font-medium">
+            全部 <ChevronRight size={12} />
+          </button>
         </div>
       </div>
 
-      {/* 你想要做什么 - 场景化入口 */}
-      <div className="px-5 pb-8">
-        <h2 className="text-base font-bold text-[#171717] mb-4">你想要做什么？</h2>
-        <div className="grid grid-cols-2 gap-3">
-          {SCENES.map(scene => (
-            <button
-              key={scene.id}
-              onClick={() => onNavigateToTool(scene.id)}
-              className={`${scene.color} rounded-2xl p-4 text-left`}
-            >
-              <div className="text-2xl mb-2">{scene.icon}</div>
-              <h3 className="text-[15px] font-bold text-[#171717] mb-1">{scene.title}</h3>
-              <p className="text-xs text-[#737373] leading-relaxed">{scene.desc}</p>
-            </button>
+      <div className="px-4 pb-4">
+        <div className="space-y-3">
+          {CORE_FEATURES.map((feature, i) => {
+            const Icon = feature.icon;
+            return (
+              <button
+                key={feature.id}
+                onClick={() => onNavigateToTool(feature.id)}
+                className="mobile-tap w-full relative overflow-hidden rounded-2xl text-left group"
+                style={{ animationDelay: `${i * 60}ms` }}
+              >
+                {/* 背景图 */}
+                <div className="absolute inset-0">
+                  <img
+                    src={feature.caseImage}
+                    alt={feature.title}
+                    className="w-full h-full object-cover opacity-40"
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/80 to-transparent" />
+                </div>
+
+                {/* 内容 */}
+                <div className="relative flex items-center gap-4 p-4">
+                  {/* 图标 */}
+                  <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center flex-shrink-0 shadow-lg`}
+                    style={{ boxShadow: `0 8px 24px ${feature.accent}33` }}>
+                    <Icon size={24} className="text-white" />
+                  </div>
+
+                  {/* 文字 */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-[16px] font-bold text-white">{feature.title}</h3>
+                      <span className="text-[9px] font-bold text-blue-400 bg-blue-500/15 px-1.5 py-0.5 rounded-full">{feature.subtitle}</span>
+                    </div>
+                    <p className="text-[12px] text-white/40 mt-1 truncate">{feature.description}</p>
+                  </div>
+
+                  {/* 箭头 */}
+                  <div className="w-8 h-8 rounded-full bg-white/[0.06] flex items-center justify-center flex-shrink-0 group-hover:bg-white/[0.1] transition-colors">
+                    <ChevronRight size={16} className="text-white/30" />
+                  </div>
+                </div>
+
+                {/* 底部高亮线 */}
+                <div className="absolute bottom-0 left-0 right-0 h-[1px]"
+                  style={{ background: `linear-gradient(90deg, transparent, ${feature.accent}40, transparent)` }} />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ===== 使用场景 ===== */}
+      <div className="px-4 pb-4">
+        <h2 className="text-[15px] font-bold text-white mb-3">适用场景</h2>
+        <div className="grid grid-cols-4 gap-2">
+          {USE_CASES.map((uc, i) => (
+            <div key={i} className="flex flex-col items-center gap-1.5 py-3 rounded-xl bg-white/[0.03] border border-white/[0.04]">
+              <span className="text-[22px]">{uc.icon}</span>
+              <span className="text-[10px] font-medium text-white/50">{uc.label}</span>
+            </div>
           ))}
         </div>
       </div>
 
-      {/* 效果展示 - 真实案例 */}
-      <div className="px-5 pb-8">
-        <h2 className="text-base font-bold text-[#171717] mb-4">看看别人用它做了什么</h2>
-        <div className="mobile-scroll-x -mx-5 px-5">
-          <div className="flex gap-3">
-            {SHOWCASES.map(item => (
-              <div
-                key={item.id}
-                className="flex-shrink-0 w-[200px] bg-[#f5f5f5] rounded-2xl overflow-hidden"
-              >
-                <div className="h-[140px] bg-gradient-to-br from-[#e5e5e5] to-[#d4d4d4] flex items-center justify-center">
-                  <ImageIcon size={32} className="text-[#a3a3a3]" />
-                </div>
-                <div className="p-3">
-                  <span className="text-[10px] font-medium text-[#737373] bg-white px-2 py-0.5 rounded-full">{item.tag}</span>
-                  <p className="text-xs text-[#525252] mt-2">{item.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* 3步开始 */}
-      <div className="px-5 pb-8">
-        <h2 className="text-base font-bold text-[#171717] mb-4">3步搞定</h2>
-        <div className="space-y-4">
-          <div className="flex items-start gap-4">
-            <div className="w-8 h-8 rounded-full bg-[#171717] flex items-center justify-center flex-shrink-0">
-              <span className="text-xs font-bold text-white">1</span>
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-[#171717]">上传产品图</h3>
-              <p className="text-xs text-[#a3a3a3] mt-0.5">手机拍的也行，AI会自动优化</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-4">
-            <div className="w-8 h-8 rounded-full bg-[#171717] flex items-center justify-center flex-shrink-0">
-              <span className="text-xs font-bold text-white">2</span>
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-[#171717]">选择你想要的效果</h3>
-              <p className="text-xs text-[#a3a3a3] mt-0.5">小红书、电商Banner、详情页...</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-4">
-            <div className="w-8 h-8 rounded-full bg-[#171717] flex items-center justify-center flex-shrink-0">
-              <span className="text-xs font-bold text-white">3</span>
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-[#171717]">下载使用</h3>
-              <p className="text-xs text-[#a3a3a3] mt-0.5">高清无水印，直接发布</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* AI对话入口 */}
-      <div className="px-5 pb-24">
+      {/* ===== 快速开始 ===== */}
+      <div className="px-4 pb-6">
         <button
-          onClick={onNavigateToChat}
-          className="mobile-tap w-full bg-[#f5f5f5] rounded-2xl p-4 flex items-center gap-4"
+          onClick={() => onSwitchTab?.('tools')}
+          className="mobile-tap w-full rounded-2xl p-4 bg-white/[0.03] border border-white/[0.06] flex items-center gap-3"
         >
-          <div className="w-12 h-12 rounded-xl bg-[#171717] flex items-center justify-center flex-shrink-0">
-            <MessageCircle size={20} className="text-white" />
+          <div className="w-10 h-10 rounded-xl bg-blue-500/15 flex items-center justify-center flex-shrink-0">
+            <Zap size={18} className="text-blue-400" />
           </div>
           <div className="flex-1 text-left">
-            <h3 className="text-sm font-bold text-[#171717]">AI 电商助手</h3>
-            <p className="text-xs text-[#a3a3a3] mt-0.5">帮你写文案、想创意、出方案</p>
+            <p className="text-[13px] font-bold text-white">探索全部工具</p>
+            <p className="text-[11px] text-white/30 mt-0.5">发现更多AI创作能力</p>
           </div>
-          <ChevronRight size={18} className="text-[#d4d4d4]" />
+          <ArrowRight size={16} className="text-white/20" />
         </button>
       </div>
 
-      {/* 通知弹窗 */}
+      {/* ===== 底部留白 ===== */}
+      <div className="h-4" />
+
+      {/* ===== 通知弹窗 ===== */}
       {showNotifModal && (
         <div className="fixed inset-0 z-[100] flex items-end" onClick={() => setShowNotifModal(false)}>
-          <div className="absolute inset-0 bg-black/40" />
-          <div className="relative w-full bg-white rounded-t-3xl pb-[calc(16px+env(safe-area-inset-bottom))] animate-mobile-slide-up" onClick={e => e.stopPropagation()}
-            style={{ maxHeight: '70vh' }}>
-            <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-[#f0f0f0]">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative w-full bg-[#141414] rounded-t-[28px] pb-[calc(16px+env(safe-area-inset-bottom))] animate-mobile-slide-up"
+            style={{ maxHeight: '70vh' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 pt-5 pb-3">
               <div className="flex items-center gap-2">
-                <Bell size={16} className="text-[#171717]" />
-                <h3 className="text-base font-bold text-[#171717]">通知</h3>
-                <span className="text-xs text-[#a3a3a3]">({notifications.length})</span>
+                <h3 className="text-[16px] font-extrabold text-white">通知</h3>
+                <span className="text-[12px] text-white/30">({notifications.length})</span>
               </div>
-              <button onClick={() => setShowNotifModal(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-[#f5f5f5]">
-                <X size={16} className="text-[#737373]" />
+              <button onClick={() => setShowNotifModal(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.06]">
+                <X size={16} className="text-white/40" />
               </button>
             </div>
-            <div className="overflow-y-auto max-h-[calc(70vh-60px)] px-4 py-3 space-y-2">
+            <div className="overflow-y-auto max-h-[calc(70vh-60px)] px-4 pb-3 space-y-2">
               <div className="flex items-center justify-between px-1 mb-1">
-                <span className="text-xs text-[#a3a3a3]">{unreadNotifs} 条未读</span>
+                <span className="text-[11px] text-white/30">{unreadNotifs} 条未读</span>
                 {unreadNotifs > 0 && (
                   <button onClick={() => setNotifDismissed(prev => new Set(notifications.map(n => n.id)))}
-                    className="text-xs text-[#737373] hover:text-[#171717] transition-colors">全部标为已读</button>
+                    className="text-[11px] text-blue-400 font-medium">全部已读</button>
                 )}
               </div>
               {notifications.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-10">
-                  <Bell size={24} className="text-[#d4d4d4]" />
-                  <p className="text-sm text-[#a3a3a3] mt-2">暂无通知</p>
+                <div className="flex flex-col items-center justify-center py-12">
+                  <div className="w-12 h-12 rounded-full bg-white/[0.04] flex items-center justify-center mb-3">
+                    <Bell size={20} className="text-white/15" />
+                  </div>
+                  <p className="text-[13px] text-white/30">暂无通知</p>
                 </div>
               ) : notifications.map((n) => {
                 const isUnread = !notifDismissed.has(n.id);
                 return (
-                <div key={n.id} className={`rounded-2xl p-4 border ${isUnread ? 'bg-white border-gray-200 shadow-sm' : 'bg-[#fafafa] border-[#f0f0f0]'}`}>
+                <div key={n.id} className={`rounded-2xl p-4 transition-all ${isUnread ? 'bg-white/[0.04] border border-white/[0.06]' : 'bg-white/[0.02]'}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className={`text-sm ${isUnread ? 'font-semibold text-[#171717]' : 'font-medium text-[#737373]'}`}>{n.title}</p>
-                        {isUnread && <span className="w-1.5 h-1.5 rounded-full bg-[#171717] flex-shrink-0" />}
+                        <p className={`text-[13px] ${isUnread ? 'font-bold text-white' : 'font-medium text-white/40'}`}>{n.title}</p>
+                        {isUnread && <span className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />}
                       </div>
-                      {n.content && <p className={`text-xs mt-1 leading-relaxed ${isUnread ? 'text-[#525252]' : 'text-[#a3a3a3]'}`}>{n.content}</p>}
+                      {n.content && <p className={`text-[11px] mt-1.5 leading-relaxed ${isUnread ? 'text-white/50' : 'text-white/20'}`}>{n.content}</p>}
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      {n.created_at && <span className="text-[10px] text-[#bdbdbd] whitespace-nowrap">{new Date(n.created_at).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })}</span>}
+                      {n.created_at && <span className="text-[10px] text-white/20 whitespace-nowrap">{new Date(n.created_at).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })}</span>}
                       {isUnread && (
                         <button onClick={() => setNotifDismissed(prev => new Set([...prev, n.id]))}
-                          className="text-[10px] text-[#a3a3a3] hover:text-[#737373] transition-colors whitespace-nowrap">已读</button>
+                          className="text-[10px] text-blue-400 font-medium">已读</button>
                       )}
                     </div>
                   </div>

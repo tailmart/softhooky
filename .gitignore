@@ -7,7 +7,11 @@ coverage/
 .env*
 !.env.example
 release/
-# Tauri
 src-tauri/target/
-src-tauri/updater.key
-*.pdb
+src-tauri/gen/
+deploy/updates/*.dmg
+deploy/updates/*.exe
+deploy/updates/*.yml
+screenshot-*.png
+*.traineddata
+

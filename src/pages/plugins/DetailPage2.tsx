@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, X, Loader2, Plus, FileImage, Copy, Check, ChevronDown, Download, Wand2 } from 'lucide-react';
 import { fileToDataUrl } from '../../services/r2Service';
 import { editImage } from '../../services/imageService';
@@ -7,16 +7,18 @@ import { uploadFileToCos } from '../../services/cosService';
 import { imageLibraryService } from '../../services/imageLibraryService';
 import { requireAuth } from '../../utils/authCheck';
 import { getAvailableModels } from '../../services/modelService';
+import { createConcurrencyLimit } from '../../utils/concurrency';
 import { ImagePreviewModal } from '../../components/ImagePreviewModal';
 import { ReEditModal } from '../../components/ReEditModal';
 import { ModelSpeedNote } from '../../components/ModelSpeedNote';
 import { LoadingAnimation } from '../../components/LoadingAnimation';
-import { PsdExportButton } from '../../components/PsdExportButton';
+import { LANGUAGES, getSavedLanguage, saveLanguage } from '../../constants/languages';
 
 interface PromptCard {
   id: number;
   title: string;
   prompt: string;
+  refImageIndices?: number[];
 }
 
 interface DeepProductAnalysis {
@@ -48,25 +50,16 @@ interface GenImage {
 const QUALITIES = ['2K', '4K'];
 
 const SMART_SECTIONS = [
-  { title: '产品整体展示', prompt: '电商详情页首图，产品整体展示，纯白背景，专业棚拍布光，产品居中，8K超清，商业级质感，锐利清晰，色彩真实，产品上叠加产品名称和核心卖点的中文文案，排版简洁大气，竖版9:16' },
-  { title: '产品细节特写', prompt: '电商详情页细节图，产品局部特写放大，展示精工细节和材质质感，微距拍摄，景深虚化背景，光线聚焦产品细节区域，标注细节说明文字，8K超清，竖版9:16' },
-  { title: '功能卖点展示', prompt: '电商详情页功能展示图，产品核心功能可视化呈现，用图标或示意图标注功能卖点，产品为主体，配简洁功能说明文案，科技感光效，专业构图，竖版9:16' },
-  { title: '使用场景图', prompt: '电商详情页场景图，产品在真实使用环境中的效果展示，生活化场景，自然光线，产品自然融入场景，体现产品实际使用方式，氛围感强，竖版9:16' },
-  { title: '材质工艺图', prompt: '电商详情页材质展示图，产品材质和工艺特写，展示表面纹理、做工细节、材质质感，侧光拍摄突出纹理，配材质说明文案，高端质感，竖版9:16' },
-  { title: '尺寸规格图', prompt: '电商详情页尺寸规格图，产品搭配尺寸标注和规格参数展示，产品主体清晰，配尺寸数字和规格图标，信息图表风格，简洁专业，竖版9:16' },
+  { title: '品牌首图+卖点概览', prompt: '电商详情页首图，浅色/白色背景，画面顶部一个小圆角标签（如产品品类），下方大号粗体主标题（6-12个字核心卖点），再下方小号副标题，中间产品多角度/多色展示图，底部一排功能图标网格（6个小圆形图标+文字标签，如"大风速""静音""长续航"等），排版干净专业，竖版9:16' },
+  { title: '核心卖点+大号数据', prompt: '电商详情页卖点图，白色背景，顶部大号粗体标题（如"100档无级风速"），副标题（如"从微风到劲爽 自由掌控"），中间产品特写图（展示关键功能部位），底部对比卡片区域（2-3个并排小卡片，每个卡片展示不同档位/模式，如"1档 微弱清风""50档 柔爽清风""100档 劲爽劲风"），竖版9:16' },
+  { title: '技术细节+内部结构', prompt: '电商详情页技术展示图，白色背景，顶部大号粗体标题（如"高速涡轮 风力澎湃"），副标题，中间产品内部结构/核心技术特写（如电机、风扇叶片、芯片等），展示技术实力，底部简短技术说明文字，竖版9:16' },
+  { title: '功能标注线说明', prompt: '电商详情页功能标注图，白色背景，顶部大号粗体标题，产品图居中，从产品不同部位引出3-4条标注线，每条标注线连接一个小文字标签（如"剩余时间显示""当前档位显示""Type-C充电口"等），标注线用细线+小圆点，排版整洁，竖版9:16' },
+  { title: '细节特写网格', prompt: '电商详情页细节展示图，白色背景，顶部大号粗体标题（如"细节之处 更显用心"），下方2x2网格排列4个产品细节特写——每个格子包含一张局部特写小图+一行标题+一行说明文字（如"挂绳孔设计 便携不占空间""隐藏式进风口 美观防尘"等），竖版9:16' },
+  { title: '人物使用效果', prompt: '电商详情页人物使用图，白色背景，顶部大号粗体标题（如"轻巧便携 随时随地"），副标题，中间真人模特正在使用/佩戴产品的自然瞬间，模特表情自然放松，产品清晰可见，底部2-3个小数据标签（如"轻至146g""小巧55mm"），竖版9:16' },
+  { title: '多场景适用', prompt: '电商详情页场景展示图，白色背景，顶部大号粗体标题（如"多场景适用 清凉随行每一刻"），副标题列出场景（如"办公、出行、户外、居家都适用"），下方2x2网格排列4个使用场景——每个格子包含一张场景照片+场景名称+简短描述（如"日常通勤 清爽随行不闷热""办公学习 静享清凉不打扰""户外出行 越热越爽 随时降温""居家休闲 享受"），竖版9:16' },
+  { title: '多色展示', prompt: '电商详情页多色展示图，白色背景，顶部大号粗体标题（如"多彩配色 选你所爱"），副标题（如"清爽配色，点亮你的每个瞬间"），下方产品的所有颜色/款式并排展示（3-5个），每个颜色下方标注颜色名称（中文），排版整齐美观，竖版9:16' },
+  { title: '产品参数表', prompt: '电商详情页参数表图，白色背景，顶部大号粗体标题（如"产品参数"），下方干净的参数表格——左列参数名（如"产品名称""电池容量""充电接口""产品尺寸"等），右列参数值，表格线条细浅灰色，排版整洁专业，竖版9:16' },
 ];
-
-const LANGUAGES = [
-  { value: 'zh', label: '简体中文' },
-  { value: 'en', label: 'English' },
-  { value: 'ja', label: '日本語' },
-  { value: 'ko', label: '한국어' },
-  { value: 'ru', label: 'Русский' },
-  { value: 'th', label: 'ไทย' },
-  { value: 'ms', label: 'Bahasa Melayu' },
-  { value: 'vi', label: 'Tiếng Việt' },
-];
-
 
 const PRODUCT_DEEP_ANALYSIS_PROMPT = `你是一位顶级的电商产品深度分析师。仔细分析上传的产品图片，从以下所有维度进行全面深度分析，输出结构化JSON。即使图片信息有限，也要尽最大能力推断和提取。
 
@@ -111,7 +104,7 @@ const PRODUCT_DEEP_ANALYSIS_PROMPT = `你是一位顶级的电商产品深度分
 - 每个字段尽量详细、有信息量
 - 不确定的要合理推断，不能留空`;
 
-const SMART_PROMPT = `你是一位资深电商视觉设计师，具备5年以上电商详情页设计经验，精通平面构成、色彩搭配、版式设计及电商视觉营销逻辑。
+const SMART_PROMPT = `你是一位资深电商视觉设计师，具备8年以上品牌电商详情页设计经验，精通产品视觉营销、版式设计和消费者心理学。
 
 ## 识别报备（严格参考以下产品信息，每屏提示词不得脱离）
 - 产品名称: {productName}
@@ -126,70 +119,112 @@ const SMART_PROMPT = `你是一位资深电商视觉设计师，具备5年以上
 - 特殊需求: {specialNeeds}
 
 ## 任务指令
-生成一套完整的电商产品详情页设计提示词，AI根据产品特点和卖点灵活决定屏数（通常5-12屏），单屏尺寸严格限定为9:16竖版（适配手机端详情排版，符合移动端用户浏览视觉习惯）。所有提示词需达到"复制即可生效"标准，无需人工补充信息，直接粘贴至AI出图即可生成符合需求的详情页。
+生成一套完整的电商产品详情页设计提示词，AI根据产品特点和卖点灵活决定屏数（通常6-12屏），单屏尺寸严格限定为9:16竖版。
 
-**核心约束**：提示词需形成完整的详情页逻辑链，视觉风格统一，无割裂感、无杂乱图。每屏提示词需具备高细节度，明确传递设计逻辑、视觉元素及内容布局，确保AI可精准拆解并还原设计意图。
+**核心原则：详情页是以产品力为核心的专业展示，用数据说话，用细节征服，用排版提升品质感。**
+
+---
+
+## ★ 版式设计规范（最高优先级）
+
+### 1. 浅色统一背景
+整套详情页统一使用浅色/白色背景，深色文字，保持干净专业的视觉风格：
+- 所有屏使用白色或浅灰色背景
+- 文字使用深色（黑色/深灰/品牌色）
+- 产品图在浅色背景上清晰展示
+- 品牌色作为点缀色贯穿全套详情页
+
+### 2. 文字排版铁律
+- **主标题**：每屏顶部，大号粗体无衬线字体（中文24-32pt等效），简洁有力，6-12个字
+- **副标题**：主标题下方，小号字体（中文14-18pt等效），补充说明，10-20个字
+- **数字突出**：关键数据用超大号字体（48-72pt等效）+ 醒目颜色（如橙色/蓝色/金色）高亮显示
+- **文字位置**：永远在画面上方1/3区域，产品图在下方2/3区域
+- **禁止**：大段文字堆砌、密集文案、文字遮挡产品
+
+### 3. 产品展示规范
+- 产品图占画面下方60-70%空间，居中或略偏一侧
+- 产品必须清晰锐利，材质质感可见
+- 产品自然光展示，浅色背景上用柔和阴影
+- 产品角度每屏不同：正面/侧面/45°/俯拍/仰拍/特写交替
+
+### 4. 数字/数据可视化
+- 核心参数用超大号数字展示（如"240°"、"48dB"、"20+"）
+- 数字下方配一行小字说明（如"超广角调节"、"深度降噪"、"小时续航"）
+- 数字颜色用品牌色或醒目对比色高亮
+
+### 5. 专业排版组件（必须使用）
+- **功能图标网格**：6个小圆形图标+文字标签，2行3列排列，用于首屏卖点概览
+- **对比卡片**：2-3个并排小卡片，展示不同档位/模式/规格
+- **标注线**：从产品不同部位引出细线+小圆点，连接功能说明文字
+- **细节网格**：2x2网格，每个格子包含特写小图+标题+说明
+- **场景网格**：2x2网格，每个格子包含场景照片+场景名称+描述
+- **参数表格**：左列参数名，右列参数值，细浅灰色线条
+
+---
+
+## ★ 内容规划框架
+
+### 屏数分配建议（AI根据产品特点灵活调整）
+1. **品牌首图+卖点概览**——品类标签+主标题+副标题+产品多色展示+底部功能图标网格（6个）
+2. **核心卖点+大号数据**——卖点标题+副标题+产品特写+底部对比卡片（2-3个档位/模式）
+3. **技术细节+内部结构**——技术标题+产品内部结构/核心技术特写
+4. **功能标注线说明**——产品居中+3-4条标注线连接功能标签
+5. **细节特写网格**——标题+2x2网格（4个细节特写+标题+说明）
+6. **人物使用效果**——标题+副标题+真人使用图+底部数据标签
+7. **多场景适用**——标题+副标题+2x2场景网格（4个场景照片+名称+描述）
+8. **多色展示**——标题+副标题+所有颜色并排+颜色名称
+9. **产品参数表**——标题+干净的参数表格
+
+### 每屏差异化强制规则
+- **一屏一主题**：每屏聚焦一个完全不同的角度/卖点，严禁重复
+- **数据不重复**：每屏突出不同的数据/参数
+- **构图不重复**：每屏的产品角度/构图必须不同
+
+---
 
 ## 视觉设计核心要求
 
-### 1. 卖点可视化规范
-严格提取【识别报备】中产品核心卖点，采用场景化、示意图、特写等视觉形式具象化呈现，拒绝单纯产品陈列。需将卖点（如续航、防水、材质优势）转化为可视化的元素（如防水场景展现产品淋水动态、材质优势呈现微观质感）。
+### 1. 照片级真实感（最高优先级，禁止AI感）
+画面中出现的所有人物必须达到专业摄影级别的真实感，**绝对禁止AI生成感**：
 
-### 2. 杂志级版式规范
-单屏版式遵循高端杂志/画册排版逻辑，注重留白、层级感与平衡感，杜绝杂乱无章。卖点可视化采用"图标+示意图+精简文字"结合的形式，避免纯文字堆砌。产品展示角度多元化，涵盖正面、侧面、俯视、仰视、细节特写等。
+**模特要求**：
+- 优先使用欧美/西方面孔模特（高鼻梁、深眼窝、自然肤色）
+- 年龄20-35岁，形象自然健康，表情是抓拍般的自然瞬间（微笑/专注/放松），禁止僵硬摆拍
+- 手指数量正确（5根），关节和指甲自然
 
-### 3. 视觉吸引力约束
-视觉设计需具备创新性与视觉冲击力，符合当下电商高端视觉趋势。单屏画面分辨率不低于300DPI，高清无模糊、无噪点。所有屏整体视觉风格统一（现代简约风），色彩、字体、排版逻辑、装饰元素保持一致。所有文字左对齐，字体统一采用无衬线黑体。**即使语言改变（中文/英文/日文等），产品实物的颜色、造型、LOGO位置、材质质感等视觉特征必须完全一致，不受语言影响。**
+**皮肤真实感**：
+- 皮肤必须有真实纹理和毛孔，允许自然的雀斑、细纹、痘印等小瑕疵
+- 皮肤光泽自然，禁止过度磨皮、塑料感、蜡质质感
+- 肤色自然，禁止过度美白或不自然的色调
 
-### 4. 提示词完整性要求
-单屏提示词为一段式完整文本，可直接复制用于AI出图，包含以下核心要素（缺一不可）：
-①主标题——明确单屏核心主题，贴合卖点，简洁有冲击力
-②副标题+补充主题——传递产品价值，字数控制在15字以内
-③信息布局——明确主标题、副标题、产品、卖点元素、装饰元素的具体位置
-④排版形式——明确留白比例、元素对齐方式、视觉焦点位置
-⑤设计细节——明确色彩搭配、元素样式及数量、材质呈现方式
+**光线要求（关键！禁止AI感光线）**：
+- 使用自然环境光（窗边散射光/户外阴天柔光/普通室内灯光）
+- 禁止：刻意的黄金时刻暖光、逆光光晕、过曝高光、不自然的边缘光
+- 光线方向单一自然，禁止多光源混合导致的不自然阴影
+- 色温中性偏暖（5000-5500K），禁止过度橙黄色调
 
-### 5. 产品尺寸精准规范
-严格提取【识别报备】中产品具体尺寸参数，提示词中需明确产品实际尺寸与画面中的比例呈现，确保产品与画面中其他元素的比例符合真实物理空间逻辑，无比例失衡、突兀感。
+**相机参数**：提示词中涉及人物时必须附加"photorealistic, shot on Sony A7R IV, 85mm f/1.8 lens, natural window light, soft shadows, no lens flare, no golden hour, real skin texture, pores visible, editorial photography"
 
-### 6. 产品还原度强制指令（每屏提示词开头必须包含以下两句，不可遗漏）
-①严格还原上传产品参考图，精准复刻颜色、产品配色、LOGO位置及比例、文字内容及字体、图案元素及细节，无任何偏差、色彩无失真
-②产品与画面中其他物体的比例遵循真实物理空间逻辑，视角规范，比例舒适，杜绝尺寸错乱、比例失衡
+### 2. 产品还原度（每屏提示词开头必须包含）
+①严格还原上传产品参考图，精准复刻颜色、配色、LOGO位置及比例、文字内容及字体、图案元素及细节
+②产品与画面中其他元素的比例遵循真实物理空间逻辑
 
-### 8. 跨语言一致性（重要）
-无论新增文案使用何种语言，产品的实物视觉特征必须完全一致：
-- 产品的颜色、配色方案、LOGO位置和大小在所有屏中严格统一
-- 产品的造型、角度、材质质感不因语言切换而改变
-- 产品实物的展示风格、光影效果保持一致
-- 唯一会随语言变化的是新增的电商文案内容，产品本身不变
+### 3. 整体风格统一
+所有屏使用白色/浅灰色背景+深色文字，字体风格、排版逻辑、色彩体系保持一致。品牌色作为点缀色贯穿全套详情页。
 
-### 7. 无产品页面规范
-允许设计无完整产品呈现，可单独聚焦产品功能、材质、工艺等核心优势，采用材质特写、功能示意图、工艺拆解图等形式呈现，重点突出功能价值与材质优势。
-
-## 逻辑链设计参考（AI根据产品特点灵活调整屏数和顺序）
-推荐的详情页逻辑递进顺序：
-1. 品牌形象/产品全景大图，品牌LOGO+产品名称+核心Slogan
-2. 产品多角度展示+核心卖点标注
-3. 产品细节特写（材质、工艺、LOGO、配件细节）
-4. 功能卖点可视化（每个核心功能独立展示）
-5. 使用场景图（真实场景展示产品使用）
-6. 尺寸/规格/参数展示
-7. 品质保障/认证/信赖背书
-8. 实拍对比或使用前后对比
-9. 购买引导/促销行动号召
-
-AI可根据产品特点灵活增减屏数和调整顺序，确保逻辑完整、卖点覆盖全面。
+### 4. 无产品页面规范
+允许设计无完整产品呈现的页面，可单独聚焦技术参数、材质工艺等，用大号数字+图表+文字排版呈现。
 
 ## 输出格式
 你必须输出严格的JSON格式，不要包含任何其他文字：
 {"prompts":[{"id":1,"title":"第1屏-XX主题","prompt":"完整AI绘图提示词"},{"id":2,"title":"第2屏-XX主题","prompt":"完整AI绘图提示词"},...]}
 
-## 文案语言要求（重要！必须严格遵守）
-- **{language}**：如果此值为 English，全部文案输出英文；如果为 简体中文/日本語/한국어/Русский 等，则全部输出对应语言
-- 所有 title 字段和 prompt 字段中的所有文案内容必须**严格使用 {language}**
-- 禁止中英混合，所有新增文案必须统一使用 {language}
-- 产品原图上的文字、标志、标签保持原样不变，不做翻译修改
-- 标题、副标题、卖点标签、说明文字等所有新增文案元素均使用 {language}`;
+## 文案语言要求（绝对禁止违反！）
+- **{language}** 是唯一允许使用的语言，所有内容必须100%使用此语言
+- **绝对禁止中英混合**：如果 {language} 是 English，则所有文案100%英文；如果 {language} 是 简体中文，则所有文案100%中文（产品品牌名除外）
+- 绝对禁止出现任何非 {language} 的文字内容
+- 产品原图上已有的文字/标志保持原样不变
+- 提示词中的画面描述必须用 {language} 书写`;
 
 const Dropdown: React.FC<{
   value: string;
@@ -240,7 +275,7 @@ const Dropdown: React.FC<{
 export const DetailPage2: React.FC = () => {
   const [models, setModels] = useState<{ value: string; label: string }[]>([]);
   useEffect(() => {
-    getAvailableModels(['seedream']).then(m => {
+    getAvailableModels().then(m => {
       const sorted = m.filter(x => x.enabled).sort((a, b) => a.sort_order - b.sort_order);
       setModels(sorted.map(x => ({ value: x.model_id, label: x.label })));
       if (sorted.length > 0) {
@@ -253,7 +288,7 @@ export const DetailPage2: React.FC = () => {
   const [productDesc, setProductDesc] = useState('');
   const [selectedModel, setSelectedModel] = useState('gpt-image-2');
   const [quality, setQuality] = useState('2K');
-  const [language, setLanguage] = useState('zh-CN');
+  const [language, setLanguage] = useState(getSavedLanguage());
   const [analyzing, setAnalyzing] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [isMerging, setIsMerging] = useState(false);
@@ -318,6 +353,21 @@ export const DetailPage2: React.FC = () => {
     setProgress('AI正在进行第一轮深度产品分析...');
 
     try {
+      // Step 0: Identify each image
+      setProgress('AI正在识别每张图片展示的产品部位...');
+      const identifyPrompt = `分析所有上传的图片，对每张图片用一句话（10字以内）说明这张图展示的是产品的哪个部分或角度。
+返回JSON数组，顺序与图片顺序一致。
+示例：["产品正面","产品背面","接口特写","侧面按键","包装正面"]
+仅输出JSON数组，不要其他文字。`;
+      const identifyRaw = await analyzeMultipleImages(productImages, identifyPrompt, { model: 'gemini-3.5-flash', maxTokens: 1000 });
+      let imageLabels: string[] = [];
+      try {
+        const parsed = JSON.parse(identifyRaw.match(/\[[\s\S]*\]/)?.[0] || '[]');
+        if (Array.isArray(parsed) && parsed.length === productImages.length) imageLabels = parsed;
+      } catch {}
+      if (imageLabels.length === 0) imageLabels = productImages.map((_, i) => `产品图 ${i + 1}`);
+      const imageDesc = imageLabels.map((label, i) => `图${i + 1}：${label}`).join('\n');
+
       // 第一步：深度产品分析（无论用户是否提供了标题/描述，都执行）
       const langLabel = LANGUAGES.find(l => l.value === language)?.label || '简体中文';
       const deepPromptWithLang = PRODUCT_DEEP_ANALYSIS_PROMPT.replace(/\{language\}/g, langLabel);
@@ -349,7 +399,8 @@ export const DetailPage2: React.FC = () => {
         .replace('{productDescription}', deepParsed.productDescription)
         .replace('{productDetails}', deepParsed.productDetails)
         .replace('{specialNeeds}', deepParsed.specialNeeds)
-        .replace('{language}', langLabel);
+        .replace('{language}', langLabel)
+        + `\n\n## 上传图片清单\n${imageDesc}\n\n重要：每张详情页配图必须指定使用哪张参考图。在输出中为每个对象添加 "refImageIndices" 字段，表示该配图需要参考哪些上传的图片（数组中的数字对应上文图1、图2...的索引，从0开始）。例如某张配图需要参考第1张和第3张图，则写 "refImageIndices": [0, 2]。`;
 
       const raw2 = await analyzeMultipleImages(productImages, smartPrompt, {
         model: 'gemini-3.5-flash',
@@ -378,8 +429,8 @@ export const DetailPage2: React.FC = () => {
     setGenerating(true);
     setGeneratedImages([]);
     imageLibraryService.clearSavedUrlsCache();
-    const sections = (result?.prompts || []).length > 0
-      ? (result?.prompts || []).map(c => ({ title: c.title, prompt: c.prompt }))
+    const sections: ({ title: string; prompt: string; refImageIndices?: number[] })[] = (result?.prompts || []).length > 0
+      ? (result?.prompts || []).map(c => ({ title: c.title, prompt: c.prompt, refImageIndices: c.refImageIndices }))
       : SMART_SECTIONS;
     if (sections.length === 0) { setGenerating(false); return; }
 
@@ -387,33 +438,42 @@ export const DetailPage2: React.FC = () => {
     setProgress(`生成中 (0/${total})...`);
     let doneCount = 0;
     const allImages: GenImage[] = [];
+    const limit = createConcurrencyLimit(3);
 
-    const tasks = sections.map(async (section, idx) => {
+    const tasks = sections.map((section, idx) => limit(async () => {
       const langLabel = LANGUAGES.find(l => l.value === language)?.label || '中文';
       const analysisContext = deepAnalysis
         ? `\n\n## AI深度分析产品信息\n品牌：${deepAnalysis.brandName} ${deepAnalysis.brandEnglishName}\n品类：${deepAnalysis.productCategory}\n规格：${deepAnalysis.productSpec}\n卖点：${deepAnalysis.sellingPoints}\n目标人群：${deepAnalysis.targetAudience}\n产品详情：${deepAnalysis.productDetails}\n特殊需求：${deepAnalysis.specialNeeds}`
         : '';
-      const finalPrompt = `${section.prompt}\n\n产品名：${productName || '该产品'}${productDesc ? `，描述：${productDesc}` : ''}${analysisContext}\n\n## 设计要求\n- AI自动分析所有上传的参考图，从中识别产品的真实外观特征并保持一致，忽略不清晰或与该产品无关的图片\n- 产品的造型、颜色、材质等视觉特征必须与筛选后的参考图一致\n- 产品原图上已有的文字/标志/标签保持原样不变\n- 画面中新增的电商文案必须使用${langLabel}，禁止使用其他语言\n- 每张图的电商文案**必须独特、有创意**，与大标题"${section.title}"呼应，不同配图之间各有侧重互不重复\n- 覆盖使用场景、产品亮点、功能卖点、细节工艺等不同维度\n- 文案排版清晰美观，标题醒目，副标题补充细节，电商详情页风格`;
+      const finalPrompt = `${section.prompt}\n\n产品名：${productName || '该产品'}${productDesc ? `，描述：${productDesc}` : ''}${analysisContext}\n\n## 设计规范（必须遵守）\n- 统一使用浅色/白色背景，深色文字，保持干净专业的视觉风格\n- 文字永远在画面上方1/3区域，产品图在下方2/3区域\n- 主标题用大号粗体无衬线字体（6-12个字），副标题用小号字体（10-20个字）\n- 关键数据用超大号数字+醒目颜色高亮（如"5000mAh"、"100档"、"146g"）\n- 产品图必须清晰锐利，材质质感可见，占画面下方60-70%\n- 使用专业排版组件：功能图标网格（小圆形图标+文字标签）、对比卡片（并排小卡片）、标注线（细线+小圆点+功能标签）、2x2网格（特写/场景）、参数表格\n- 人物必须照片级真实，优先欧美模特：皮肤有真实纹理和毛孔、允许自然小瑕疵、禁止磨皮塑料感。光线用自然环境光（窗边散射光/阴天柔光），禁止黄金时刻暖光/逆光光晕/过曝高光。涉及人物时附加"photorealistic, shot on Sony A7R IV, 85mm f/1.8 lens, natural window light, soft shadows, no lens flare, no golden hour, real skin texture, pores visible, editorial photography"\n\n## 差异化要求\n- 本屏内容必须与其他屏完全不同，严禁重复相同的场景、构图、角度或卖点\n- 如果其他屏已使用过某个场景/构图，本屏必须换到不同的场景/角度\n\n## 技术要求\n- AI自动分析所有上传的参考图，从中识别产品的真实外观特征并保持一致\n- 产品的造型、颜色、材质等视觉特征必须与参考图一致\n- 产品原图上已有的文字/标志/标签保持原样不变`;
       try {
+        const refIndices = section.refImageIndices?.filter(idx => idx >= 0 && idx < productImages.length) || []
+        const images = refIndices.length > 0 ? refIndices.map(idx => productImages[idx]) : productImages
+        console.log(`[详情页] 开始生成第${idx + 1}张: ${section.title}, model=${selectedModel}, images=${images.length}`);
         const resp = await editImage({
           prompt: finalPrompt,
-          images: productImages,
+          images,
           aspectRatio: '9:16',
           resolution: quality,
           model: selectedModel,
         });
+        console.log(`[详情页] 第${idx + 1}张生成成功:`, JSON.stringify(resp).substring(0, 200));
         const url = resp.data?.[0]?.url || resp.image_url || resp.url || '';
         if (url) {
           const item = { url, title: section.title, idx: idx + 1 };
           allImages.push(item);
           setGeneratedImages(prev => [...prev, item]);
+          imageLibraryService.saveToLibrary({ image_url: url, prompt: finalPrompt, model: String(selectedModel || 'nanobann2'), aspect_ratio: String('9:16'), resolution: String(quality || '2K'), type: 'edited' });
+          console.log(`[详情页] 第${idx + 1}张URL: ${url.substring(0, 100)}`);
+        } else {
+          console.error(`[详情页] 第${idx + 1}张无URL, resp:`, JSON.stringify(resp).substring(0, 300));
         }
       } catch (err: any) {
-        console.error(`生成第${idx + 1}张失败:`, err);
+        console.error(`[详情页] 生成第${idx + 1}张失败:`, err.message || err, err.stack);
       }
       doneCount++;
       setProgress(`生成中 (${doneCount}/${total})...`);
-    });
+    }));
 
     await Promise.all(tasks);
 
@@ -602,7 +662,7 @@ export const DetailPage2: React.FC = () => {
             <div className="space-y-4">
               <Dropdown label="模型" value={selectedModel} options={models.length > 0 ? models : [{ value: 'nanobann2', label: 'Nanobann2' }]} onChange={setSelectedModel} />
               <ModelSpeedNote />
-              <Dropdown label="目标语言" value={language} options={LANGUAGES} onChange={setLanguage} />
+              <Dropdown label="目标语言" value={language} options={LANGUAGES} onChange={(v: string) => { setLanguage(v); saveLanguage(v); }} />
               <div>
                 <label className="text-xs font-medium text-[#A3A3A3] mb-1.5 block">清晰度</label>
                 <div className="flex gap-1.5">
@@ -726,7 +786,7 @@ export const DetailPage2: React.FC = () => {
                                     <button onClick={() => handleDownload(genImg.url)} className="absolute bottom-2 right-2 w-7 h-7 bg-black/50 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                       <Download size={12} className="text-white" />
                                     </button>
-                                    <PsdExportButton imageUrl={genImg.url} size="sm" className="absolute bottom-2 right-11 bg-black/50 opacity-0 group-hover:opacity-100" />
+
                                   </div>
                                 </div>
                               )}
@@ -818,7 +878,7 @@ export const DetailPage2: React.FC = () => {
                               <button onClick={() => handleDownload(img.url)} className="w-6 h-6 flex items-center justify-center rounded-xl text-[#A3A3A3] hover:bg-[#F5F5F5] hover:text-[#171717] transition-colors flex-shrink-0 ml-1">
                                 <Download size={12} />
                               </button>
-                              <PsdExportButton imageUrl={img.url} size="sm" />
+
                             </div>
                           </div>
                           {result && (() => {

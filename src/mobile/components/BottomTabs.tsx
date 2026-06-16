@@ -1,7 +1,7 @@
 import React from 'react';
-import { Home, Sparkles, MessageCircle, User } from 'lucide-react';
+import { Home, Sparkles, User } from 'lucide-react';
 
-export type TabId = 'home' | 'tools' | 'chat' | 'profile';
+export type TabId = 'home' | 'tools' | 'profile';
 
 interface TabItem {
   id: TabId;
@@ -12,7 +12,6 @@ interface TabItem {
 const TABS: TabItem[] = [
   { id: 'home', label: '首页', icon: Home },
   { id: 'tools', label: '创作', icon: Sparkles },
-  { id: 'chat', label: '消息', icon: MessageCircle },
   { id: 'profile', label: '我的', icon: User },
 ];
 
@@ -22,7 +21,7 @@ interface BottomTabsProps {
   unreadCount?: number;
 }
 
-export const BottomTabs: React.FC<BottomTabsProps> = ({ activeTab, onTabChange, unreadCount = 0 }) => {
+export const BottomTabs: React.FC<BottomTabsProps> = ({ activeTab, onTabChange }) => {
   return (
     <nav className="flex items-center justify-around w-full h-full">
       {TABS.map(tab => {
@@ -35,7 +34,7 @@ export const BottomTabs: React.FC<BottomTabsProps> = ({ activeTab, onTabChange, 
             className="mobile-tap relative flex flex-col items-center justify-center flex-1 h-full gap-0.5"
           >
             <div className={`relative flex items-center justify-center w-7 h-7 transition-all duration-200 ${
-              isActive ? 'text-[#171717]' : 'text-[#a3a3a3]'
+              isActive ? 'text-blue-400' : 'text-white/30'
             }`}>
               <Icon
                 size={22}
@@ -44,19 +43,14 @@ export const BottomTabs: React.FC<BottomTabsProps> = ({ activeTab, onTabChange, 
                   isActive ? 'scale-110' : 'scale-100'
                 }`}
               />
-              {tab.id === 'chat' && unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] flex items-center justify-center text-[9px] font-bold px-1 bg-[#ef4444] text-white rounded-full shadow-sm">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
             </div>
             <span className={`text-[10px] font-medium transition-colors duration-200 ${
-              isActive ? 'text-[#171717]' : 'text-[#a3a3a3]'
+              isActive ? 'text-blue-400' : 'text-white/30'
             }`}>
               {tab.label}
             </span>
             {isActive && (
-              <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-[#171717] rounded-full" />
+              <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-blue-400 rounded-full" />
             )}
           </button>
         );

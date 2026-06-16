@@ -549,6 +549,7 @@ export const ImageLibraryModal: React.FC<ImageLibraryModalProps> = ({
                 <span className="flex items-center gap-1">
                   <Clock size={12} />
                   倒计时 {(() => {
+                    if (!fullscreenImage.expires_at) return '';
                     const diff = new Date(fullscreenImage.expires_at).getTime() - Date.now();
                     if (diff <= 0) return '已过期';
                     const hours = Math.floor(diff / (1000 * 60 * 60));

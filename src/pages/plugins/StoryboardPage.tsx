@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Upload, Sparkles, Image as ImageIcon, X, Loader2, Check, ChevronDown, Download, Film, Globe } from 'lucide-react';
 import { analyzeMultipleImages, chatCompletion } from '../../services/aiChatService';
 import { editImage } from '../../services/imageService';
@@ -102,19 +102,19 @@ function buildPrompt(duration: number, langLabel: string, script: string, shotCo
 
 const LANGUAGES = [
   { value: 'zh', label: '简体中文' },
-  { value: 'en', label: 'English' },
-  { value: 'ja', label: '日本語' },
-  { value: 'ko', label: '한국어' },
-  { value: 'ru', label: 'Русский' },
-  { value: 'th', label: 'ไทย' },
-  { value: 'ms', label: 'Bahasa Melayu' },
-  { value: 'vi', label: 'Tiếng Việt' },
+  { value: 'en', label: '英语' },
+  { value: 'ja', label: '日语' },
+  { value: 'ko', label: '韩语' },
+  { value: 'ru', label: '俄语' },
+  { value: 'th', label: '泰语' },
+  { value: 'ms', label: '马来语' },
+  { value: 'vi', label: '越南语' },
 ];
 
 export const StoryboardPage: React.FC = () => {
   const [models, setModels] = useState<{ value: string; label: string }[]>([]);
   useEffect(() => {
-    getAvailableModels(['seedream']).then(m => {
+    getAvailableModels().then(m => {
       const sorted = m.filter(x => x.enabled).sort((a, b) => a.sort_order - b.sort_order);
       setModels(sorted.map(x => ({ value: x.model_id, label: x.label })));
       if (sorted.length > 0) setModel('gpt-image-2');
@@ -240,6 +240,7 @@ ${shotsDesc}
         if (url) {
           allUrls.push(url);
           setStoryboardImages([...allUrls]);
+          imageLibraryService.saveToLibrary({ image_url: url, prompt, model: String(model || 'nanobann2'), aspect_ratio: String('16:9'), resolution: String(quality || '2K'), type: 'edited' });
         }
       }
       if (allUrls.length === 0) throw new Error('生成返回为空');

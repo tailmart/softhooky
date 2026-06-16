@@ -1,26 +1,25 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, X, Loader2, Plus, Share2, Images, Globe, Wand2, Download, ChevronDown } from 'lucide-react';
 import { fileToDataUrl } from '../../services/r2Service';
 import { editImage } from '../../services/imageService';
-import { analyzeMultipleImages } from '../../services/aiChatService';
 import { imageLibraryService } from '../../services/imageLibraryService';
+import { analyzeMultipleImages } from '../../services/aiChatService';
 import { requireAuth } from '../../utils/authCheck';
 import { getAvailableModels } from '../../services/modelService';
 import { ImagePreviewModal } from '../../components/ImagePreviewModal';
 import { ReEditModal } from '../../components/ReEditModal';
 import { ModelSpeedNote } from '../../components/ModelSpeedNote';
 import { LoadingAnimation } from '../../components/LoadingAnimation';
-import { PsdExportButton } from '../../components/PsdExportButton';
 
 const LANGUAGES = [
   { value: 'zh', label: '简体中文' },
-  { value: 'en', label: 'English' },
-  { value: 'ja', label: '日本語' },
-  { value: 'ko', label: '한국어' },
-  { value: 'ru', label: 'Русский' },
-  { value: 'th', label: 'ไทย' },
-  { value: 'ms', label: 'Bahasa Melayu' },
-  { value: 'vi', label: 'Tiếng Việt' },
+  { value: 'en', label: '英语' },
+  { value: 'ja', label: '日语' },
+  { value: 'ko', label: '韩语' },
+  { value: 'ru', label: '俄语' },
+  { value: 'th', label: '泰语' },
+  { value: 'ms', label: '马来语' },
+  { value: 'vi', label: '越南语' },
 ];
 
 const ASPECT_RATIOS = [
@@ -70,7 +69,7 @@ interface GenResult {
 export const SocialMediaPage: React.FC = () => {
   const [models, setModels] = useState<{ value: string; label: string }[]>([]);
   useEffect(() => {
-    getAvailableModels(['seedream']).then(m => {
+    getAvailableModels().then(m => {
       const sorted = m.filter(x => x.enabled).sort((a, b) => a.sort_order - b.sort_order);
       setModels(sorted.map(x => ({ value: x.model_id, label: x.label })));
       if (sorted.length > 0) setSelectedModel(sorted[0].model_id);
@@ -232,17 +231,10 @@ IMPORTANT:
           const resp = await editImage({ prompt, images: urls, aspectRatio: card.ratio, resolution: quality, model: selectedModel });
           const url = resp.data?.[0]?.url || resp.image_url || resp.url || '';
           if (url) {
-            imageLibraryService.saveToLibrary({
-              image_url: url,
-              prompt: `社媒-${card.title}`,
-              model: selectedModel,
-              aspect_ratio: card.ratio,
-              resolution: quality,
-              type: 'generated',
-            });
             const item: GenResult = { url, title: card.title, ratio: card.ratio, idx: idx + 1 };
             allResults.push(item);
             setResults(prev => [...prev, item]);
+            imageLibraryService.saveToLibrary({ image_url: url, prompt, model: String(selectedModel || 'nanobann2'), aspect_ratio: String(card.ratio), resolution: String(quality || '2K'), type: 'edited' });
           }
         } catch {}
         doneCount++;
@@ -526,7 +518,7 @@ IMPORTANT:
                           <div className="flex gap-1">
                             <button onClick={() => setReEditImage(item.url)} className="w-7 h-7 flex items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-[#171717] transition-colors flex-shrink-0" title="微调"><Sparkles size={14} /></button>
                             <button onClick={() => handleDownload(item.url)} className="w-7 h-7 flex items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-[#171717] transition-colors flex-shrink-0" title="下载"><Download size={14} /></button>
-                            <PsdExportButton imageUrl={item.url} />
+
                           </div>
                         </div>
                       </div>

@@ -9,6 +9,7 @@ import { getAvailableModels } from '../../services/modelService';
 import { ImagePreviewModal } from '../../components/ImagePreviewModal';
 import { ReEditModal } from '../../components/ReEditModal';
 import { ModelSpeedNote } from '../../components/ModelSpeedNote';
+import { LANGUAGES, getSavedLanguage, saveLanguage } from '../../constants/languages';
 
 const RATIOS = ['自动', '1:1', '3:4', '9:16', '16:9'];
 const QUALITIES = ['2K', '4K'];
@@ -17,7 +18,7 @@ const BATCH_COUNTS = [1, 2, 3, 4, 5, 6];
 export const ProductRefinePage: React.FC = () => {
   const [models, setModels] = useState<{ value: string; label: string }[]>([]);
   useEffect(() => {
-    getAvailableModels(['seedream']).then(m => {
+    getAvailableModels().then(m => {
       const sorted = m.filter(x => x.enabled).sort((a, b) => a.sort_order - b.sort_order);
       setModels(sorted.map(x => ({ value: x.model_id, label: x.label })));
       if (sorted.length > 0) setSelectedModel(sorted[0].model_id);
@@ -28,6 +29,7 @@ export const ProductRefinePage: React.FC = () => {
   const [quality, setQuality] = useState('2K');
   const [batchCount, setBatchCount] = useState(1);
   const [selectedModel, setSelectedModel] = useState('');
+  const [language, setLanguage] = useState(getSavedLanguage());
   const [isProcessing, setIsProcessing] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
@@ -119,8 +121,8 @@ export const ProductRefinePage: React.FC = () => {
             const response = await editImage({ prompt: refinePrompt, images: [productUrls[p]], aspectRatio: aspectRatio === '自动' ? '1:1' : aspectRatio, resolution: quality, model: selectedModel });
             if (response.data?.[0]?.url) {
               const finalUrl = response.data[0].url;
-              imageLibraryService.saveToLibrary({ image_url: finalUrl, prompt: `产品精修 - ${productDesc}`, model: selectedModel, aspect_ratio: aspectRatio, resolution: quality, type: 'edited' }).catch(e => console.error('保存到图库失败:', e));
               setResults(prev => [finalUrl, ...prev]);
+              imageLibraryService.saveToLibrary({ image_url: finalUrl, prompt: refinePrompt, model: String(selectedModel || 'nanobann2'), aspect_ratio: String(aspectRatio === '自动' ? '1:1' : aspectRatio), resolution: String(quality || '2K'), type: 'edited' });
             }
           } catch {}
         }
@@ -218,6 +220,13 @@ export const ProductRefinePage: React.FC = () => {
                   <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                 </div>
                 <ModelSpeedNote />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-[#A3A3A3] mb-1.5 block">语言</label>
+                <select value={language} onChange={(e) => { setLanguage(e.target.value); saveLanguage(e.target.value); }}
+                  className="w-full bg-[#F5F5F5] px-4 py-3 rounded-xl text-sm text-[#171717] border-0 focus:outline-none focus:ring-2 focus:ring-[#171717]/10 appearance-none cursor-pointer">
+                  {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+                </select>
               </div>
             </div>
           </div>

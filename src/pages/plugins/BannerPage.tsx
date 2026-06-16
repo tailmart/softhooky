@@ -1,26 +1,17 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, X, Loader2, Plus, Layout, Images, Globe, Wand2, Download, Copy, Check, ChevronDown } from 'lucide-react';
 import { fileToDataUrl } from '../../services/r2Service';
 import { editImage } from '../../services/imageService';
+import { imageLibraryService } from '../../services/imageLibraryService';
 import { analyzeMultipleImages } from '../../services/aiChatService';
 import { requireAuth } from '../../utils/authCheck';
 import { getAvailableModels } from '../../services/modelService';
+import { createConcurrencyLimit } from '../../utils/concurrency';
 import { ImagePreviewModal } from '../../components/ImagePreviewModal';
 import { ReEditModal } from '../../components/ReEditModal';
 import { ModelSpeedNote } from '../../components/ModelSpeedNote';
 import { LoadingAnimation } from '../../components/LoadingAnimation';
-import { PsdExportButton } from '../../components/PsdExportButton';
-
-const LANGUAGES = [
-  { value: 'zh', label: '简体中文' },
-  { value: 'en', label: 'English' },
-  { value: 'ja', label: '日本語' },
-  { value: 'ko', label: '한국어' },
-  { value: 'ru', label: 'Русский' },
-  { value: 'th', label: 'ไทย' },
-  { value: 'ms', label: 'Bahasa Melayu' },
-  { value: 'vi', label: 'Tiếng Việt' },
-];
+import { LANGUAGES, getSavedLanguage, saveLanguage } from '../../constants/languages';
 
 const ASPECT_RATIOS = [
   { value: '9:16', label: '9:16' },
@@ -50,12 +41,13 @@ interface BannerCard {
   title: string;
   desc: string;
   subtitle: string;
+  refImageIndices?: number[];
 }
 
 export const BannerPage: React.FC = () => {
   const [models, setModels] = useState<{ value: string; label: string }[]>([]);
   useEffect(() => {
-    getAvailableModels(['seedream']).then(m => {
+    getAvailableModels().then(m => {
       const sorted = m.filter(x => x.enabled).sort((a, b) => a.sort_order - b.sort_order);
       setModels(sorted.map(x => ({ value: x.model_id, label: x.label })));
       if (sorted.length > 0) setSelectedModel('gpt-image-2');
@@ -67,7 +59,7 @@ export const BannerPage: React.FC = () => {
   const [bannerDescription, setBannerDescription] = useState('');
   const [copyText, setCopyText] = useState('');
   const [bannerCount, setBannerCount] = useState(1);
-  const [language, setLanguage] = useState('zh');
+  const [language, setLanguage] = useState(getSavedLanguage());
   const [selectedRatios, setSelectedRatios] = useState<string[]>(['9:16']);
   const [selectedModel, setSelectedModel] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
@@ -118,6 +110,21 @@ export const BannerPage: React.FC = () => {
       const b64s = await Promise.all(productImages.map(item => fileToDataUrl(item.file, 1200)));
       const langLabel = LANGUAGES.find(l => l.value === language)?.label || '中文';
 
+      // Step 0: Identify each image
+      setProgress('AI正在识别每张图片展示的产品部位...');
+      const identifyPrompt = `分析所有上传的图片，对每张图片用一句话（10字以内）说明这张图展示的是产品的哪个部分或角度。
+返回JSON数组，顺序与图片顺序一致。
+示例：["产品正面","产品背面","接口特写","侧面按键","包装正面"]
+仅输出JSON数组，不要其他文字。`;
+      const identifyRaw = await analyzeMultipleImages(b64s, identifyPrompt, { model: 'gemini-3.5-flash', maxTokens: 1000 });
+      let imageLabels: string[] = [];
+      try {
+        const parsed = JSON.parse(identifyRaw.match(/\[[\s\S]*\]/)?.[0] || '[]');
+        if (Array.isArray(parsed) && parsed.length === b64s.length) imageLabels = parsed;
+      } catch {}
+      if (imageLabels.length === 0) imageLabels = b64s.map((_, i) => `产品图 ${i + 1}`);
+      const imageDesc = imageLabels.map((label, i) => `图${i + 1}：${label}`).join('\n');
+
       // 深度分析（始终执行）
       let finalTitle = bannerTitle;
       let finalSubtitle = bannerSubtitle;
@@ -137,7 +144,7 @@ export const BannerPage: React.FC = () => {
       // 第二步：规划Banner方案
       setProgress('AI正在规划Banner展示方案...');
       const promptText = BANNER_ANALYSIS_PROMPT.replace('{count}', String(bannerCount));
-      const userContent = `${promptText}\n\n=====\n\nBanner标题：${finalTitle}\n${finalSubtitle ? `副标题：${finalSubtitle}` : ''}\n产品描述：${finalDesc || ''}${analysisContext}\n文案参考：${copyText || '（AI自主创意）'}\n目标语言：${langLabel}\n图片比例：${selectedRatios.join(' / ')}\n\n请分析以上产品图片，输出JSON格式的Banner方案。每张Banner的标题和描述要有差异化、不能重复。所有文案使用目标语言。`;
+      const userContent = `${promptText}\n\n=====\n\nBanner标题：${finalTitle}\n${finalSubtitle ? `副标题：${finalSubtitle}` : ''}\n产品描述：${finalDesc || ''}${analysisContext}\n文案参考：${copyText || '（AI自主创意）'}\n目标语言：${langLabel}\n图片比例：${selectedRatios.join(' / ')}\n\n## 上传图片清单\n${imageDesc}\n\n重要：每张Banner必须指定使用哪张参考图。在输出中为每个对象添加 "refImageIndices" 字段，表示该Banner需要参考哪些上传的图片（数组中的数字对应上文图1、图2...的索引，从0开始）。例如某张Banner需要参考第1张和第3张图，则写 "refImageIndices": [0, 2]。\n\n请分析以上产品图片，输出JSON格式的Banner方案。每张Banner的标题和描述要有差异化、不能重复。所有文案使用目标语言。`;
       const raw2 = await analyzeMultipleImages(b64s, userContent, { model: 'gemini-3.5-flash', maxTokens: 8000});
       const jsonMatch2 = raw2.match(/\[[\s\S]*\]/);
       if (!jsonMatch2) throw new Error('AI返回格式异常，请重试');
@@ -165,16 +172,22 @@ export const BannerPage: React.FC = () => {
       const totalCount = flatTasks.length;
       setProgress(`生成中 (0/${totalCount})...`);
       let doneCount = 0;
-      await Promise.all(flatTasks.map(async ({ card, ratio }, flatIdx) => {
+      const limit = createConcurrencyLimit(3);
+      await Promise.all(flatTasks.map(({ card, ratio }, flatIdx) => limit(async () => {
         const langLabel = LANGUAGES.find(l => l.value === language)?.label || '中文';
-        const prompt = `电商首页Banner轮播图，第${flatIdx + 1}张\n比例：${ratio}\n语言：${langLabel}\n\n主标题：${card.title}\n${card.subtitle ? `副标题：${card.subtitle}` : ''}\n配图描述：${card.desc}\n${copyText ? `文案参考：${copyText}` : ''}\n\n产品信息：\nBanner标题：${bannerTitle}\n${bannerSubtitle ? `Banner副标题：${bannerSubtitle}` : ''}\n产品描述：${bannerDescription || ''}${deepAnalysisRef.current}\n\n要求：\n- 电商首屏Banner设计，视觉冲击力强\n- 图文排版合理，主次分明\n- 产品在画面中突出，色彩搭配协调\n- 大标题文字清晰可读，排版高端\n- 不同Banner之间的文案各有特色、互不重复`;
+        const prompt = `电商首页Banner轮播图，第${flatIdx + 1}张\n比例：${ratio}\n语言：${langLabel}\n\n主标题：${card.title}\n${card.subtitle ? `副标题：${card.subtitle}` : ''}\n配图描述：${card.desc}\n${copyText ? `文案参考：${copyText}` : ''}\n\n产品信息：\nBanner标题：${bannerTitle}\n${bannerSubtitle ? `Banner副标题：${bannerSubtitle}` : ''}\n产品描述：${bannerDescription || ''}${deepAnalysisRef.current}\n\n要求：\n- 电商首屏Banner设计，视觉冲击力强\n- 图文排版合理，主次分明\n- 产品在画面中突出，色彩搭配协调\n- 大标题文字清晰可读，排版高端\n- 不同Banner之间的文案各有特色、互不重复\n\n## 人物真实感要求（最高优先级，如画面中有人物则必须遵守）\n- 模特必须使用欧美/西方面孔（高鼻梁、深眼窝、自然肤色），年龄20-35岁\n- 皮肤必须有真实纹理和毛孔，允许自然的雀斑、细纹等小瑕疵，禁止过度磨皮、塑料感\n- 表情是抓拍般的自然瞬间，禁止僵硬摆拍\n- 光线用自然环境光（窗边散射光/阴天柔光），禁止刻意的黄金时刻暖光、逆光光晕、过曝高光\n- 手指数量正确（5根），关节和指甲自然\n- 附加关键词：photorealistic, shot on Sony A7R IV, 85mm f/1.8 lens, natural window light, soft shadows, no lens flare, no golden hour, real skin texture, pores visible, editorial photography`;
         try {
-          const resp = await editImage({ prompt, images: urls, aspectRatio: ratio, resolution: quality, model: selectedModel });
-          if (resp.data?.[0]?.url) setResults(prev => [{ url: resp.data[0].url, idx: flatIdx + 1, ratio }, ...prev]);
+          const refIndices = card.refImageIndices?.filter(idx => idx >= 0 && idx < urls.length) || []
+          const images = refIndices.length > 0 ? refIndices.map(idx => urls[idx]) : urls
+          const resp = await editImage({ prompt, images, aspectRatio: ratio, resolution: quality, model: selectedModel });
+          if (resp.data?.[0]?.url) {
+            setResults(prev => [{ url: resp.data[0].url, idx: flatIdx + 1, ratio }, ...prev]);
+            imageLibraryService.saveToLibrary({ image_url: resp.data[0].url, prompt, model: String(selectedModel || 'nanobann2'), aspect_ratio: String(ratio), resolution: String(quality || '2K'), type: 'edited' });
+          }
         } catch {}
         doneCount++;
         setProgress(`生成中 (${doneCount}/${totalCount})...`);
-      }));
+      })));
     } catch (err: any) { console.error('生成失败:', err); }
     finally { setIsProcessing(false); setProgress(''); }
   };
@@ -268,7 +281,7 @@ export const BannerPage: React.FC = () => {
               <Globe size={14} className="text-blue-500" />
               <span className="text-sm font-semibold text-[#171717]">语言</span>
             </div>
-            <select value={language} onChange={e => setLanguage(e.target.value)}
+            <select value={language} onChange={e => { setLanguage(e.target.value); saveLanguage(e.target.value); }}
               className="w-full bg-[#F5F5F5] px-3 py-2.5 rounded-2xl text-sm text-[#171717] border-0 focus:outline-none focus:ring-2 focus:ring-gray-200 appearance-none cursor-pointer">
               {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
             </select>
@@ -432,7 +445,7 @@ export const BannerPage: React.FC = () => {
                           <div className="flex gap-1">
                             <button onClick={(e) => { e.stopPropagation(); setReEditImage(item.url); }} className="w-7 h-7 flex items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-[#171717]"><Wand2 size={14} /></button>
                             <button onClick={() => handleDownload(item.url)} className="w-7 h-7 flex items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-[#171717]"><Download size={14} /></button>
-                            <PsdExportButton imageUrl={item.url} />
+
                           </div>
                         </div>
                       </div>

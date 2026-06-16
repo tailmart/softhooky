@@ -14,13 +14,24 @@ axios.interceptors.response.use(
       window.location.href = redirectUrl;
     }
     if (error.response?.status === 401) {
-      // 登录/注册接口的401是密码错误，不重定向
       const url = error.config?.url || '';
-      if (url.includes('/api/auth/login') || url.includes('/api/auth/register')) {
+      // 登录/注册接口的401是密码错误，不重定向
+      if (url.includes('/api/auth/login') || url.includes('/api/auth/register') || url.includes('/api/admin/login')) {
+        return Promise.reject(error);
+      }
+      const currentPath = window.location.pathname;
+      // 管理后台的401：跳转到管理后台登录页
+      if (url.startsWith('/api/admin') || currentPath.startsWith('/admin')) {
+        if (currentPath === '/admin' || currentPath === '/admin/') {
+          return Promise.reject(error);
+        }
+        localStorage.removeItem('adminToken');
+        localStorage.removeItem('adminUser');
+        alert('管理后台登录已过期，请重新登录');
+        window.location.href = '/admin';
         return Promise.reject(error);
       }
       // 如果已经在登录页或子账号登录页，不弹窗也不跳转
-      const currentPath = window.location.pathname;
       if (currentPath === '/auth' || currentPath === '/sub-login') {
         return Promise.reject(error);
       }

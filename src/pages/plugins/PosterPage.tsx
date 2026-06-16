@@ -10,18 +10,7 @@ import { ImagePreviewModal } from '../../components/ImagePreviewModal';
 import { ReEditModal } from '../../components/ReEditModal';
 import { ModelSpeedNote } from '../../components/ModelSpeedNote';
 import { LoadingAnimation } from '../../components/LoadingAnimation';
-import { PsdExportButton } from '../../components/PsdExportButton';
-
-const LANGUAGES = [
-  { value: 'zh', label: '简体中文' },
-  { value: 'en', label: 'English' },
-  { value: 'ja', label: '日本語' },
-  { value: 'ko', label: '한국어' },
-  { value: 'ru', label: 'Русский' },
-  { value: 'th', label: 'ไทย' },
-  { value: 'ms', label: 'Bahasa Melayu' },
-  { value: 'vi', label: 'Tiếng Việt' },
-];
+import { LANGUAGES, getSavedLanguage, saveLanguage } from '../../constants/languages';
 
 const ASPECTS = ['3:4', '9:16', '16:9', '21:9'];
 
@@ -53,29 +42,31 @@ const POSTER_ANALYSIS_PROMPT = `你是一位资深平面设计师和品牌视觉
 - 如果用户上传了Logo图片，Logo应放置在海报顶部或角落显眼位置
 - 产品图片应作为视觉中心或核心展示元素
 - 多张图片需要合理安排融合，避免杂乱
-- 输出使用目标语言`;
+- 输出使用目标语言
+- 所有返回内容必须使用目标语言，绝对禁止混入其他语言`;
 
 interface DesignPlan {
   layout: string;
   colorScheme: string;
   elements: { type: string; description: string }[];
   designBrief: string;
+  refImageIndices?: number[];
 }
 
 export const PosterPage: React.FC = () => {
   const [models, setModels] = useState<{ value: string; label: string }[]>([]);
   useEffect(() => {
-    getAvailableModels(['seedream']).then(m => {
-      const sorted = m.filter(x => x.enabled).sort((a, b) => a.sort_order - b.sort_order);
+    getAvailableModels().then(m => {
+      const sorted = m.filter(x => x.enabled && x.model_id !== 'nanobann2').sort((a, b) => a.sort_order - b.sort_order);
       setModels(sorted.map(x => ({ value: x.model_id, label: x.label })));
-      if (sorted.length > 0) setSelectedModel('nanobann2');
+      if (sorted.length > 0) setSelectedModel('gpt-image-1');
     });
   }, []);
 
   const [images, setImages] = useState<{ file: File; preview: string }[]>([]);
   const [posterDescription, setPosterDescription] = useState('');
   const [posterCopy, setPosterCopy] = useState('');
-  const [language, setLanguage] = useState('zh');
+  const [language, setLanguage] = useState(getSavedLanguage());
   const [selectedRatios, setSelectedRatios] = useState<string[]>(['3:4']);
   const [resolution, setResolution] = useState('2K');
   const [selectedModel, setSelectedModel] = useState('');
@@ -89,6 +80,7 @@ export const PosterPage: React.FC = () => {
   const [reEditImage, setReEditImage] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const deepAnalysisRef = useRef('');
+  const imageLabelsRef = useRef<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -128,21 +120,37 @@ export const PosterPage: React.FC = () => {
       const b64s = await Promise.all(images.map(item => fileToDataUrl(item.file, 1200)));
       const langLabel = LANGUAGES.find(l => l.value === language)?.label || '中文';
 
+      // Step 0: Identify each image
+      setProgress('AI正在识别每张图片展示的产品部位...');
+      const identifyPrompt = `Analyze all uploaded images. For each image, describe in one short phrase (under 10 words) in ENGLISH what part or angle of the product it shows.
+Return a JSON array, in order matching the image sequence.
+Example: ["product front","product back","port detail","side buttons","packaging front"]
+Return ONLY the JSON array, nothing else.`;
+      const identifyRaw = await analyzeMultipleImages(b64s, identifyPrompt, { model: 'gemini-3.5-flash', maxTokens: 1000 });
+      let imageLabels: string[] = [];
+      try {
+        const parsed = JSON.parse(identifyRaw.match(/\[[\s\S]*\]/)?.[0] || '[]');
+        if (Array.isArray(parsed) && parsed.length === b64s.length) imageLabels = parsed;
+      } catch {}
+      if (imageLabels.length === 0) imageLabels = b64s.map((_, i) => `产品图 ${i + 1}`);
+      imageLabelsRef.current = imageLabels;
+      const imageDesc = imageLabels.map((label, i) => `图${i + 1}：${label}`).join('\n');
+
       // 深度分析
       let analysisContext = '';
       const deepRaw = await analyzeMultipleImages(b64s,
-        `分析所有上传的图片中的产品，返回JSON：{"title":"产品名称","description":"产品描述","brand":"品牌","category":"品类","specs":"规格","sellingPoints":"卖点(逗号分隔)","targetAudience":"目标人群"}。仅输出JSON。`,
+        `Analyze the product in all uploaded images. Return JSON in ENGLISH: {"title":"product name","description":"product description","brand":"brand","category":"category","specs":"specifications","sellingPoints":"key selling points (comma separated)","targetAudience":"target audience"}. Return ONLY the JSON.`,
         { model: 'gemini-3.5-flash', maxTokens: 2000 }
       );
       const deepMatch = deepRaw.match(/\{[\s\S]*\}/);
       if (deepMatch) {
         const d = JSON.parse(deepMatch[0]) as Record<string, string>;
-        analysisContext = `\n## AI深度分析产品信息\n品牌：${d.brand || ''}\n品类：${d.category || ''}\n规格：${d.specs || ''}\n卖点：${d.sellingPoints || ''}\n目标人群：${d.targetAudience || ''}`;
+        analysisContext = `\n## AI Deep Product Analysis\nBrand: ${d.brand || ''}\nCategory: ${d.category || ''}\nSpecifications: ${d.specs || ''}\nSelling Points: ${d.sellingPoints || ''}\nTarget Audience: ${d.targetAudience || ''}`;
         deepAnalysisRef.current = analysisContext;
       }
 
       setProgress('AI规划海报设计方案...');
-      const userContent = `${POSTER_ANALYSIS_PROMPT}\n\n=====\n\n海报描述：${posterDescription || '无'}\n海报文案内容：${posterCopy}\n目标语言：${langLabel}\n比例：${selectedRatios.join(' / ')}${analysisContext}\n\n请分析以上图片，输出JSON格式的海报设计方案。使用目标语言。`;
+      const userContent = `${POSTER_ANALYSIS_PROMPT}\n\n=====\n\n海报描述：${posterDescription || '无'}\n海报文案内容：${posterCopy}\n目标语言：${langLabel}\n比例：${selectedRatios.join(' / ')}${analysisContext}\n\n## 上传图片清单\n${imageDesc}\n\n在输出中添加 "refImageIndices" 字段（数组，表示该海报需要参考哪些上传的图片，数字对应上文图1、图2...的索引，从0开始）。例如需要参考第1张和第3张图，则写 "refImageIndices": [0, 2]。\n\n请分析以上图片，输出JSON格式的海报设计方案。使用目标语言。必须包含 "refImageIndices" 字段，这是一个数组，表示该海报需要参考哪些上传的图片，数字对应索引从0开始。如果未指定或无效，将默认使用所有图片。`;
       const raw = await analyzeMultipleImages(b64s, userContent, { model: 'gemini-3.5-flash', maxTokens: 8000 });
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error('AI返回格式异常');
@@ -163,8 +171,10 @@ export const PosterPage: React.FC = () => {
     if (images.length === 0 || !posterCopy.trim()) return;
     setIsGenerating(true);
     try {
-      const urls = await Promise.all(images.map(item => fileToDataUrl(item.file, 1536)));
+      const allUrls = await Promise.all(images.map(item => fileToDataUrl(item.file, 1536)));
       imageLibraryService.clearSavedUrlsCache();
+      const refIndices = analysisResult?.refImageIndices?.filter(idx => idx >= 0 && idx < allUrls.length) || []
+      const urls = refIndices.length > 0 ? refIndices.map(idx => allUrls[idx]) : allUrls
       // 展平：count × ratios
       const flatTasks = Array.from({ length: count }).flatMap((_, i) =>
         selectedRatios.map(ratio => ({ cardIdx: i, ratio }))
@@ -172,31 +182,43 @@ export const PosterPage: React.FC = () => {
       const totalCount = flatTasks.length;
       setProgress(`生成中 (0/${totalCount})...`);
       let doneCount = 0;
-      await Promise.all(flatTasks.map(async ({ cardIdx, ratio }, flatIdx) => {
+      let failCount = 0;
+      // 串行生成避免503限流
+      for (const { cardIdx, ratio } of flatTasks) {
         const langLabel = LANGUAGES.find(l => l.value === language)?.label || '中文';
         const designBrief = analysisResult?.designBrief
           ? `\n设计方案：${analysisResult.designBrief}`
           : '';
-        const prompt = `电商营销海报设计 第${cardIdx + 1}张/共${count}张  比例：${ratio}\n海报描述：${posterDescription || '无'}\n\n海报文案内容（请将这些文字排版到海报上）：\n${posterCopy}${deepAnalysisRef.current}\n\n${designBrief ? `按照以下设计方案执行：${designBrief}\n\n` : ''}要求：\n- 如果只生成1张：所有上传的图片都必须用在这张海报中\n- 如果生成多张（共${count}张）：这是第${cardIdx + 1}张，请从上传的图片中选取不同的产品角度/细节进行组合，每张海报侧重展示不同的内容维度\n- 多张之间要有明显差异：比如有的侧重全景展示、有的侧重局部细节、有的侧重使用场景组合\n- 将文案内容以美观的排版设计到海报中\n- 专业营销海报风格，视觉冲击力强\n- ${ratio} 比例\n- 目标语言：${langLabel}\n- 多张时每张使用完全不同的构图布局，不能雷同`;
-        try {
-          const resp = await editImage({ prompt, images: urls, aspectRatio: ratio, resolution, model: selectedModel });
-          if (resp.data?.[0]?.url) {
-            imageLibraryService.saveToLibrary({
-              image_url: resp.data[0].url,
-              prompt: `AI海报 - ${posterCopy.substring(0, 50)}`,
-              model: selectedModel,
-              aspect_ratio: ratio,
-              resolution,
-              type: 'generated'
-            });
-            setResults(prev => [{ url: resp.data[0].url, label: `海报 ${cardIdx + 1}`, ratio }, ...prev]);
+        const isEn = language === 'en';
+        const prompt = isEn
+          ? `Marketing poster design #${cardIdx + 1}/${count} | Ratio: ${ratio}\nProduct: ${posterDescription || 'N/A'}\nText on poster: ${posterCopy}\n\nImage reference: ${imageLabelsRef.current.map((l, i) => `图${i+1}=${l}`).join(', ')}\n${designBrief ? `Design plan: ${designBrief}\n\n` : ''}Layout rules:\n- Product image as hero visual, large and prominent\n- Bold oversized title (English) as visual anchor, half the frame\n- Spec callout boxes with icons on the side\n- Bottom info bar: series name, slogan, brand\n- Color: AI selects best palette based on product type and brand positioning\n- English only, no Chinese/Korean/Japanese\n- ALL uploaded images MUST be incorporated into the poster\n\nIf person appears: Western face, real skin texture, natural lighting, photorealistic, Sony A7R IV, 85mm f/1.8, no golden hour`
+          : `电商营销海报设计 第${cardIdx + 1}张/共${count}张  比例：${ratio}\n产品描述：${posterDescription || '无'}\n\n海报文案内容：${posterCopy}\n\n图片说明：${imageLabelsRef.current.map((l, i) => `图${i+1}=${l}`).join(', ')}\n${designBrief ? `设计方案：${designBrief}\n\n` : ''}要求：\n- 产品图作为视觉中心，占据画面60-70%\n- 大号粗体英文标题作为视觉锚点\n- 参数标注框+底部信息栏\n- 根据产品类型自动搭配配色\n- 所有上传的图片都必须用在这张海报中\n- 画面文字100%英文，禁止中文/日文/韩文\n\n人物真实感：欧美面孔、真实皮肤纹理、自然光线、photorealistic、Sony A7R IV、85mm f/1.8、禁止黄金时刻暖光`;
+        let success = false;
+        // 重试最多3次，间隔递增
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const resp = await editImage({ prompt, images: urls, aspectRatio: ratio, resolution, model: selectedModel });
+            if (resp.data?.[0]?.url) {
+              setResults(prev => [{ url: resp.data[0].url, label: `海报 ${cardIdx + 1}`, ratio }, ...prev]);
+              imageLibraryService.saveToLibrary({ image_url: resp.data[0].url, prompt, model: String(selectedModel || 'gpt-image-2'), aspect_ratio: String(ratio), resolution: String(resolution || '2K'), type: 'edited' });
+              success = true;
+            }
+            break;
+          } catch (err: any) {
+            if (attempt < 2 && err?.response?.status === 503) {
+              const wait = 5000 * (attempt + 1);
+              setProgress(`服务繁忙，${wait/1000}秒后重试 (${attempt+1}/3)...`);
+              await new Promise(r => setTimeout(r, wait));
+              continue;
+            }
+            console.error(`生成第${cardIdx + 1}张失败:`, err);
           }
-        } catch (err: any) {
-          console.error(`生成第${cardIdx + 1}张失败:`, err);
         }
-        doneCount++;
-        setProgress(`生成中 (${doneCount}/${totalCount})...`);
-      }));
+        if (success) doneCount++; else failCount++;
+        setProgress(failCount > 0
+          ? `成功 ${doneCount} 张，失败 ${failCount} 张 (${doneCount + failCount}/${totalCount})`
+          : `生成中 (${doneCount}/${totalCount})...`);
+      }
     } catch (err: any) {
       console.error('生成失败:', err);
     } finally {
@@ -225,7 +247,7 @@ export const PosterPage: React.FC = () => {
       <div className="flex items-center gap-3 px-6 h-14 border-b border-gray-200 flex-shrink-0 bg-gray-50">
         <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#171717] to-[#404040] flex items-center justify-center"><Layout size={16} className="text-white" /></div>
         <div className="flex-1 min-w-0">
-          <h1 className="text-base font-semibold text-[#171717]">智能海报设计</h1>
+          <h1 className="text-base font-semibold text-[#171717]">营销海报设计</h1>
           <p className="text-[10px] text-gray-400 leading-tight">上传产品/Logo + 文案，AI设计营销海报</p>
         </div>
       </div>
@@ -285,7 +307,7 @@ export const PosterPage: React.FC = () => {
               <Globe size={14} className="text-blue-500" />
               <span className="text-sm font-semibold text-[#171717]">海报语言</span>
             </div>
-            <select value={language} onChange={e => setLanguage(e.target.value)}
+            <select value={language} onChange={e => { setLanguage(e.target.value); saveLanguage(e.target.value); }}
               className="w-full bg-[#F5F5F5] px-3 py-2.5 rounded-2xl text-sm text-[#171717] border-0 focus:outline-none focus:ring-2 focus:ring-gray-200 appearance-none cursor-pointer">
               {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
             </select>
@@ -340,7 +362,7 @@ export const PosterPage: React.FC = () => {
             <div className="relative">
               <select value={selectedModel} onChange={e => setSelectedModel(e.target.value)}
                 className="w-full bg-gray-100 px-3 py-2.5 pr-8 rounded-xl text-sm text-[#171717] border-0 focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer">
-                {models.length > 0 ? models.map(m => <option key={m.value} value={m.value}>{m.label}</option>) : <option value="nanobann2">Nanobann2</option>}
+                {models.length > 0 ? models.map(m => <option key={m.value} value={m.value}>{m.label}</option>) : <option value="gpt-image-2">GPT Image 2</option>}
               </select>
               <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             </div>
@@ -425,7 +447,7 @@ export const PosterPage: React.FC = () => {
             <div className="flex-1 flex items-center justify-center p-8">
               <div className="text-center max-w-md">
                 <div className="w-20 h-20 mx-auto mb-5 bg-gray-100 rounded-2xl flex items-center justify-center"><Layout size={32} className="text-gray-300" /></div>
-                <h2 className="text-lg font-semibold text-[#171717] mb-2">智能海报设计</h2>
+                <h2 className="text-lg font-semibold text-[#171717] mb-2">营销海报设计</h2>
                 <p className="text-sm text-gray-400 leading-relaxed">上传图片 → AI分析 → 生成营销海报</p>
               </div>
             </div>
@@ -511,7 +533,7 @@ export const PosterPage: React.FC = () => {
                           <div className="flex gap-1">
                             <button onClick={() => setReEditImage(item.url)} className="w-7 h-7 flex items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-[#171717]"><Wand2 size={14} /></button>
                             <button onClick={() => handleDownload(item.url)} className="w-7 h-7 flex items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-[#171717]"><Download size={14} /></button>
-                            <PsdExportButton imageUrl={item.url} />
+
                           </div>
                         </div>
                       </div>
