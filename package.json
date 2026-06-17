@@ -10,6 +10,7 @@
     "build": "vite build && node build-server.js",
     "start": "node server.cjs",
     "preview": "vite preview",
+    "vite:only": "vite build",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "migrate": "tsx run-migrations.ts",

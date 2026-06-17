@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:3000",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "npm run vite:only",
     "frontendDist": "../dist"
   },
   "app": {
@@ -60,8 +60,7 @@
     "updater": {
       "endpoints": [
         "http://43.161.228.92:3001/api/tauri/update"
-      ],
-      "pubkey": ""
+      ]
     }
   }
 }
