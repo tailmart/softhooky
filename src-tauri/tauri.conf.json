@@ -59,7 +59,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "http://43.161.228.92:3001/api/tauri/update"
+        "http://43.143.213.221:3001/api/tauri/update"
       ]
     }
   }
