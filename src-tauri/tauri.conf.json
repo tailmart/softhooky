@@ -58,9 +58,10 @@
   },
   "plugins": {
     "updater": {
-      "endpoints": [
-        "http://43.143.213.221/api/tauri/update"
-      ]
-    }
+        "endpoints": [
+          "http://43.143.213.221/api/tauri/update"
+        ],
+        "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERGRUY2MTg2MUI4MkYzNkIKUldTVWVvVzVrY1dJeUJ3Z1p3cmNnY29xZnNrZnB0Y2hrYm9kWGN6R1E3ZUpQc25Ia3dHN3VTTUkK"
+      }
   }
 }
