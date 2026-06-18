@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import axios from 'axios'
+import api from '../../services/api'
 import { Loader2, Wallet, TrendingUp, Users, Copy, Check, RefreshCw, Shield } from 'lucide-react'
 
 function getAuthHeaders() {
@@ -25,7 +25,7 @@ export default function AgentDashboard() {
 
   const checkAgent = async () => {
     try {
-      const res = await axios.get('/api/auth/me', { headers: getAuthHeaders() })
+      const res = await api.get('/api/auth/me', { headers: getAuthHeaders() })
       if (res.data.success) {
         setIsAgent(!!res.data.user.is_agent)
         setAppliedAgent(!!res.data.user.applied_agent)
@@ -37,7 +37,7 @@ export default function AgentDashboard() {
   const handleApply = async () => {
     setApplying(true)
     try {
-      const res = await axios.post('/api/agent/apply', {}, { headers: getAuthHeaders() })
+      const res = await api.post('/api/agent/apply', {}, { headers: getAuthHeaders() })
       if (res.data.success) {
         setAppliedAgent(true)
       } else {
@@ -57,7 +57,7 @@ export default function AgentDashboard() {
 
   const loadCommission = async () => {
     try {
-      const res = await axios.get('/api/agent/commission?page=1', { headers: getAuthHeaders() })
+      const res = await api.get('/api/agent/commission?page=1', { headers: getAuthHeaders() })
       if (res.data.success) {
         setBalance(parseFloat(res.data.balance) || 0)
         setTotalCommission(parseFloat(res.data.totalCommission) || 0)
@@ -67,7 +67,7 @@ export default function AgentDashboard() {
 
   const loadInviteCodes = async () => {
     try {
-      const res = await axios.get('/api/agent/invite-codes', { headers: getAuthHeaders() })
+      const res = await api.get('/api/agent/invite-codes', { headers: getAuthHeaders() })
       if (res.data.success && res.data.data?.length > 0) {
         const unused = res.data.data.find((c: any) => !c.used_at)
         if (unused) setInviteCode(unused.code)
@@ -77,7 +77,7 @@ export default function AgentDashboard() {
 
   const loadCustomers = async () => {
     try {
-      const res = await axios.get('/api/agent/customers?page=1', { headers: getAuthHeaders() })
+      const res = await api.get('/api/agent/customers?page=1', { headers: getAuthHeaders() })
       if (res.data.success) setCustomerCount(res.data.total || 0)
     } catch {}
   }
@@ -85,7 +85,7 @@ export default function AgentDashboard() {
   const generateInviteCode = async () => {
     setGenerating(true)
     try {
-      const res = await axios.post('/api/agent/invite-code', {}, { headers: getAuthHeaders() })
+      const res = await api.post('/api/agent/invite-code', {}, { headers: getAuthHeaders() })
       if (res.data.success) setInviteCode(res.data.code)
     } catch {}
     setGenerating(false)

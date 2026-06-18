@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Check, X, Loader2, History, ChevronLeft, ChevronRight, Zap, Sparkles, Video, Film, Shield, Mail, FileText, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import axios from 'axios';
+import { API_URL } from '../services/api';
 import { getPricing } from '../services/pricingService';
 import { TermsModal } from '../components/TermsModal';
 import { PrivacyModal } from '../components/PrivacyModal';
@@ -62,7 +62,7 @@ export const RechargeModal: React.FC<RechargeModalProps> = ({ isOpen, onClose })
           const token = sessionStorage.getItem('authToken');
           if (!token) return;
 
-          const response = await fetch('/api/payment/sync-credits', {
+          const response = await fetch(`${API_URL}/api/payment/sync-credits`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` }
           });
@@ -77,7 +77,7 @@ export const RechargeModal: React.FC<RechargeModalProps> = ({ isOpen, onClose })
           window.dispatchEvent(new Event('credits-updated'));
 
           try {
-            const creditsRes = await fetch('/api/auth/credits', {
+            const creditsRes = await fetch(`${API_URL}/api/auth/credits`, {
               headers: { Authorization: `Bearer ${token}` }
             });
             const creditsData = await creditsRes.json();
@@ -121,7 +121,7 @@ export const RechargeModal: React.FC<RechargeModalProps> = ({ isOpen, onClose })
         const token = sessionStorage.getItem('authToken');
         if (!token) return;
 
-        const response = await fetch('/api/payment/order/' + paymentOrderId, {
+        const response = await fetch(`${API_URL}/api/payment/order/` + paymentOrderId, {
           method: 'GET',
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -135,7 +135,7 @@ export const RechargeModal: React.FC<RechargeModalProps> = ({ isOpen, onClose })
           try {
             const token = sessionStorage.getItem('authToken');
             if (token) {
-              const creditsRes = await fetch('/api/auth/credits', {
+              const creditsRes = await fetch(`${API_URL}/api/auth/credits`, {
                 headers: { Authorization: `Bearer ${token}` }
               });
               const creditsData = await creditsRes.json();
@@ -192,7 +192,7 @@ export const RechargeModal: React.FC<RechargeModalProps> = ({ isOpen, onClose })
         setIsLoading(false);
         return;
       }
-      const response = await fetch('/api/payment/initiate', {
+      const response = await fetch(`${API_URL}/api/payment/initiate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ amount: finalAmount, paymentMethod }),
@@ -562,7 +562,7 @@ export const PaymentRecordsModal: React.FC<PaymentRecordsModalProps> = ({ isOpen
     setLoading(true);
     try {
       const token = sessionStorage.getItem('authToken');
-      const response = await fetch(`/api/payment/records?page=${pageNum}`, {
+      const response = await fetch(`${API_URL}/api/payment/records?page=${pageNum}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await response.json();
@@ -582,7 +582,7 @@ export const PaymentRecordsModal: React.FC<PaymentRecordsModalProps> = ({ isOpen
     setLoading(true);
     try {
       const token = sessionStorage.getItem('authToken');
-      const response = await fetch(`/api/payment/consumption?page=${pageNum}&pageSize=${pageSize}`, {
+      const response = await fetch(`${API_URL}/api/payment/consumption?page=${pageNum}&pageSize=${pageSize}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await response.json();

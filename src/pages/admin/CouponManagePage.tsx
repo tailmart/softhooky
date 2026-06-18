@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Tag, Plus, X, Loader2, Trash2 } from 'lucide-react';
-import axios from 'axios';
+import api from '../../services/api';
 
 interface Coupon {
   id: number;
@@ -39,7 +39,7 @@ export default function CouponManagePage({ token }: CouponManagePageProps) {
   const fetchCoupons = async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`/api/admin/coupons?page=${page}`, {
+      const res = await api.get(`/api/admin/coupons?page=${page}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setCoupons(res.data.data || []);
@@ -87,12 +87,12 @@ export default function CouponManagePage({ token }: CouponManagePageProps) {
       };
 
       if (editId) {
-        await axios.put(`/api/admin/coupons/${editId}`, payload, {
+        await api.put(`/api/admin/coupons/${editId}`, payload, {
           headers: { Authorization: `Bearer ${token}` }
         });
         showMsg('success', '更新成功');
       } else {
-        await axios.post('/api/admin/coupons', payload, {
+        await api.post('/api/admin/coupons', payload, {
           headers: { Authorization: `Bearer ${token}` }
         });
         showMsg('success', '创建成功');
@@ -109,7 +109,7 @@ export default function CouponManagePage({ token }: CouponManagePageProps) {
   const handleDelete = async (id: number) => {
     if (!confirm('确定删除该优惠券？')) return;
     try {
-      await axios.delete(`/api/admin/coupons/${id}`, {
+      await api.delete(`/api/admin/coupons/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       showMsg('success', '已删除');
@@ -121,7 +121,7 @@ export default function CouponManagePage({ token }: CouponManagePageProps) {
 
   const toggleActive = async (c: Coupon) => {
     try {
-      await axios.put(`/api/admin/coupons/${c.id}`, {
+      await api.put(`/api/admin/coupons/${c.id}`, {
         ...c, is_active: c.is_active ? 0 : 1
       }, { headers: { Authorization: `Bearer ${token}` } });
       fetchCoupons();

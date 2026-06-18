@@ -1,3 +1,5 @@
+import { API_URL } from './api';
+
 export interface ModelOption {
   model_id: string;
   label: string;
@@ -28,7 +30,7 @@ export async function getAvailableModels(excludeModels?: string[]): Promise<Mode
 // 获取视频模型列表
 export async function getVideoModels(): Promise<ModelOption[]> {
   try {
-    const response = await fetch('/api/models');
+    const response = await fetch(`${API_URL}/api/models`);
     const data = await response.json();
     if (data.success && Array.isArray(data.data)) {
       // 过滤出视频模型（model_id 包含 'video'）

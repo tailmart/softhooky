@@ -1,7 +1,5 @@
-import axios from 'axios';
+import api from './api';
 import { getAuthToken } from './authService';
-
-const API_BASE = window.location.origin;
 
 export interface GeneratedImage {
   id: number;
@@ -37,7 +35,7 @@ const savedUrls = new Set<string>();
 export const imageLibraryService = {
   async getImages(page: number = 1, pageSize: number = 20, filter: string = 'mine'): Promise<ImageLibraryResponse> {
     const token = getAuthToken();
-    const res = await axios.get(`${API_BASE}/api/images/library`, {
+    const res = await api.get('/api/images/library', {
       headers: { Authorization: `Bearer ${token}` },
       params: { page, pageSize, filter }
     });
@@ -86,7 +84,7 @@ export const imageLibraryService = {
     console.log('backendData:', JSON.stringify(backendData));
     
     try {
-      const res = await axios.post('/api/images/library', backendData, {
+      const res = await api.post('/api/images/library', backendData, {
         headers: { 
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -118,7 +116,7 @@ export const imageLibraryService = {
 
   async deleteImage(id: number): Promise<{ success: boolean; message: string }> {
     const token = getAuthToken();
-    const res = await axios.delete(`${API_BASE}/api/images/library/${id}`, {
+    const res = await api.delete(`/api/images/library/${id}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     return res.data;
@@ -126,7 +124,7 @@ export const imageLibraryService = {
 
   async deleteImageByUrl(url: string): Promise<{ success: boolean; message: string }> {
     const token = getAuthToken();
-    const res = await axios.post(`${API_BASE}/api/images/delete-by-url`,
+    const res = await api.post('/api/images/delete-by-url',
       { url },
       { headers: { Authorization: `Bearer ${token}` } }
     );
@@ -135,7 +133,7 @@ export const imageLibraryService = {
 
   async cleanupExpiredImages(): Promise<{ success: boolean; message: string; deletedCount?: number; deletedUrls?: string[] }> {
     const token = getAuthToken();
-    const res = await axios.post(`${API_BASE}/api/images/library/cleanup`, {}, {
+    const res = await api.post('/api/images/library/cleanup', {}, {
       headers: { Authorization: `Bearer ${token}` }
     });
     // 记录已删除的图片URL到本地
@@ -194,7 +192,7 @@ export const imageLibraryService = {
 
   async batchDeleteImages(ids: number[]): Promise<{ success: boolean; message: string }> {
     const token = getAuthToken();
-    const res = await axios.post(`${API_BASE}/api/images/library/batch-delete`, 
+    const res = await api.post('/api/images/library/batch-delete', 
       { ids },
       { headers: { Authorization: `Bearer ${token}` } }
     );
@@ -235,7 +233,7 @@ export const imageLibraryService = {
     };
     
     try {
-      const res = await axios.post('/api/images/library', backendData, {
+      const res = await api.post('/api/images/library', backendData, {
         headers: { 
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'

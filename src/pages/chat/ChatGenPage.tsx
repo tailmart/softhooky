@@ -14,7 +14,7 @@ import { CreditCheckModal } from '../../components/CreditCheckModal';
 import { ImagePreviewModal } from '../../components/ImagePreviewModal';
 import { imageLibraryService } from '../../services/imageLibraryService';
 import { getAvailableModels } from '../../services/modelService';
-import axios from 'axios';
+import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface ChatImage {
@@ -107,7 +107,7 @@ export const ChatGenPage: React.FC = () => {
         setLoadingImages(false);
         return;
       }
-      const res = await axios.get('/api/chat/images', {
+      const res = await api.get('/api/chat/images', {
         headers: { Authorization: `Bearer ${token}` },
         timeout: 15000
       });
@@ -369,7 +369,7 @@ export const ChatGenPage: React.FC = () => {
     try {
       const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
       if (token) {
-        await axios.post('/api/images/delete-by-url',
+        await api.post('/api/images/delete-by-url',
           { url },
           { headers: { Authorization: `Bearer ${token}` } }
         );

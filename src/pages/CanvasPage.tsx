@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, Copy, Layers, ImageIcon, FileImage, Layout, ShoppingCart, Hand, Coins, User, Boxes, Wand2, Globe } from 'lucide-react';
 import { LeftSidebar } from '../components/LeftSidebar';
@@ -86,7 +86,7 @@ const saveState = (data: any) => {
     localStorage.setItem(getStorageKey(), JSON.stringify(cleanedData));
     const token = sessionStorage.getItem('authToken');
     if (token) {
-      axios.post('/api/canvas/state', { stateData: cleanedData }, { headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
+      api.post('/api/canvas/state', { stateData: cleanedData }, { headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
     }
   } catch (e: any) {
     if (e.name === 'QuotaExceededError') localStorage.removeItem(getStorageKey());
@@ -189,7 +189,7 @@ export const CanvasPage: React.FC = () => {
       try {
         const token = sessionStorage.getItem('authToken');
         if (token) {
-          const pluginRes = await axios.get('/api/canvas/plugin-state?pluginId=chatgen_history', { 
+          const pluginRes = await api.get('/api/canvas/plugin-state?pluginId=chatgen_history', { 
             headers: { Authorization: `Bearer ${token}` }, 
             timeout: 5000 
           });
@@ -204,7 +204,7 @@ export const CanvasPage: React.FC = () => {
         try {
           const token = sessionStorage.getItem('authToken');
           if (token) {
-            const res = await axios.get('/api/canvas/state', { headers: { Authorization: `Bearer ${token}` }, timeout: 5000 });
+            const res = await api.get('/api/canvas/state', { headers: { Authorization: `Bearer ${token}` }, timeout: 5000 });
             if (res.data?.success && res.data?.data) {
               saved = res.data.data;
               localStorage.setItem(getStorageKey(), JSON.stringify(saved));
@@ -219,7 +219,7 @@ export const CanvasPage: React.FC = () => {
         try {
           const token = sessionStorage.getItem('authToken');
           if (token) {
-            const libRes = await axios.get('/api/images/library?page=1&pageSize=100', {
+            const libRes = await api.get('/api/images/library?page=1&pageSize=100', {
               headers: { Authorization: `Bearer ${token}` }, timeout: 5000
             });
             if (libRes.data?.success && libRes.data?.data) {

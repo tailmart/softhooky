@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Lock, Unlock, Coins, User, Eye, EyeOff, Sliders, Gauge } from 'lucide-react';
-import axios from 'axios';
+import api from '../services/api';
 
 interface SubAccount {
   id: number;
@@ -46,7 +46,7 @@ export const SubAccountManager: React.FC<{ token: string }> = ({ token }) => {
 
   const loadSubAccounts = async () => {
     try {
-      const response = await axios.get('/api/auth/sub-users', {
+      const response = await api.get('/api/auth/sub-users', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setSubAccounts(response.data.data || []);
@@ -64,7 +64,7 @@ export const SubAccountManager: React.FC<{ token: string }> = ({ token }) => {
     }
     try {
       setLoading(true);
-      await axios.post('/api/auth/sub-users', { email: newSubEmail, password: newSubPassword, name: newSubName },
+      await api.post('/api/auth/sub-users', { email: newSubEmail, password: newSubPassword, name: newSubName },
         { headers: { Authorization: `Bearer ${token}` } });
       setNewSubEmail(''); setNewSubPassword(''); setNewSubName('');
       setShowNewForm(false);
@@ -79,7 +79,7 @@ export const SubAccountManager: React.FC<{ token: string }> = ({ token }) => {
 
   const toggleSubAccount = async (subUserId: number, isEnabled: boolean) => {
     try {
-      await axios.post(`/api/auth/sub-users/${subUserId}/toggle`, { isEnabled: !isEnabled },
+      await api.post(`/api/auth/sub-users/${subUserId}/toggle`, { isEnabled: !isEnabled },
         { headers: { Authorization: `Bearer ${token}` } });
       loadSubAccounts();
     } catch (error: any) {
@@ -90,7 +90,7 @@ export const SubAccountManager: React.FC<{ token: string }> = ({ token }) => {
   const deleteSubAccount = async (subUserId: number) => {
     if (!confirm('确定要删除这个子账号吗？')) return;
     try {
-      await axios.delete(`/api/auth/sub-users/${subUserId}`, { headers: { Authorization: `Bearer ${token}` } });
+      await api.delete(`/api/auth/sub-users/${subUserId}`, { headers: { Authorization: `Bearer ${token}` } });
       loadSubAccounts();
       showMsg('success', '子账号已删除');
     } catch (error: any) {
@@ -108,7 +108,7 @@ export const SubAccountManager: React.FC<{ token: string }> = ({ token }) => {
 
     try {
       setModeSwitching(true);
-      const response = await axios.put('/api/auth/sub-users/quota-mode', { mode: newMode },
+      const response = await api.put('/api/auth/sub-users/quota-mode', { mode: newMode },
         { headers: { Authorization: `Bearer ${token}` } });
       if (response.data.success) {
         setQuotaMode(newMode);
@@ -129,7 +129,7 @@ export const SubAccountManager: React.FC<{ token: string }> = ({ token }) => {
       return;
     }
     try {
-      const response = await axios.put(`/api/auth/sub-users/${subUserId}/quota`, { quotaLimit: value },
+      const response = await api.put(`/api/auth/sub-users/${subUserId}/quota`, { quotaLimit: value },
         { headers: { Authorization: `Bearer ${token}` } });
       if (response.data.success) {
         showMsg('success', response.data.message);
@@ -149,7 +149,7 @@ export const SubAccountManager: React.FC<{ token: string }> = ({ token }) => {
       return;
     }
     try {
-      const response = await axios.post(`/api/auth/sub-users/${subUserId}/quota/add`, { amount: value },
+      const response = await api.post(`/api/auth/sub-users/${subUserId}/quota/add`, { amount: value },
         { headers: { Authorization: `Bearer ${token}` } });
       if (response.data.success) {
         showMsg('success', response.data.message);

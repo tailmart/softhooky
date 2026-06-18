@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import axios from 'axios'
+import api from '../../services/api'
 import { Loader2, Copy, Check, RefreshCw } from 'lucide-react'
 
 function getAuthHeaders() {
@@ -18,7 +18,7 @@ export default function AgentInviteCodes() {
 
   const loadCodes = async () => {
     try {
-      const res = await axios.get('/api/agent/invite-codes', { headers: getAuthHeaders() })
+      const res = await api.get('/api/agent/invite-codes', { headers: getAuthHeaders() })
       if (res.data.success) {
         setCodes(res.data.data || [])
         const unused = res.data.data.find((c: any) => !c.used_at)
@@ -31,7 +31,7 @@ export default function AgentInviteCodes() {
   const generate = async () => {
     setGenerating(true)
     try {
-      const res = await axios.post('/api/agent/invite-code', {}, { headers: getAuthHeaders() })
+      const res = await api.post('/api/agent/invite-code', {}, { headers: getAuthHeaders() })
       if (res.data.success) { setCurrentCode(res.data.code); loadCodes() }
     } catch {}
     setGenerating(false)

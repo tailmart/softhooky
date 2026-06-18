@@ -11,6 +11,7 @@ import { refreshCredits } from './services/authService';
 import { AuthModal } from './components/AuthModal';
 import { MobileApp } from './mobile/MobileApp';
 import TauriUpdater from './components/TauriUpdater';
+import { API_URL } from './services/api';
 
 const VideoStudioPage = React.lazy(() => import('./pages/video/VideoStudioPage'));
 const WorkflowPage = React.lazy(() => import('./pages/plugins/WorkflowPage').then(m => ({ default: m.WorkflowPage })));
@@ -79,7 +80,7 @@ const AppContent = () => {
   useEffect(() => {
     const checkVersion = async () => {
       try {
-        const res = await fetch('/api/app/version', { cache: 'no-store' });
+        const res = await fetch(`${API_URL}/api/app/version`, { cache: 'no-store' });
         const data = await res.json();
         if (!data?.success) return;
         const serverVersion = String(data.version);
@@ -150,7 +151,7 @@ function OAuthCallbackHandler({ children }: { children: React.ReactNode }) {
 
     (async () => {
       try {
-        const res = await fetch(`/api/auth/oauth/callback?code=${code}&state=${state}`);
+        const res = await fetch(`${API_URL}/api/auth/oauth/callback?code=${code}&state=${state}`);
         const html = await res.text();
         const m = html.match(/var payload = ({.*?});/);
         const errM = html.match(/var msg = (".*?");/);

@@ -4,7 +4,7 @@ import { register, login } from '../services/authService';
 import { TermsModal } from './TermsModal';
 import { PrivacyModal } from './PrivacyModal';
 import { TianaiCaptchaButton } from './TianaiCaptcha';
-import axios from 'axios';
+import api from '../services/api';
 import { useSiteConfig } from '../contexts/SiteConfigContext';
 
 interface AuthModalProps {
@@ -12,11 +12,6 @@ interface AuthModalProps {
   onClose: () => void;
   onLoginSuccess?: () => void;
 }
-
-const api = axios.create({
-  timeout: 60000,
-  headers: { 'Content-Type': 'application/json' }
-});
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSuccess }) => {
   const { config } = useSiteConfig();
@@ -56,7 +51,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
       const top = window.screenY + (window.innerHeight - height) / 2;
 
       // 先获取 OAuth URL
-      const res = await axios.get('/api/auth/oauth/login', {
+      const res = await api.get('/api/auth/oauth/login', {
         params: { type, redirect: window.location.href }
       });
 
@@ -194,7 +189,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
       if (!captchaToken) { setError('请先完成安全验证'); return; }
       setLoading(true);
       try {
-        const response = await axios.post('/api/auth/sub-login', { email, password, captchaToken });
+        const response = await api.post('/api/auth/sub-login', { email, password, captchaToken });
         if (response.data.success) {
           const storage = rememberMe ? localStorage : sessionStorage;
           storage.setItem('authToken', response.data.token);

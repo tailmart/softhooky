@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Lock, ArrowRight, AlertCircle, X } from 'lucide-react';
-import axios from 'axios';
+import api from '../services/api';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { TianaiCaptchaButton } from '../components/TianaiCaptcha';
 import { useSiteConfig } from '../contexts/SiteConfigContext';
@@ -62,7 +62,7 @@ export const SubAccountLoginPage: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await axios.post('/api/auth/sub-login', {
+      const response = await api.post('/api/auth/sub-login', {
         email,
         password,
         captchaToken

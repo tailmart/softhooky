@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Loader2, Check } from 'lucide-react'
+import { API_URL } from '../services/api'
 
 interface ModelItem {
   id: number
@@ -31,8 +32,8 @@ export default function ModelLibraryPicker({ token, multi, onSelect, onClose }: 
       const headers: Record<string, string> = {}
       if (authToken) headers.Authorization = `Bearer ${authToken}`
       const [femaleRes, maleRes] = await Promise.all([
-        fetch('/api/admin/model-library?gender=female', { headers }),
-        fetch('/api/admin/model-library?gender=male', { headers })
+        fetch(`${API_URL}/api/admin/model-library?gender=female`, { headers }),
+        fetch(`${API_URL}/api/admin/model-library?gender=male`, { headers })
       ])
       const femaleData = await femaleRes.json()
       const maleData = await maleRes.json()

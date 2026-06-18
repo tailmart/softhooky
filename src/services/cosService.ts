@@ -1,4 +1,4 @@
-import axios from 'axios';
+import api from './api';
 import { getAuthToken } from './authService';
 
 /**
@@ -23,7 +23,7 @@ export async function uploadFileToCos(file: File): Promise<string> {
     });
 
     const token = getAuthToken();
-    const response = await axios.post('/api/images/upload-base64-to-cos', {
+    const response = await api.post('/api/images/upload-base64-to-cos', {
       base64,
       mimeType: file.type,
       fileName: file.name
@@ -53,7 +53,7 @@ export async function uploadImageToCos(imageUrl: string): Promise<string> {
     console.log('📤 上传图片到 COS:', imageUrl);
 
     const token = getAuthToken();
-    const response = await axios.post('/api/images/upload-to-cos', {
+    const response = await api.post('/api/images/upload-to-cos', {
       imageUrl
     }, {
       headers: token ? { Authorization: `Bearer ${token}` } : {}
@@ -81,7 +81,7 @@ export async function uploadImagesToCos(imageUrls: string[]): Promise<string[]> 
     console.log('📤 批量上传图片到 COS:', imageUrls.length, '张');
 
     const token = getAuthToken();
-    const response = await axios.post('/api/images/batch-upload-to-cos', {
+    const response = await api.post('/api/images/batch-upload-to-cos', {
       imageUrls
     }, {
       headers: token ? { Authorization: `Bearer ${token}` } : {}

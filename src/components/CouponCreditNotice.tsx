@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Gift } from 'lucide-react';
 import { getAuthToken } from '../services/authService';
+import { API_URL } from '../services/api';
 
 interface CouponCreditInfo {
   total: number;
@@ -16,7 +17,7 @@ export const CouponCreditNotice: React.FC = () => {
     console.log('[CouponCreditNotice] mounted, token:', token ? 'exists' : 'null');
     if (!token) { setLoading(false); return; }
     try {
-      const res = await fetch('/api/coupons/claims', {
+      const res = await fetch(`${API_URL}/api/coupons/claims`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const json = await res.json();

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Coins, CreditCard, History, Users, Image as ImageIcon, FileImage, Video, Share2, ShoppingCart, Layout, User, Wand2, Hand, ChevronDown, ChevronRight, Copy, Layers, MessageCircle, Film, Bell, Mail, FileText, Shield, X, Gift, Clapperboard, ChevronsLeft, ChevronsRight, TrendingUp, Sparkles, ShoppingBag, Megaphone, Boxes, Languages } from 'lucide-react';
-import axios from 'axios';
+import api, { API_URL } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
 import { SubAccountManager } from './SubAccountManager';
@@ -86,7 +86,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   useEffect(() => {
     const fetchNotifs = async () => {
       try {
-        const res = await fetch('/api/notifications');
+        const res = await fetch(`${API_URL}/api/notifications`);
         const data = await res.json();
         if (data.success) setNotifications(data.data || []);
       } catch {}
@@ -105,7 +105,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
       try {
         const token = sessionStorage.getItem('authToken');
         if (!token) return;
-        const res = await axios.get('/api/coupons/claims', {
+        const res = await api.get('/api/coupons/claims', {
           headers: { Authorization: `Bearer ${token}` }
         });
         const claims = (res.data.data || []) as any[];
@@ -326,6 +326,32 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
               </div>
             );
           })}
+
+          {/* Video Studio 按钮 */}
+          <div className="mt-2">
+            {sidebarCollapsed ? (
+              <div className="flex justify-center">
+                <button
+                  onClick={() => { window.location.href = '/video'; }}
+                  onMouseEnter={(e) => setHoveredNav({ label: 'Video Studio', top: e.currentTarget.getBoundingClientRect().top + e.currentTarget.offsetHeight / 2 })}
+                  onMouseLeave={() => setHoveredNav(null)}
+                  className="w-10 h-10 flex items-center justify-center rounded-xl bg-blue-500 text-white hover:bg-blue-600 transition-all duration-200 shadow-sm shadow-blue-200/50"
+                >
+                  <Clapperboard size={17} strokeWidth={2} />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => { window.location.href = '/video'; }}
+                className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl bg-blue-500 text-white hover:bg-blue-600 transition-all duration-200 shadow-sm shadow-blue-200/50"
+              >
+                <div className="w-7 h-7 flex items-center justify-center rounded-lg flex-shrink-0 bg-white/20">
+                  <Clapperboard size={13} strokeWidth={2} />
+                </div>
+                <span className="text-[13px] font-medium truncate">Video Studio</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Tooltip for collapsed sidebar */}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Tag, X, Loader2, CheckCircle, Gift, Clock } from 'lucide-react';
-import axios from 'axios';
+import api from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
 interface CouponClaimModalProps {
@@ -29,7 +29,7 @@ export const CouponClaimModal: React.FC<CouponClaimModalProps> = ({ isOpen, onCl
     try {
       const token = sessionStorage.getItem('authToken');
       if (!token) return;
-      const res = await axios.get('/api/coupons/claims', {
+      const res = await api.get('/api/coupons/claims', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setClaims(res.data.data || []);
@@ -46,7 +46,7 @@ export const CouponClaimModal: React.FC<CouponClaimModalProps> = ({ isOpen, onCl
         setResult({ success: false, message: '请先登录' });
         return;
       }
-      const res = await axios.post('/api/coupons/claim', { code: code.trim() }, {
+      const res = await api.post('/api/coupons/claim', { code: code.trim() }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.data.success) {

@@ -3,6 +3,7 @@ import { Sparkles, X, Loader2, Film, Video, Image, Upload, Clock, CheckCircle, D
 import { getAuthToken } from '../../../services/authService';
 import { requireAuth } from '../../../utils/authCheck';
 import { getVideoModels } from '../../../services/modelService';
+import { API_URL } from '../../../services/api';
 
 // COS/外部视频走后端代理，解决 CORS 问题
 const cosProxyUrl = (url: string) => {
@@ -101,7 +102,7 @@ export const VideoTab: React.FC<VideoTabProps> = ({ onTaskCountChange, onTasksCh
     }).catch(() => {});
 
     // 获取动态定价
-    fetch('/api/pricing')
+    fetch(`${API_URL}/api/pricing`)
       .then(r => r.json())
       .then(res => {
         if (res.success && res.data) {
@@ -114,7 +115,7 @@ export const VideoTab: React.FC<VideoTabProps> = ({ onTaskCountChange, onTasksCh
   useEffect(() => {
     const token = getAuthToken();
     if (!token) return;
-    fetch('/api/video/tasks', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_URL}/api/video/tasks`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(res => {
         if (res.success && Array.isArray(res.data)) {
@@ -189,7 +190,7 @@ export const VideoTab: React.FC<VideoTabProps> = ({ onTaskCountChange, onTasksCh
         setTrackedTasks(prev => prev.map(t => t.taskId === String(taskId) ? { ...t, status: 'failed', error: '超时未完成', progress: 0 } : t));
         return;
       }
-      const res = await fetch(`/api/video/query/${taskId}`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API_URL}/api/video/query/${taskId}`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (data.success && data.data) {
         const d = data.data;
@@ -242,7 +243,7 @@ export const VideoTab: React.FC<VideoTabProps> = ({ onTaskCountChange, onTasksCh
           aspectRatio,
           duration,
         };
-        const response = await fetch('/api/video/generate', {
+        const response = await fetch(`${API_URL}/api/video/generate`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -304,7 +305,7 @@ export const VideoTab: React.FC<VideoTabProps> = ({ onTaskCountChange, onTasksCh
     try {
       const token = getAuthToken();
       if (!token) { setIsQuerying(false); return; }
-      const res = await fetch(`/api/video/query/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API_URL}/api/video/query/${id}`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (data.success && data.data) {
         const d = data.data;
@@ -317,7 +318,7 @@ export const VideoTab: React.FC<VideoTabProps> = ({ onTaskCountChange, onTasksCh
         if (d.status === 'pending') {
           const timer = setInterval(async () => {
             try {
-              const pollRes = await fetch(`/api/video/query/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+              const pollRes = await fetch(`${API_URL}/api/video/query/${id}`, { headers: { Authorization: `Bearer ${token}` } });
               const pollData = await pollRes.json();
               if (pollData.success && pollData.data) {
                 const pd = pollData.data;
@@ -364,7 +365,7 @@ export const VideoTab: React.FC<VideoTabProps> = ({ onTaskCountChange, onTasksCh
     // 后端删除记录
     const token = getAuthToken();
     if (token) {
-      fetch(`/api/images/library/${taskId}`, {
+      fetch(`${API_URL}/api/images/library/${taskId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       }).catch(() => {});

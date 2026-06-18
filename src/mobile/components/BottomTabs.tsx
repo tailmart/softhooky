@@ -34,7 +34,7 @@ export const BottomTabs: React.FC<BottomTabsProps> = ({ activeTab, onTabChange }
             className="mobile-tap relative flex flex-col items-center justify-center flex-1 h-full gap-0.5"
           >
             <div className={`relative flex items-center justify-center w-7 h-7 transition-all duration-200 ${
-              isActive ? 'text-blue-400' : 'text-white/30'
+              isActive ? 'text-blue-400' : 'text-gray-400'
             }`}>
               <Icon
                 size={22}
@@ -45,7 +45,7 @@ export const BottomTabs: React.FC<BottomTabsProps> = ({ activeTab, onTabChange }
               />
             </div>
             <span className={`text-[10px] font-medium transition-colors duration-200 ${
-              isActive ? 'text-blue-400' : 'text-white/30'
+              isActive ? 'text-blue-400' : 'text-gray-400'
             }`}>
               {tab.label}
             </span>

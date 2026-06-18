@@ -74,6 +74,7 @@ export const VideoMediaCard: React.FC<VideoMediaCardProps> = ({ item, onDelete, 
                 className="absolute inset-0 w-full h-full object-cover opacity-30"
                 muted
                 crossOrigin="anonymous"
+                onError={(e) => e.stopPropagation()}
               />
             </div>
           ) : (
@@ -166,6 +167,8 @@ export const VideoMediaCard: React.FC<VideoMediaCardProps> = ({ item, onDelete, 
                 autoPlay
                 crossOrigin="anonymous"
                 className="w-full rounded-2xl shadow-2xl"
+                onError={(e) => e.stopPropagation()}
+                onPlay={(e) => { try { e.stopPropagation(); } catch {} }}
               />
             ) : (
               <img

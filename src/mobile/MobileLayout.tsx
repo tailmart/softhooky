@@ -23,9 +23,9 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
   const { config } = useSiteConfig();
 
   return (
-    <div className="mobile-app h-dvh bg-[#0a0a0a] flex flex-col overflow-hidden">
+    <div className="mobile-app h-dvh bg-white flex flex-col overflow-hidden">
       {/* 顶部 Header */}
-      {!hideHeader && <div className="mobile-header flex-shrink-0 bg-[#0a0a0a] border-b border-white/[0.06]">
+      {!hideHeader && <div className="mobile-header flex-shrink-0 bg-white border-b border-gray-200">
         <div className="flex items-center justify-between px-4 h-12">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm flex-shrink-0">
@@ -39,7 +39,7 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
                 lineHeight: 1,
                 letterSpacing: '0.3px',
               }}
-              className="text-white"
+              className="text-[#171717]"
             >
               Softhooky
             </span>
@@ -47,7 +47,7 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
 
           <div className="flex items-center gap-3">
             {isAuthenticated && user && (
-              <div className="flex items-center gap-1.5 bg-white/[0.08] px-2.5 py-1 rounded-full">
+              <div className="flex items-center gap-1.5 bg-gray-100 px-2.5 py-1 rounded-full">
                 <Coins size={13} className="text-blue-400" />
                 <span className="text-xs font-semibold text-blue-400">
                   {Number(user.credits || 0).toFixed(1)}
@@ -59,12 +59,12 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
       </div>}
 
       {/* 内容区域 */}
-      <main className="flex-1 min-h-0 overflow-y-auto bg-[#0a0a0a]">
+      <main className="flex-1 min-h-0 overflow-y-auto bg-white">
         {children}
       </main>
 
       {/* 底部 Tab Bar */}
-      <div className="flex-shrink-0 bg-[#0a0a0a] border-t border-white/[0.06] pb-[env(safe-area-inset-bottom,0px)]">
+      <div className="flex-shrink-0 bg-white border-t border-gray-200 pb-[env(safe-area-inset-bottom,0px)]">
         <div className="h-14 flex items-center justify-around px-2">
           <BottomTabs
             activeTab={activeTab}

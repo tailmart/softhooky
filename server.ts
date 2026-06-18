@@ -8189,23 +8189,39 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
       const parentUserId = req.user.parentUserId || req.user.id;
       const mediaId = parseInt(req.params.id);
 
-      const imageUrl = await generatedImagesDb.deleteVideoMedia(mediaId, userId, parentUserId);
+      const result = await generatedImagesDb.deleteVideoMedia(mediaId, userId, parentUserId);
 
-      if (!imageUrl) {
+      if (!result) {
         return res.status(404).json({ success: false, message: '记录不存在或无权删除' });
       }
 
-      // 从COS删除文件
-      if (imageUrl.includes(process.env.COS_PUBLIC_URL || '')) {
+      const { image_url: imageUrl, thumbnail_url: thumbnailUrl } = result;
+
+      // 从COS删除视频文件
+      if (imageUrl && imageUrl.includes(process.env.COS_PUBLIC_URL || '')) {
         try {
           const key = imageUrl.replace(process.env.COS_PUBLIC_URL + '/', '');
           await cosClient.send(new DeleteObjectCommand({
             Bucket: process.env.COS_BUCKET!,
             Key: key
           }));
-          console.log('✅ COS文件已删除:', key);
+          console.log('✅ COS视频文件已删除:', key);
         } catch (cosError: any) {
-          console.error('删除COS文件失败:', cosError.message);
+          console.error('删除COS视频文件失败:', cosError.message);
+        }
+      }
+
+      // 从COS删除封面图
+      if (thumbnailUrl && thumbnailUrl.includes(process.env.COS_PUBLIC_URL || '')) {
+        try {
+          const thumbKey = thumbnailUrl.replace(process.env.COS_PUBLIC_URL + '/', '');
+          await cosClient.send(new DeleteObjectCommand({
+            Bucket: process.env.COS_BUCKET!,
+            Key: thumbKey
+          }));
+          console.log('✅ COS封面图已删除:', thumbKey);
+        } catch (cosError: any) {
+          console.error('删除COS封面图失败:', cosError.message);
         }
       }
 
@@ -8229,9 +8245,10 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
 
       const deletedRecords = await generatedImagesDb.batchDeleteVideoMedia(ids, userId, parentUserId);
 
-      // 批量删除COS文件
+      // 批量删除COS文件（视频+封面图）
       let cosDeletedCount = 0;
       for (const record of deletedRecords) {
+        // 删除视频文件
         if (record.image_url && record.image_url.includes(process.env.COS_PUBLIC_URL || '')) {
           try {
             const key = record.image_url.replace(process.env.COS_PUBLIC_URL + '/', '');
@@ -8241,7 +8258,21 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
             }));
             cosDeletedCount++;
           } catch (cosError: any) {
-            console.error('删除COS文件失败:', record.image_url, cosError.message);
+            console.error('删除COS视频文件失败:', record.image_url, cosError.message);
+          }
+        }
+
+        // 删除封面图
+        if (record.thumbnail_url && record.thumbnail_url.includes(process.env.COS_PUBLIC_URL || '')) {
+          try {
+            const thumbKey = record.thumbnail_url.replace(process.env.COS_PUBLIC_URL + '/', '');
+            await cosClient.send(new DeleteObjectCommand({
+              Bucket: process.env.COS_BUCKET!,
+              Key: thumbKey
+            }));
+            cosDeletedCount++;
+          } catch (cosError: any) {
+            console.error('删除COS封面图失败:', record.thumbnail_url, cosError.message);
           }
         }
       }
@@ -8266,9 +8297,10 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
 
       const expiredRecords = await generatedImagesDb.cleanupExpiredVideoMedia(userId, parentUserId);
 
-      // 删除COS文件
+      // 删除COS文件（视频+封面图）
       let cosDeletedCount = 0;
       for (const record of expiredRecords) {
+        // 删除视频文件
         if (record.image_url && record.image_url.includes(process.env.COS_PUBLIC_URL || '')) {
           try {
             const key = record.image_url.replace(process.env.COS_PUBLIC_URL + '/', '');
@@ -8278,7 +8310,21 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
             }));
             cosDeletedCount++;
           } catch (cosError: any) {
-            console.error('删除COS文件失败:', record.image_url, cosError.message);
+            console.error('删除COS视频文件失败:', record.image_url, cosError.message);
+          }
+        }
+
+        // 删除封面图
+        if (record.thumbnail_url && record.thumbnail_url.includes(process.env.COS_PUBLIC_URL || '')) {
+          try {
+            const thumbKey = record.thumbnail_url.replace(process.env.COS_PUBLIC_URL + '/', '');
+            await cosClient.send(new DeleteObjectCommand({
+              Bucket: process.env.COS_BUCKET!,
+              Key: thumbKey
+            }));
+            cosDeletedCount++;
+          } catch (cosError: any) {
+            console.error('删除COS封面图失败:', record.thumbnail_url, cosError.message);
           }
         }
       }

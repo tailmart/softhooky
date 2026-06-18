@@ -15,6 +15,12 @@ interface VideoPreviewModalProps {
 }
 
 export function VideoPreviewModal({ url, onClose, onDownload }: VideoPreviewModalProps) {
+  // 捕获 Safari 视频播放器内部的 EmptyRanges 错误
+  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+    e.stopPropagation();
+    // Safari 内部错误，忽略即可
+  };
+
   return (
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm"
@@ -39,6 +45,11 @@ export function VideoPreviewModal({ url, onClose, onDownload }: VideoPreviewModa
           autoPlay
           crossOrigin="anonymous"
           className="max-w-full max-h-[80vh] rounded-2xl shadow-2xl shadow-black/50 bg-black"
+          onError={handleVideoError}
+          onPlay={(e) => {
+            // 阻止 Safari EmptyRanges 错误冒泡
+            try { e.stopPropagation(); } catch {}
+          }}
         >
           Your browser does not support the video tag.
         </video>

@@ -1,7 +1,7 @@
-import axios from 'axios';
+import api from './api';
 import { clearPricingCache } from './pricingService';
 
-axios.interceptors.response.use(
+api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 403 && error.response?.data?.message?.includes('账号已被禁用')) {
@@ -94,7 +94,7 @@ export interface AuthResponse {
 export const register = async (data: RegisterData): Promise<AuthResponse> => {
   clearPricingCache();
   try {
-    const response = await axios.post('/api/auth/register', data);
+    const response = await api.post('/api/auth/register', data);
     
     // 保存 token 和 apiKey 到 sessionStorage（窗口关闭后自动清除）
     if (response.data.token) {
@@ -119,7 +119,7 @@ export const register = async (data: RegisterData): Promise<AuthResponse> => {
 export const login = async (data: LoginData & { rememberMe?: boolean }): Promise<AuthResponse> => {
   clearPricingCache();
   try {
-    const response = await axios.post('/api/auth/login', data);
+    const response = await api.post('/api/auth/login', data);
 
     if (response.data.token) {
       const storage = data.rememberMe ? localStorage : sessionStorage;
@@ -223,7 +223,7 @@ export const refreshCredits = async (): Promise<number> => {
   try {
     const token = getAuthToken();
     if (!token) return 0;
-    const response = await axios.get('/api/auth/credits', {
+    const response = await api.get('/api/auth/credits', {
       headers: { Authorization: `Bearer ${token}` }
     });
     if (response.data.success) {
@@ -254,7 +254,7 @@ export const refreshCredits = async (): Promise<number> => {
 export const rechargeCredits = async (amount: number): Promise<{ success: boolean; credits: number; message?: string }> => {
   try {
     const token = getAuthToken();
-    const response = await axios.post('/api/auth/recharge', { amount }, {
+    const response = await api.post('/api/auth/recharge', { amount }, {
       headers: token ? { Authorization: `Bearer ${token}` } : {}
     });
     if (response.data.success) {
@@ -281,7 +281,7 @@ export const fetchCurrentUser = async (): Promise<{ id: number; email: string; c
     const token = getAuthToken();
     if (!token) return null;
     
-    const response = await axios.get('/api/auth/me', {
+    const response = await api.get('/api/auth/me', {
       headers: { Authorization: `Bearer ${token}` }
     });
     

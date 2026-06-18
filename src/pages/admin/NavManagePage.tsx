@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Loader2, Check, X, Navigation } from 'lucide-react'
+import { API_URL } from '../../services/api'
 
 interface NavItem {
   nav_id: string
@@ -19,7 +20,7 @@ export default function NavManagePage({ token }: { token: string }) {
   const fetchItems = async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/admin/nav', { headers: { Authorization: `Bearer ${token}` } })
+      const res = await fetch(`${API_URL}/api/admin/nav`, { headers: { Authorization: `Bearer ${token}` } })
       const data = await res.json()
       if (data.success) {
         let list = data.data || [];
@@ -58,7 +59,7 @@ export default function NavManagePage({ token }: { token: string }) {
     }
     setToggling(navId)
     try {
-      const res = await fetch(`/api/admin/nav/${navId}/toggle`, {
+      const res = await fetch(`${API_URL}/api/admin/nav/${navId}/toggle`, {
         method: 'PUT', headers: { Authorization: `Bearer ${token}` }
       })
       const data = await res.json()

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { API_URL } from '../services/api'
 
 interface SiteConfig {
   logo_url: string
@@ -28,7 +29,7 @@ export function SiteConfigProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/site-config')
+    fetch(`${API_URL}/api/site-config`)
       .then(r => r.json())
       .then(d => {
         if (d.success && d.data) {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Loader2, Save, Upload, Image } from 'lucide-react'
+import { API_URL } from '../../services/api'
 
 interface SiteConfig {
   logo_url: string
@@ -67,7 +68,7 @@ export default function SettingsPage({ token }: SettingsPageProps) {
 
   const fetchConfig = async () => {
     try {
-      const res = await fetch('/api/admin/site-config', {
+      const res = await fetch(`${API_URL}/api/admin/site-config`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       if (!res.ok) {
@@ -92,7 +93,7 @@ export default function SettingsPage({ token }: SettingsPageProps) {
 
   const fetchOAuthConfig = async () => {
     try {
-      const res = await fetch('/api/admin/oauth-config', {
+      const res = await fetch(`${API_URL}/api/admin/oauth-config`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       if (!res.ok) {
@@ -135,7 +136,7 @@ export default function SettingsPage({ token }: SettingsPageProps) {
         reader.readAsDataURL(file)
       })
 
-      const res = await fetch('/api/images/upload-base64-to-cos', {
+      const res = await fetch(`${API_URL}/api/images/upload-base64-to-cos`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -170,7 +171,7 @@ export default function SettingsPage({ token }: SettingsPageProps) {
   const saveConfig = async () => {
     setSaving(true)
     try {
-      const res = await fetch('/api/admin/site-config', {
+      const res = await fetch(`${API_URL}/api/admin/site-config`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -209,7 +210,7 @@ export default function SettingsPage({ token }: SettingsPageProps) {
   const saveOAuthConfig = async () => {
     setOauthSaving(true)
     try {
-      const res = await fetch('/api/admin/oauth-config', {
+      const res = await fetch(`${API_URL}/api/admin/oauth-config`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

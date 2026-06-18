@@ -1,8 +1,8 @@
-import axios from 'axios';
+import api from './api';
 import { getAuthToken } from './authService';
 
 // 响应拦截器：自动同步积分（放在全局 axios 上，确保所有请求都能触发）
-axios.interceptors.response.use(
+api.interceptors.response.use(
   async (response) => {
     if (response.data?.remainingCredits !== undefined) {
       const userStr = sessionStorage.getItem('user');
@@ -53,7 +53,7 @@ export const generateImage = async (params: ImageGenerationParams): Promise<Imag
   const { prompt, model, aspectRatio, resolution, n } = params;
   const token = getAuthToken();
 
-  const response = await axios.post(
+  const response = await api.post(
     '/api/images/generations',
     {
       prompt,
@@ -79,7 +79,7 @@ export const editImage = async (params: ImageEditParams): Promise<ImageGeneratio
   const { prompt, images, model, resolution, aspectRatio } = params;
   const token = getAuthToken();
 
-  const response = await axios.post(
+  const response = await api.post(
     '/api/images/edits',
     {
       prompt,
@@ -102,7 +102,7 @@ export const editImage = async (params: ImageEditParams): Promise<ImageGeneratio
 
 export const updateImagePositions = async (images: { imageUrl: string; x: number; y: number }[]) => {
   const token = getAuthToken();
-  const response = await axios.post(
+  const response = await api.post(
     '/api/images/update-positions',
     { images },
     {

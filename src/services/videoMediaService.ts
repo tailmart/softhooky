@@ -1,4 +1,5 @@
 import { getAuthToken } from './authService';
+import { API_URL } from './api';
 
 export interface VideoMediaItem {
   id: number;
@@ -44,7 +45,7 @@ export const getVideoMediaLibrary = async (
     params.append('type', mediaType);
   }
 
-  const response = await fetch(`/api/video/media-library?${params}`, {
+  const response = await fetch(`${API_URL}/api/video/media-library?${params}`, {
     headers: getHeaders(),
   });
 
@@ -57,7 +58,7 @@ export const getVideoMediaLibrary = async (
 
 // 删除单条视频媒体
 export const deleteVideoMedia = async (id: number): Promise<void> => {
-  const response = await fetch(`/api/video/media/${id}`, {
+  const response = await fetch(`${API_URL}/api/video/media/${id}`, {
     method: 'DELETE',
     headers: getHeaders(),
   });
@@ -69,7 +70,7 @@ export const deleteVideoMedia = async (id: number): Promise<void> => {
 
 // 批量删除视频媒体
 export const batchDeleteVideoMedia = async (ids: number[]): Promise<void> => {
-  const response = await fetch('/api/video/media/batch-delete', {
+  const response = await fetch(`${API_URL}/api/video/media/batch-delete`, {
     method: 'POST',
     headers: getHeaders(),
     body: JSON.stringify({ ids }),
@@ -82,7 +83,7 @@ export const batchDeleteVideoMedia = async (ids: number[]): Promise<void> => {
 
 // 清理过期视频媒体
 export const cleanupExpiredVideoMedia = async (): Promise<{ cleanedCount: number }> => {
-  const response = await fetch('/api/video/media/cleanup', {
+  const response = await fetch(`${API_URL}/api/video/media/cleanup`, {
     method: 'POST',
     headers: getHeaders(),
   });

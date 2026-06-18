@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { LayoutDashboard, Shield, DollarSign, Users, History, Wallet, LogOut, ArrowLeft, Loader2 } from 'lucide-react'
-import axios from 'axios'
+import api from '../../services/api'
 
 function getAuthHeaders() {
   const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken')
@@ -15,7 +15,7 @@ export default function AgentLayout({ onLogout }: { onLogout?: () => void }) {
   const [applying, setApplying] = useState(false)
 
   useEffect(() => {
-    axios.get('/api/auth/me', { headers: getAuthHeaders() })
+    api.get('/api/auth/me', { headers: getAuthHeaders() })
       .then(res => {
         setIsAgent(!!res.data.user?.is_agent)
         setAppliedAgent(!!res.data.user?.applied_agent)
@@ -26,7 +26,7 @@ export default function AgentLayout({ onLogout }: { onLogout?: () => void }) {
   const handleApply = async () => {
     setApplying(true)
     try {
-      const res = await axios.post('/api/agent/apply', {}, { headers: getAuthHeaders() })
+      const res = await api.post('/api/agent/apply', {}, { headers: getAuthHeaders() })
       if (res.data.success) setAppliedAgent(true)
       else alert(res.data.message || '申请失败')
     } catch (err: any) {

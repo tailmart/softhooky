@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Loader2, Save, DollarSign } from 'lucide-react'
+import { API_URL } from '../../services/api'
 
 interface PricingItem {
   id: number
@@ -25,7 +26,7 @@ export default function PricingPage({ token }: PricingPageProps) {
 
   const fetchPricing = async () => {
     try {
-      const response = await fetch('/api/admin/pricing', {
+      const response = await fetch(`${API_URL}/api/admin/pricing`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       const data = await response.json()
@@ -53,7 +54,7 @@ export default function PricingPage({ token }: PricingPageProps) {
     let hasError = false
     for (const item of pricing) {
       try {
-        const res = await fetch(`/api/admin/pricing/${item.key}`, {
+        const res = await fetch(`${API_URL}/api/admin/pricing/${item.key}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ price: item.price, enabled: item.enabled })

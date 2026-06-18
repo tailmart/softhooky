@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import axios from 'axios'
+import api from '../../services/api'
 import { Loader2, Wallet, DollarSign, X, ExternalLink } from 'lucide-react'
 
 function getAuthHeaders() {
@@ -25,8 +25,8 @@ export default function AgentWithdraw() {
   const load = async () => {
     try {
       const [res1, res2] = await Promise.all([
-        axios.get('/api/agent/commission?page=1', { headers: getAuthHeaders() }),
-        axios.get('/api/agent/withdraw-logs', { headers: getAuthHeaders() })
+        api.get('/api/agent/commission?page=1', { headers: getAuthHeaders() }),
+        api.get('/api/agent/withdraw-logs', { headers: getAuthHeaders() })
       ])
       if (res1.data.success) setBalance(parseFloat(res1.data.balance) || 0)
       if (res2.data.success) setLogs(res2.data.data || [])
@@ -42,7 +42,7 @@ export default function AgentWithdraw() {
     setWithdrawing(true)
     setMessage(null)
     try {
-      const res = await axios.post('/api/agent/withdraw',
+      const res = await api.post('/api/agent/withdraw',
         { amount: val, accountType, accountId: accountId.trim() },
         { headers: getAuthHeaders() }
       )

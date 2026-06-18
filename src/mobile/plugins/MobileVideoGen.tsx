@@ -4,6 +4,7 @@ import { fileToDataUrl } from '../../services/r2Service';
 import { getAuthToken } from '../../services/authService';
 import { useAuth } from '../../contexts/AuthContext';
 import { RatioPicker } from '../components/RatioPicker';
+import { API_URL } from '../../services/api';
 
 interface VideoGenConfig {
   title: string;
@@ -43,7 +44,7 @@ export const MobileVideoGen: React.FC<MobileVideoGenProps> = ({ config, onBack }
   const [sheet, setSheet] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/pricing').then(r => r.json()).then(d => {
+    fetch(`${API_URL}/api/pricing`).then(r => r.json()).then(d => {
       if (d.data?.[config.pricingKey]) setPrice(Number(d.data[config.pricingKey]));
     }).catch(() => {});
   }, [config.pricingKey]);
@@ -63,7 +64,7 @@ export const MobileVideoGen: React.FC<MobileVideoGenProps> = ({ config, onBack }
     const token = getAuthToken();
     const poll = async () => {
       try {
-        const r = await fetch(`${config.statusEndpoint}/${taskId}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+        const r = await fetch(`${API_URL}${config.statusEndpoint}/${taskId}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
         const d = await r.json();
         if (d.status === 'completed' || d.status === 'success') {
           const url = d.data?.url || d.url || d.data?.video_url || '';
@@ -89,7 +90,7 @@ export const MobileVideoGen: React.FC<MobileVideoGenProps> = ({ config, onBack }
     setIsGenerating(true); setError('');
     const token = getAuthToken();
     try {
-      const r = await fetch(config.apiEndpoint, {
+      const r = await fetch(`${API_URL}${config.apiEndpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({

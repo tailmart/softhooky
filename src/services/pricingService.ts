@@ -1,4 +1,4 @@
-import axios from 'axios';
+import api from './api';
 
 interface Pricing {
   nanobann2_generation?: number;
@@ -22,7 +22,7 @@ export const getPricing = async (): Promise<Pricing> => {
   // 登录用户每次请求最新价格（可能有代理定价），不走缓存
   if (token) {
     try {
-      const response = await axios.get('/api/pricing', {
+      const response = await api.get('/api/pricing', {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (response.data.success) {
@@ -40,7 +40,7 @@ export const getPricing = async (): Promise<Pricing> => {
   }
 
   try {
-    const response = await axios.get('/api/pricing');
+    const response = await api.get('/api/pricing');
     if (response.data.success) {
       cachedPricing = response.data.data;
       pricingCacheTime = now;

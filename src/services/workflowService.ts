@@ -1,4 +1,4 @@
-import axios from 'axios';
+import api from './api';
 import { getAuthToken } from './authService';
 
 interface WorkflowNode {
@@ -35,7 +35,7 @@ function getHeaders() {
 export const workflowService = {
   async list(): Promise<WorkflowData[]> {
     try {
-      const res = await axios.get('/api/workflows', { headers: getHeaders() });
+      const res = await api.get('/api/workflows', { headers: getHeaders() });
       if (res.data.success) return res.data.data || [];
       return [];
     } catch (error) {
@@ -46,7 +46,7 @@ export const workflowService = {
 
   async create(name: string, nodes: WorkflowNode[], connections: Connection[]): Promise<number | null> {
     try {
-      const res = await axios.post('/api/workflows', { name, nodes, connections }, { headers: getHeaders() });
+      const res = await api.post('/api/workflows', { name, nodes, connections }, { headers: getHeaders() });
       if (res.data.success) return res.data.data.id;
       return null;
     } catch (error) {
@@ -57,7 +57,7 @@ export const workflowService = {
 
   async update(id: number, name: string, nodes: WorkflowNode[], connections: Connection[]): Promise<boolean> {
     try {
-      const res = await axios.put(`/api/workflows/${id}`, { name, nodes, connections }, { headers: getHeaders() });
+      const res = await api.put(`/api/workflows/${id}`, { name, nodes, connections }, { headers: getHeaders() });
       return res.data.success === true;
     } catch (error) {
       console.error('Failed to update workflow:', error);
@@ -67,7 +67,7 @@ export const workflowService = {
 
   async delete(id: number): Promise<boolean> {
     try {
-      const res = await axios.delete(`/api/workflows/${id}`, { headers: getHeaders() });
+      const res = await api.delete(`/api/workflows/${id}`, { headers: getHeaders() });
       return res.data.success === true;
     } catch (error) {
       console.error('Failed to delete workflow:', error);

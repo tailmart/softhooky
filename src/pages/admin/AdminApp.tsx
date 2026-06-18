@@ -13,6 +13,7 @@ import SettingsPage from './SettingsPage'
 import AgentManagePage from './AgentManagePage'
 import ModelLibraryPage from './ModelLibraryPage'
 import AdminLayout from './AdminLayout'
+import { API_URL } from '../../services/api'
 
 interface User {
   id: number
@@ -31,7 +32,7 @@ export default function AdminApp() {
     
     if (savedToken && savedUser) {
       // 使用 fetch 验证 token，避免触发 axios 拦截器的 alert/redirect
-      fetch('/api/admin/dashboard', {
+      fetch(`${API_URL}/api/admin/dashboard`, {
         headers: { Authorization: `Bearer ${savedToken}` }
       }).then(resp => {
         if (resp.ok) {

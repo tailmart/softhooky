@@ -1237,7 +1237,7 @@ export const generatedImagesDb = {
       : [id, userId];
 
     const [rows] = await pool.execute(
-      `SELECT image_url FROM generated_images WHERE id = ? AND ${userCondition}`,
+      `SELECT image_url, thumbnail_url FROM generated_images WHERE id = ? AND ${userCondition}`,
       queryParams
     );
 
@@ -1249,7 +1249,7 @@ export const generatedImagesDb = {
       queryParams
     );
 
-    return record.image_url;
+    return { image_url: record.image_url, thumbnail_url: record.thumbnail_url };
   },
 
   // 批量删除视频媒体
@@ -1263,7 +1263,7 @@ export const generatedImagesDb = {
       : [...ids, userId];
 
     const [rows] = await pool.execute(
-      `SELECT id, image_url FROM generated_images WHERE id IN (${placeholders}) AND ${userCondition}`,
+      `SELECT id, image_url, thumbnail_url FROM generated_images WHERE id IN (${placeholders}) AND ${userCondition}`,
       queryParams
     );
 
@@ -1285,7 +1285,7 @@ export const generatedImagesDb = {
       : [userId];
 
     const [rows] = await pool.execute(
-      `SELECT id, image_url FROM generated_images 
+      `SELECT id, image_url, thumbnail_url FROM generated_images 
        WHERE ${userCondition} 
        AND type IN ('video', 'video-script', 'video-social')
        AND (expires_at <= NOW() OR (expires_at IS NULL AND created_at < DATE_SUB(NOW(), INTERVAL 3 DAY)))`,

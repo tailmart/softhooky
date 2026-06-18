@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import axios from 'axios'
+import api from '../../services/api'
 import { Loader2, Save, DollarSign } from 'lucide-react'
 
 function getAuthHeaders() {
@@ -18,8 +18,8 @@ export default function AgentPricing() {
   const load = async () => {
     try {
       const [defaultRes, agentRes] = await Promise.all([
-        axios.get('/api/pricing'),
-        axios.get('/api/agent/pricing', { headers: getAuthHeaders() })
+        api.get('/api/pricing'),
+        api.get('/api/agent/pricing', { headers: getAuthHeaders() })
       ])
       const defaultPricing = defaultRes.data.success ? defaultRes.data.data : {}
       const customPricing = agentRes.data.success ? agentRes.data.data : {}
@@ -51,7 +51,7 @@ export default function AgentPricing() {
     try {
       const map: Record<string, number> = {}
       pricing.forEach(item => { map[item.key] = item.price })
-      const res = await axios.put('/api/agent/pricing', { pricing: map }, { headers: getAuthHeaders() })
+      const res = await api.put('/api/agent/pricing', { pricing: map }, { headers: getAuthHeaders() })
       setMessage({ type: res.data.success ? 'success' : 'error', text: res.data.success ? '定价保存成功' : res.data.message || '保存失败' })
     } catch (err: any) {
       setMessage({ type: 'error', text: err.response?.data?.message || '保存失败' })

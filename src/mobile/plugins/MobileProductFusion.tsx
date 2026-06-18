@@ -9,6 +9,7 @@ import { getGeneratePrice } from '../../services/pricingService';
 import { getAuthToken } from '../../services/authService';
 import { getAvailableModels } from '../../services/modelService';
 import { RatioPicker } from '../components/RatioPicker';
+import { API_URL } from '../../services/api';
 
 const DEFAULT_SCENES = ['人物佩戴近景图', '室内摄影棚', '户外场景', '街头场景', '咖啡厅', '森林背景', '工作室场景'];
 
@@ -123,7 +124,7 @@ export const MobileProductFusion: React.FC<MobileProductFusionProps> = ({ onBack
       }
       // 出一张显示一张（已在循环内逐张添加）
       // 同步到 PC 画布
-      try { const t = getAuthToken(); if (t) { const g = await fetch('/api/canvas/plugin-state?pluginId=nanogen_history', { headers: { Authorization: `Bearer ${t}` }, signal: AbortSignal.timeout(3000) }); const d = g.ok ? (await g.json()) : null; const existing = d?.data?.generatedImages || d?.generatedImages || []; const ni = allUrls.map((u, i) => ({ url: u, position: { x: 40 + (i % 3) * 220, y: 40 + Math.floor(i / 3) * 220 }, width: 200, height: 200 })); const merged = [...ni, ...existing].slice(0, 50); await fetch('/api/canvas/plugin-state', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` }, body: JSON.stringify({ pluginId: 'nanogen_history', stateData: { generatedImages: merged } }), signal: AbortSignal.timeout(3000) }); } } catch {}
+      try { const t = getAuthToken(); if (t) { const g = await fetch(`${API_URL}/api/canvas/plugin-state?pluginId=nanogen_history`, { headers: { Authorization: `Bearer ${t}` }, signal: AbortSignal.timeout(3000) }); const d = g.ok ? (await g.json()) : null; const existing = d?.data?.generatedImages || d?.generatedImages || []; const ni = allUrls.map((u, i) => ({ url: u, position: { x: 40 + (i % 3) * 220, y: 40 + Math.floor(i / 3) * 220 }, width: 200, height: 200 })); const merged = [...ni, ...existing].slice(0, 50); await fetch(`${API_URL}/api/canvas/plugin-state`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` }, body: JSON.stringify({ pluginId: 'nanogen_history', stateData: { generatedImages: merged } }), signal: AbortSignal.timeout(3000) }); } } catch {}
       window.dispatchEvent(new Event('credits-updated'));
     } catch (err: any) { setError(err.message || '生成失败'); }
     finally { setIsGenerating(false); }

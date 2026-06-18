@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getCurrentUser, isAuthenticated, getAuthToken, logout as authLogout } from '../services/authService';
+import { API_URL } from '../services/api';
 
 interface User {
   id: number;
@@ -84,7 +85,7 @@ const refreshUser = async () => {
       const token = getAuthToken();
       if (!token) { setUser(null); return; }
       
-      const response = await fetch('/api/auth/credits', {
+      const response = await fetch(`${API_URL}/api/auth/credits`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await response.json();

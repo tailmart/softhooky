@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Trash2, Loader2, Image as ImageIcon } from 'lucide-react'
 import { ImagePreviewModal } from '../../components/ImagePreviewModal'
+import { API_URL } from '../../services/api'
 
 interface ModelItem {
   id: number
@@ -28,7 +29,7 @@ export default function ModelLibraryPage({ token }: ModelLibraryPageProps) {
   const fetchModels = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/admin/model-library?gender=${activeTab}`, {
+      const res = await fetch(`${API_URL}/api/admin/model-library?gender=${activeTab}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       const d = await res.json()
@@ -45,7 +46,7 @@ export default function ModelLibraryPage({ token }: ModelLibraryPageProps) {
       reader.onload = async () => {
         try {
           const name = `${activeTab === 'female' ? '女模' : '男模'}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-          const res = await fetch('/api/admin/model-library/upload', {
+          const res = await fetch(`${API_URL}/api/admin/model-library/upload`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ name, gender: activeTab, imageBase64: reader.result })
@@ -91,7 +92,7 @@ export default function ModelLibraryPage({ token }: ModelLibraryPageProps) {
   const handleDelete = async (item: ModelItem) => {
     if (!confirm('确定删除？')) return
     try {
-      const res = await fetch(`/api/admin/model-library/${item.id}`, {
+      const res = await fetch(`${API_URL}/api/admin/model-library/${item.id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       })

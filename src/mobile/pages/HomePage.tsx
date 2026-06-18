@@ -5,6 +5,7 @@ import {
   Zap, Star, TrendingUp, Play
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { API_URL } from '../../services/api';
 
 // ============ 5大核心功能 ============
 const CORE_FEATURES = [
@@ -77,7 +78,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigateToTool, onNavigate
   }, [notifDismissed]);
 
   useEffect(() => {
-    fetch('/api/notifications').then(r => r.json()).then(d => {
+    fetch(`${API_URL}/api/notifications`).then(r => r.json()).then(d => {
       if (d.success) setNotifications(d.data || []);
     }).catch(() => {});
   }, []);
@@ -85,15 +86,15 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigateToTool, onNavigate
   const unreadNotifs = notifications.filter(n => !notifDismissed.has(n.id)).length;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] animate-mobile-fade-in">
+    <div className="min-h-screen bg-white animate-mobile-fade-in">
       {/* ===== Hero 区域 ===== */}
       <div className="px-4 pt-4 pb-2">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <p className="text-[13px] text-white/40 font-medium">
+            <p className="text-[13px] text-gray-500 font-medium">
               {isAuthenticated ? `Hi, ${user?.email?.split('@')[0] || ''}` : '欢迎回来'}
             </p>
-            <h1 className="text-[22px] font-extrabold text-white mt-0.5">
+            <h1 className="text-[22px] font-extrabold text-[#171717] mt-0.5">
               AI 创作工作台
             </h1>
           </div>
@@ -106,8 +107,8 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigateToTool, onNavigate
               </button>
             )}
             {unreadNotifs > 0 && (
-              <button onClick={() => setShowNotifModal(true)} className="relative w-9 h-9 flex items-center justify-center rounded-full bg-white/[0.05]">
-                <Bell size={17} className="text-white/40" />
+              <button onClick={() => setShowNotifModal(true)} className="relative w-9 h-9 flex items-center justify-center rounded-full bg-gray-100">
+                <Bell size={17} className="text-gray-500" />
                 <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] flex items-center justify-center text-[8px] font-bold bg-blue-500 text-white rounded-full">
                   {unreadNotifs > 9 ? '9+' : unreadNotifs}
                 </span>
@@ -126,7 +127,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigateToTool, onNavigate
             <div className="relative flex items-center justify-between">
               <div className="text-left">
                 <p className="text-[15px] font-bold text-white">立即登录，开始创作</p>
-                <p className="text-[12px] text-white/50 mt-1">新用户注册即送免费积分</p>
+                <p className="text-[12px] text-gray-500 mt-1">新用户注册即送免费积分</p>
               </div>
               <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center">
                 <ArrowRight size={18} className="text-white" />
@@ -139,9 +140,9 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigateToTool, onNavigate
       {/* ===== 核心功能 - 5大工具 ===== */}
       <div className="px-4 pb-2">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-[15px] font-bold text-white">核心功能</h2>
+          <h2 className="text-[15px] font-bold text-[#171717]">核心功能</h2>
           <button onClick={() => onSwitchTab?.('tools')}
-            className="flex items-center gap-1 text-[11px] text-white/30 font-medium">
+            className="flex items-center gap-1 text-[11px] text-gray-400 font-medium">
             全部 <ChevronRight size={12} />
           </button>
         </div>
@@ -166,7 +167,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigateToTool, onNavigate
                     className="w-full h-full object-cover opacity-40"
                     loading="lazy"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/80 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-r from-white via-white/80 to-transparent" />
                 </div>
 
                 {/* 内容 */}
@@ -180,15 +181,15 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigateToTool, onNavigate
                   {/* 文字 */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <h3 className="text-[16px] font-bold text-white">{feature.title}</h3>
+                      <h3 className="text-[16px] font-bold text-[#171717]">{feature.title}</h3>
                       <span className="text-[9px] font-bold text-blue-400 bg-blue-500/15 px-1.5 py-0.5 rounded-full">{feature.subtitle}</span>
                     </div>
-                    <p className="text-[12px] text-white/40 mt-1 truncate">{feature.description}</p>
+                    <p className="text-[12px] text-gray-500 mt-1 truncate">{feature.description}</p>
                   </div>
 
                   {/* 箭头 */}
-                  <div className="w-8 h-8 rounded-full bg-white/[0.06] flex items-center justify-center flex-shrink-0 group-hover:bg-white/[0.1] transition-colors">
-                    <ChevronRight size={16} className="text-white/30" />
+                  <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 group-hover:bg-white/[0.1] transition-colors">
+                    <ChevronRight size={16} className="text-gray-400" />
                   </div>
                 </div>
 
@@ -203,12 +204,12 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigateToTool, onNavigate
 
       {/* ===== 使用场景 ===== */}
       <div className="px-4 pb-4">
-        <h2 className="text-[15px] font-bold text-white mb-3">适用场景</h2>
+        <h2 className="text-[15px] font-bold text-[#171717] mb-3">适用场景</h2>
         <div className="grid grid-cols-4 gap-2">
           {USE_CASES.map((uc, i) => (
-            <div key={i} className="flex flex-col items-center gap-1.5 py-3 rounded-xl bg-white/[0.03] border border-white/[0.04]">
+            <div key={i} className="flex flex-col items-center gap-1.5 py-3 rounded-xl bg-gray-50 border border-gray-100">
               <span className="text-[22px]">{uc.icon}</span>
-              <span className="text-[10px] font-medium text-white/50">{uc.label}</span>
+              <span className="text-[10px] font-medium text-gray-500">{uc.label}</span>
             </div>
           ))}
         </div>
@@ -218,16 +219,16 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigateToTool, onNavigate
       <div className="px-4 pb-6">
         <button
           onClick={() => onSwitchTab?.('tools')}
-          className="mobile-tap w-full rounded-2xl p-4 bg-white/[0.03] border border-white/[0.06] flex items-center gap-3"
+          className="mobile-tap w-full rounded-2xl p-4 bg-gray-50 border border-gray-200 flex items-center gap-3"
         >
           <div className="w-10 h-10 rounded-xl bg-blue-500/15 flex items-center justify-center flex-shrink-0">
             <Zap size={18} className="text-blue-400" />
           </div>
           <div className="flex-1 text-left">
-            <p className="text-[13px] font-bold text-white">探索全部工具</p>
-            <p className="text-[11px] text-white/30 mt-0.5">发现更多AI创作能力</p>
+            <p className="text-[13px] font-bold text-[#171717]">探索全部工具</p>
+            <p className="text-[11px] text-gray-400 mt-0.5">发现更多AI创作能力</p>
           </div>
-          <ArrowRight size={16} className="text-white/20" />
+          <ArrowRight size={16} className="text-gray-300" />
         </button>
       </div>
 
@@ -238,20 +239,20 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigateToTool, onNavigate
       {showNotifModal && (
         <div className="fixed inset-0 z-[100] flex items-end" onClick={() => setShowNotifModal(false)}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div className="relative w-full bg-[#141414] rounded-t-[28px] pb-[calc(16px+env(safe-area-inset-bottom))] animate-mobile-slide-up"
+          <div className="relative w-full bg-white rounded-t-[28px] pb-[calc(16px+env(safe-area-inset-bottom))] animate-mobile-slide-up"
             style={{ maxHeight: '70vh' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 pt-5 pb-3">
               <div className="flex items-center gap-2">
-                <h3 className="text-[16px] font-extrabold text-white">通知</h3>
-                <span className="text-[12px] text-white/30">({notifications.length})</span>
+                <h3 className="text-[16px] font-extrabold text-[#171717]">通知</h3>
+                <span className="text-[12px] text-gray-400">({notifications.length})</span>
               </div>
-              <button onClick={() => setShowNotifModal(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.06]">
-                <X size={16} className="text-white/40" />
+              <button onClick={() => setShowNotifModal(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100">
+                <X size={16} className="text-gray-500" />
               </button>
             </div>
             <div className="overflow-y-auto max-h-[calc(70vh-60px)] px-4 pb-3 space-y-2">
               <div className="flex items-center justify-between px-1 mb-1">
-                <span className="text-[11px] text-white/30">{unreadNotifs} 条未读</span>
+                <span className="text-[11px] text-gray-400">{unreadNotifs} 条未读</span>
                 {unreadNotifs > 0 && (
                   <button onClick={() => setNotifDismissed(prev => new Set(notifications.map(n => n.id)))}
                     className="text-[11px] text-blue-400 font-medium">全部已读</button>
@@ -259,25 +260,25 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigateToTool, onNavigate
               </div>
               {notifications.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12">
-                  <div className="w-12 h-12 rounded-full bg-white/[0.04] flex items-center justify-center mb-3">
-                    <Bell size={20} className="text-white/15" />
+                  <div className="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center mb-3">
+                    <Bell size={20} className="text-gray-300" />
                   </div>
-                  <p className="text-[13px] text-white/30">暂无通知</p>
+                  <p className="text-[13px] text-gray-400">暂无通知</p>
                 </div>
               ) : notifications.map((n) => {
                 const isUnread = !notifDismissed.has(n.id);
                 return (
-                <div key={n.id} className={`rounded-2xl p-4 transition-all ${isUnread ? 'bg-white/[0.04] border border-white/[0.06]' : 'bg-white/[0.02]'}`}>
+                <div key={n.id} className={`rounded-2xl p-4 transition-all ${isUnread ? 'bg-gray-50 border border-gray-200' : 'bg-gray-50'}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className={`text-[13px] ${isUnread ? 'font-bold text-white' : 'font-medium text-white/40'}`}>{n.title}</p>
+                        <p className={`text-[13px] ${isUnread ? 'font-bold text-[#171717]' : 'font-medium text-gray-500'}`}>{n.title}</p>
                         {isUnread && <span className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />}
                       </div>
-                      {n.content && <p className={`text-[11px] mt-1.5 leading-relaxed ${isUnread ? 'text-white/50' : 'text-white/20'}`}>{n.content}</p>}
+                      {n.content && <p className={`text-[11px] mt-1.5 leading-relaxed ${isUnread ? 'text-gray-500' : 'text-gray-300'}`}>{n.content}</p>}
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      {n.created_at && <span className="text-[10px] text-white/20 whitespace-nowrap">{new Date(n.created_at).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })}</span>}
+                      {n.created_at && <span className="text-[10px] text-gray-300 whitespace-nowrap">{new Date(n.created_at).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })}</span>}
                       {isUnread && (
                         <button onClick={() => setNotifDismissed(prev => new Set([...prev, n.id]))}
                           className="text-[10px] text-blue-400 font-medium">已读</button>

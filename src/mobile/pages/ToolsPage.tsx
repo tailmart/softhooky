@@ -63,24 +63,24 @@ export const ToolsPage: React.FC<ToolsPageProps> = ({ onNavigateToTool }) => {
     : CORE_TOOLS;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] animate-mobile-fade-in">
+    <div className="min-h-screen bg-white animate-mobile-fade-in">
       {/* 搜索栏 */}
       <div className="px-4 pt-4 pb-3">
         <div className="relative">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/20" />
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-300" />
           <input
             type="text"
             placeholder="搜索功能..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white/[0.04] border border-white/[0.06] rounded-xl py-2.5 pl-10 pr-8 text-sm text-white placeholder-white/20 outline-none focus:border-blue-500/30 transition-colors"
+            className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 pl-10 pr-8 text-sm text-[#171717] placeholder-gray-300 outline-none focus:border-blue-500/30 transition-colors"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
               className="absolute right-3 top-1/2 -translate-y-1/2"
             >
-              <X size={16} className="text-white/20" />
+              <X size={16} className="text-gray-300" />
             </button>
           )}
         </div>
@@ -90,7 +90,7 @@ export const ToolsPage: React.FC<ToolsPageProps> = ({ onNavigateToTool }) => {
       <div className="px-4 pb-2">
         <div className="flex items-center gap-2 mb-3">
           <Zap size={14} className="text-blue-400" />
-          <h2 className="text-[14px] font-bold text-white">
+          <h2 className="text-[14px] font-bold text-[#171717]">
             {searchQuery ? `搜索结果 (${searchResults.length})` : '全部功能'}
           </h2>
         </div>
@@ -99,10 +99,10 @@ export const ToolsPage: React.FC<ToolsPageProps> = ({ onNavigateToTool }) => {
       <div className="px-4 pb-6">
         {searchResults.length === 0 ? (
           <div className="text-center py-16">
-            <div className="w-14 h-14 rounded-2xl bg-white/[0.04] flex items-center justify-center mx-auto mb-3">
-              <Search size={24} className="text-white/10" />
+            <div className="w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center mx-auto mb-3">
+              <Search size={24} className="text-gray-200" />
             </div>
-            <p className="text-sm text-white/30">没有找到相关功能</p>
+            <p className="text-sm text-gray-400">没有找到相关功能</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -123,7 +123,7 @@ export const ToolsPage: React.FC<ToolsPageProps> = ({ onNavigateToTool }) => {
                       className="w-full h-full object-cover opacity-25"
                       loading="lazy"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/90 to-[#0a0a0a]/60" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-white via-white/90 to-white/60" />
                   </div>
 
                   {/* 内容 */}
@@ -134,14 +134,14 @@ export const ToolsPage: React.FC<ToolsPageProps> = ({ onNavigateToTool }) => {
                     </div>
                     <div className="flex-1 text-left min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="text-[14px] font-bold text-white">{tool.title}</p>
+                        <p className="text-[14px] font-bold text-[#171717]">{tool.title}</p>
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
                           style={{ color: tool.accent, background: `${tool.accent}15` }}>{tool.subtitle}</span>
                       </div>
-                      <p className="text-[11px] text-white/30 mt-1 truncate">{tool.desc}</p>
+                      <p className="text-[11px] text-gray-400 mt-1 truncate">{tool.desc}</p>
                     </div>
-                    <div className="w-8 h-8 rounded-full bg-white/[0.04] flex items-center justify-center flex-shrink-0 group-hover:bg-white/[0.08] transition-colors">
-                      <ChevronRight size={16} className="text-white/20" />
+                    <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center flex-shrink-0 group-hover:bg-white/[0.08] transition-colors">
+                      <ChevronRight size={16} className="text-gray-300" />
                     </div>
                   </div>
 
