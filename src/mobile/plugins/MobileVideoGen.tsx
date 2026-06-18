@@ -121,22 +121,22 @@ export const MobileVideoGen: React.FC<MobileVideoGenProps> = ({ config, onBack }
   }, []);
 
   return (
-    <div className="flex flex-col h-full bg-[#0a0a0a]">
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-[#0a0a0a] flex-shrink-0">
-        <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.06] mobile-tap"><X size={16} className="text-white/40" /></button>
-        <h1 className="text-base font-bold text-white">{config.title}</h1>
+    <div className="flex flex-col h-full bg-white">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 bg-white flex-shrink-0">
+        <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 mobile-tap"><X size={16} className="text-gray-500" /></button>
+        <h1 className="text-base font-bold text-[#171717]">{config.title}</h1>
         {isAuthenticated && user && <div className="ml-auto flex items-center gap-1 bg-blue-500/10 px-2.5 py-1 rounded-full"><Coins size={12} className="text-blue-400" /><span className="text-xs font-semibold text-blue-400">{Number(user.credits || 0).toFixed(1)}</span></div>}
       </div>
       <div className="flex-1 overflow-y-auto">
         <div className="px-4 pt-4 pb-32 space-y-4">
-          {config.description && <p className="text-xs text-white/30">{config.description}</p>}
+          {config.description && <p className="text-xs text-gray-400">{config.description}</p>}
 
           {/* Upload */}
           <div>
-            <label className="text-xs font-semibold text-white/40 mb-2 block">上传参考图 <span className="text-white/20">（可选）</span></label>
+            <label className="text-xs font-semibold text-gray-500 mb-2 block">上传参考图 <span className="text-gray-300">（可选）</span></label>
             <div className="flex gap-2.5 flex-wrap">
-              {images.map((url, i) => <div key={i} className="relative w-[72px] h-[72px] rounded-xl overflow-hidden bg-white/[0.04] border border-white/[0.06]"><img src={url} className="w-full h-full object-cover" /><button onClick={() => setImages(p => p.filter((_, j) => j !== i))} className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center"><X size={10} className="text-white" /></button></div>)}
-              {images.length < 3 && <button onClick={() => fileRef.current?.click()} className="w-[72px] h-[72px] rounded-xl border-2 border-dashed border-white/[0.1] flex flex-col items-center justify-center bg-white/[0.02]"><Plus size={20} className="text-white/20" /><span className="text-[9px] text-white/20">上传</span></button>}
+              {images.map((url, i) => <div key={i} className="relative w-[72px] h-[72px] rounded-xl overflow-hidden bg-gray-50 border border-gray-200"><img src={url} className="w-full h-full object-cover" /><button onClick={() => setImages(p => p.filter((_, j) => j !== i))} className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center"><X size={10} className="text-white" /></button></div>)}
+              {images.length < 3 && <button onClick={() => fileRef.current?.click()} className="w-[72px] h-[72px] rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center bg-gray-50"><Plus size={20} className="text-gray-300" /><span className="text-[9px] text-gray-300">上传</span></button>}
             </div>
             <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={handleUpload} />
           </div>
@@ -144,22 +144,22 @@ export const MobileVideoGen: React.FC<MobileVideoGenProps> = ({ config, onBack }
           {/* Model selector */}
           {config.models && config.models.length > 0 && (
             <div>
-              <label className="text-xs font-semibold text-white/40 mb-2 block">模型</label>
-              <button onClick={() => setSheet('model')} className="w-full flex items-center justify-between px-4 py-3 bg-white/[0.04] rounded-xl border border-white/[0.06] text-sm">
-                <span className="text-white">{config.models.find(m => m.value === model)?.label}</span>
-                <ChevronDown size={16} className="text-white/30" />
+              <label className="text-xs font-semibold text-gray-500 mb-2 block">模型</label>
+              <button onClick={() => setSheet('model')} className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 text-sm">
+                <span className="text-[#171717]">{config.models.find(m => m.value === model)?.label}</span>
+                <ChevronDown size={16} className="text-gray-400" />
               </button>
               {sheet === 'model' && (
                 <div className="fixed inset-0 z-[100] flex items-end" onClick={() => setSheet(null)}>
                   <div className="absolute inset-0 bg-black/60" />
-                  <div className="relative w-full bg-[#141414] rounded-t-3xl pb-[calc(16px+env(safe-area-inset-bottom))] animate-mobile-slide-up" onClick={e => e.stopPropagation()}>
-                    <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-white/[0.06]">
-                      <h3 className="text-base font-bold text-white">选择模型</h3>
-                      <button onClick={() => setSheet(null)} className="w-8 h-8 rounded-full bg-white/[0.06] flex items-center justify-center"><X size={16} className="text-white/40" /></button>
+                  <div className="relative w-full bg-white rounded-t-3xl pb-[calc(16px+env(safe-area-inset-bottom))] animate-mobile-slide-up" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-200">
+                      <h3 className="text-base font-bold text-[#171717]">选择模型</h3>
+                      <button onClick={() => setSheet(null)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"><X size={16} className="text-gray-500" /></button>
                     </div>
                     <div className="px-3 py-2">{config.models.map(m => (
-                      <button key={m.value} onClick={() => { setModel(m.value); setSheet(null); }} className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl my-0.5 ${model === m.value ? 'bg-white/[0.06]' : ''}`}>
-                        <span className="text-sm text-white/50">{m.label}</span>
+                      <button key={m.value} onClick={() => { setModel(m.value); setSheet(null); }} className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl my-0.5 ${model === m.value ? 'bg-gray-100' : ''}`}>
+                        <span className="text-sm text-gray-500">{m.label}</span>
                         {model === m.value && <Check size={18} className="text-blue-400" />}
                       </button>
                     ))}</div>
@@ -171,34 +171,34 @@ export const MobileVideoGen: React.FC<MobileVideoGenProps> = ({ config, onBack }
 
           {/* Aspect Ratio */}
           <div>
-            <label className="text-xs font-semibold text-white/40 mb-2 block">比例</label>
+            <label className="text-xs font-semibold text-gray-500 mb-2 block">比例</label>
             <RatioPicker options={RATIOS} selected={ratio} onChange={setRatio} />
           </div>
 
           {/* Duration */}
           {config.durations && (
             <div>
-              <label className="text-xs font-semibold text-white/40 mb-2 block">时长</label>
+              <label className="text-xs font-semibold text-gray-500 mb-2 block">时长</label>
               <div className="mobile-scroll-x -mx-1"><div className="flex gap-2 px-1">
-                {config.durations.map(d => <button key={d.value} onClick={() => setDuration(d.value)} className={`mobile-tap flex-shrink-0 px-5 py-2.5 rounded-xl text-xs font-medium transition-all ${duration === d.value ? 'bg-blue-500 text-white shadow-sm shadow-blue-500/25' : 'bg-white/[0.04] text-white/40 border border-white/[0.06]'}`}>{d.label}</button>)}
+                {config.durations.map(d => <button key={d.value} onClick={() => setDuration(d.value)} className={`mobile-tap flex-shrink-0 px-5 py-2.5 rounded-xl text-xs font-medium transition-all ${duration === d.value ? 'bg-blue-500 text-white shadow-sm shadow-blue-500/25' : 'bg-gray-50 text-gray-500 border border-gray-200'}`}>{d.label}</button>)}
               </div></div>
             </div>
           )}
 
           {/* Quantity */}
           <div>
-            <label className="text-xs font-semibold text-white/40 mb-2 block">数量</label>
+            <label className="text-xs font-semibold text-gray-500 mb-2 block">数量</label>
             <div className="flex items-center gap-3">
-              <button onClick={() => setQuantity(p => Math.max(1, p - 1))} className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-lg font-medium text-white/40">-</button>
-              <span className="w-10 text-center text-base font-semibold text-white">{quantity}</span>
-              <button onClick={() => setQuantity(p => Math.min(3, p + 1))} className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-lg font-medium text-white/40">+</button>
+              <button onClick={() => setQuantity(p => Math.max(1, p - 1))} className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center text-lg font-medium text-gray-500">-</button>
+              <span className="w-10 text-center text-base font-semibold text-[#171717]">{quantity}</span>
+              <button onClick={() => setQuantity(p => Math.min(3, p + 1))} className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center text-lg font-medium text-gray-500">+</button>
             </div>
           </div>
 
           {/* Prompt */}
           <div>
-            <label className="text-xs font-semibold text-white/40 mb-2 block">描述</label>
-            <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="描述视频内容..." rows={3} className="w-full px-4 py-3 bg-white/[0.04] rounded-xl border border-white/[0.06] text-sm text-white placeholder-white/20 resize-none outline-none focus:border-blue-500/30 transition-colors" />
+            <label className="text-xs font-semibold text-gray-500 mb-2 block">描述</label>
+            <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="描述视频内容..." rows={3} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 text-sm text-[#171717] placeholder-gray-300 resize-none outline-none focus:border-blue-500/30 transition-colors" />
           </div>
 
           {/* Generate */}
@@ -216,14 +216,14 @@ export const MobileVideoGen: React.FC<MobileVideoGenProps> = ({ config, onBack }
 
           {/* Results */}
           {results.length > 0 && <div>
-            <div className="flex items-center gap-2 mb-3"><Film size={16} className="text-white/50" /><h2 className="text-sm font-bold text-white/60">生成视频</h2></div>
+            <div className="flex items-center gap-2 mb-3"><Film size={16} className="text-gray-500" /><h2 className="text-sm font-bold text-gray-600">生成视频</h2></div>
             <div className="space-y-3">{results.map((url, i) => (
-              <div key={i} className="mobile-card overflow-hidden rounded-xl bg-white/[0.03] border border-white/[0.06]">
+              <div key={i} className="mobile-card overflow-hidden rounded-xl bg-gray-50 border border-gray-200">
                 <div className="aspect-[9/16] bg-black flex items-center justify-center">
                   <video src={url} controls className="w-full h-full object-contain" />
                 </div>
-                <div className="flex px-3 py-2.5 border-t border-white/[0.04]">
-                  <button onClick={() => handleDownload(url)} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-white/[0.04] text-white/40 text-xs font-medium"><Download size={14} /> 下载</button>
+                <div className="flex px-3 py-2.5 border-t border-gray-100">
+                  <button onClick={() => handleDownload(url)} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-gray-50 text-gray-500 text-xs font-medium"><Download size={14} /> 下载</button>
                 </div>
               </div>
             ))}</div>

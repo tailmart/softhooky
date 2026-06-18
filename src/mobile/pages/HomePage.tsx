@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Sparkles, Bell, X, ArrowRight, ChevronRight,
-  Film, Video, Camera, Image as ImageIcon, Layers,
-  Zap, Star, TrendingUp, Play
+  Sparkles, Bell, X, ArrowRight,
+  Film, Video, Camera, Star, Layers
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { API_URL } from '../../services/api';
@@ -10,53 +9,68 @@ import { API_URL } from '../../services/api';
 // ============ 5大核心功能 ============
 const CORE_FEATURES = [
   {
-    id: 'storyboard',
-    title: '故事板',
-    subtitle: 'AI 分镜生成',
-    description: '输入剧本，自动生成专业影视分镜画面',
-    icon: Film,
-    gradient: 'from-violet-600 to-indigo-700',
-    accent: '#8b5cf6',
-    caseImage: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=professional+film+storyboard+frames+cinematic+shot+sequence+dark+background+blue+accent+lighting&image_size=landscape_4_3',
+    id: 'xiaohongshu',
+    title: '小红书种草',
+    description: '封面+文案+5张配图，一键生成',
+    icon: Star,
+    tag: '热门',
   },
   {
     id: 'nano-gen',
     title: 'TK带货图片',
-    subtitle: '产品商业大片',
-    description: '上传产品图，AI生成TikTok风格带货海报',
+    description: 'TikTok风格产品商业大片',
     icon: Camera,
-    gradient: 'from-blue-600 to-cyan-600',
-    accent: '#3b82f6',
-    caseImage: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=tiktok+style+product+photography+commercial+photo+studio+lighting+modern+aesthetic+dark+background&image_size=landscape_4_3',
+    tag: '爆款',
   },
   {
-    id: 'xiaohongshu',
-    title: '小红书种草',
-    subtitle: '一键生成笔记',
-    description: '封面+文案+5张配图，完整种草笔记',
-    icon: Star,
-    gradient: 'from-rose-600 to-pink-700',
-    accent: '#f43f5e',
-    caseImage: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=xiaohongshu+social+media+post+aesthetic+flat+lay+product+photography+pastel+colors+minimalist&image_size=landscape_4_3',
+    id: 'video',
+    title: 'AI视频生成',
+    description: '图片转视频，一键出片',
+    icon: Video,
+    tag: '新功能',
+  },
+  {
+    id: 'storyboard',
+    title: '故事板',
+    description: '剧本自动AI分镜生成',
+    icon: Film,
+    tag: null,
   },
   {
     id: 'social',
     title: '社媒POV出图',
-    subtitle: '第一视角场景图',
-    description: '适配Ins/TikTok/FB，多平台一键出图',
+    description: 'Ins/TikTok/FB多平台适配',
     icon: Layers,
-    gradient: 'from-amber-600 to-orange-700',
-    accent: '#f59e0b',
-    caseImage: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=social+media+content+creation+first+person+perspective+lifestyle+product+shot+modern+aesthetic+dark&image_size=landscape_4_3',
+    tag: null,
   },
 ];
 
-// ============ 使用场景数据 ============
-const USE_CASES = [
-  { label: '电商卖家', desc: '产品图批量生成', icon: '🛍️' },
-  { label: '内容创作者', desc: '社媒素材批量出', icon: '📱' },
-  { label: '品牌营销', desc: '短视频广告制作', icon: '🎬' },
-  { label: '独立站', desc: '详情页/Banner', icon: '🌐' },
+// ============ 案例展示数据 ============
+const SHOWCASE_ITEMS = [
+  {
+    title: '小红书种草笔记',
+    desc: 'AI自动生成封面+文案+配图',
+    image: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=xiaohongshu+style+product+flat+lay+aesthetic+pink+white+minimalist+phone+case&image_size=portrait_4_3',
+    tag: '小红书',
+  },
+  {
+    title: 'TK带货海报',
+    desc: 'TikTok爆款产品图',
+    image: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=tiktok+product+photography+headphones+studio+lighting+blue+gradient+background+commercial&image_size=portrait_4_3',
+    tag: 'TK图片',
+  },
+  {
+    title: '产品场景融合',
+    desc: 'AI智能场景合成',
+    image: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=watch+product+on+wrist+lifestyle+photo+natural+light+outdoor+scene+premium+quality&image_size=portrait_4_3',
+    tag: '场景图',
+  },
+  {
+    title: '社媒POV视角',
+    desc: '第一人称生活场景',
+    image: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=first+person+perspective+holding+coffee+mug+cozy+cafe+setting+natural+light+lifestyle&image_size=portrait_4_3',
+    tag: 'POV',
+  },
 ];
 
 interface HomePageProps {
@@ -85,25 +99,31 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigateToTool, onNavigate
 
   const unreadNotifs = notifications.filter(n => !notifDismissed.has(n.id)).length;
 
+  const handleFeatureClick = (featureId: string) => {
+    if (featureId === 'video') {
+      onSwitchTab?.('video');
+    } else {
+      onNavigateToTool(featureId);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-white animate-mobile-fade-in">
-      {/* ===== Hero 区域 ===== */}
-      <div className="px-4 pt-4 pb-2">
-        <div className="flex items-center justify-between mb-4">
+    <div className="min-h-screen bg-gray-50 animate-mobile-fade-in">
+      {/* ===== 顶部栏 ===== */}
+      <div className="bg-white px-4 pt-4 pb-3 border-b border-gray-100">
+        <div className="flex items-center justify-between">
           <div>
-            <p className="text-[13px] text-gray-500 font-medium">
-              {isAuthenticated ? `Hi, ${user?.email?.split('@')[0] || ''}` : '欢迎回来'}
+            <p className="text-[12px] text-gray-400">
+              {isAuthenticated ? `Hi, ${user?.email?.split('@')[0] || ''}` : '欢迎使用'}
             </p>
-            <h1 className="text-[22px] font-extrabold text-[#171717] mt-0.5">
-              AI 创作工作台
-            </h1>
+            <h1 className="text-[20px] font-bold text-gray-900">AI创作工作台</h1>
           </div>
           <div className="flex items-center gap-2">
             {isAuthenticated && user && (
               <button onClick={() => onNavigateToPlugin('recharge')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20">
-                <Sparkles size={12} className="text-blue-400" />
-                <span className="text-[12px] font-bold text-blue-400">{Number(user.credits || 0).toFixed(0)}</span>
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 border border-blue-100">
+                <Sparkles size={12} className="text-blue-500" />
+                <span className="text-[12px] font-semibold text-blue-600">{Number(user.credits || 0).toFixed(0)}</span>
               </button>
             )}
             {unreadNotifs > 0 && (
@@ -117,119 +137,76 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigateToTool, onNavigate
           </div>
         </div>
 
-        {/* 快捷入口 - 登录/体验 */}
+        {/* 未登录提示 */}
         {!isAuthenticated && (
           <button
             onClick={() => window.dispatchEvent(new Event('mobile-auth-required'))}
-            className="w-full mb-4 p-4 rounded-2xl bg-gradient-to-r from-blue-600 to-blue-700 relative overflow-hidden"
+            className="w-full mt-3 p-3 rounded-xl bg-blue-500 active:bg-blue-600 transition-colors"
           >
-            <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
-            <div className="relative flex items-center justify-between">
+            <div className="flex items-center justify-between">
               <div className="text-left">
-                <p className="text-[15px] font-bold text-white">立即登录，开始创作</p>
-                <p className="text-[12px] text-gray-500 mt-1">新用户注册即送免费积分</p>
+                <p className="text-[14px] font-semibold text-white">登录解锁全部功能</p>
+                <p className="text-[11px] text-blue-100">新用户注册送免费积分</p>
               </div>
-              <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center">
-                <ArrowRight size={18} className="text-white" />
-              </div>
+              <ArrowRight size={16} className="text-white" />
             </div>
           </button>
         )}
       </div>
 
-      {/* ===== 核心功能 - 5大工具 ===== */}
-      <div className="px-4 pb-2">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-[15px] font-bold text-[#171717]">核心功能</h2>
-          <button onClick={() => onSwitchTab?.('tools')}
-            className="flex items-center gap-1 text-[11px] text-gray-400 font-medium">
-            全部 <ChevronRight size={12} />
-          </button>
+      {/* ===== 案例展示 - 横向滚动 ===== */}
+      <div className="pt-4 pb-2">
+        <div className="px-4 flex items-center justify-between mb-3">
+          <h2 className="text-[14px] font-semibold text-gray-900">AI创作案例</h2>
+          <button onClick={() => onSwitchTab?.('tools')} className="text-[11px] text-blue-500">查看全部</button>
         </div>
-      </div>
-
-      <div className="px-4 pb-4">
-        <div className="space-y-3">
-          {CORE_FEATURES.map((feature, i) => {
-            const Icon = feature.icon;
-            return (
-              <button
-                key={feature.id}
-                onClick={() => onNavigateToTool(feature.id)}
-                className="mobile-tap w-full relative overflow-hidden rounded-2xl text-left group"
-                style={{ animationDelay: `${i * 60}ms` }}
-              >
-                {/* 背景图 */}
-                <div className="absolute inset-0">
-                  <img
-                    src={feature.caseImage}
-                    alt={feature.title}
-                    className="w-full h-full object-cover opacity-40"
-                    loading="lazy"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-r from-white via-white/80 to-transparent" />
+        <div className="flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide">
+          {SHOWCASE_ITEMS.map((item, i) => (
+            <div key={i} className="flex-shrink-0 w-[140px] rounded-xl overflow-hidden bg-white border border-gray-100 shadow-sm">
+              <div className="relative aspect-[3/4]">
+                <img src={item.image} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+                <div className="absolute top-2 left-2">
+                  <span className="text-[9px] font-medium bg-blue-500 text-white px-2 py-0.5 rounded-full">{item.tag}</span>
                 </div>
-
-                {/* 内容 */}
-                <div className="relative flex items-center gap-4 p-4">
-                  {/* 图标 */}
-                  <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center flex-shrink-0 shadow-lg`}
-                    style={{ boxShadow: `0 8px 24px ${feature.accent}33` }}>
-                    <Icon size={24} className="text-white" />
-                  </div>
-
-                  {/* 文字 */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-[16px] font-bold text-[#171717]">{feature.title}</h3>
-                      <span className="text-[9px] font-bold text-blue-400 bg-blue-500/15 px-1.5 py-0.5 rounded-full">{feature.subtitle}</span>
-                    </div>
-                    <p className="text-[12px] text-gray-500 mt-1 truncate">{feature.description}</p>
-                  </div>
-
-                  {/* 箭头 */}
-                  <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 group-hover:bg-white/[0.1] transition-colors">
-                    <ChevronRight size={16} className="text-gray-400" />
-                  </div>
-                </div>
-
-                {/* 底部高亮线 */}
-                <div className="absolute bottom-0 left-0 right-0 h-[1px]"
-                  style={{ background: `linear-gradient(90deg, transparent, ${feature.accent}40, transparent)` }} />
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ===== 使用场景 ===== */}
-      <div className="px-4 pb-4">
-        <h2 className="text-[15px] font-bold text-[#171717] mb-3">适用场景</h2>
-        <div className="grid grid-cols-4 gap-2">
-          {USE_CASES.map((uc, i) => (
-            <div key={i} className="flex flex-col items-center gap-1.5 py-3 rounded-xl bg-gray-50 border border-gray-100">
-              <span className="text-[22px]">{uc.icon}</span>
-              <span className="text-[10px] font-medium text-gray-500">{uc.label}</span>
+              </div>
+              <div className="p-2.5">
+                <p className="text-[11px] font-medium text-gray-900 truncate">{item.title}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">{item.desc}</p>
+              </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* ===== 快速开始 ===== */}
-      <div className="px-4 pb-6">
-        <button
-          onClick={() => onSwitchTab?.('tools')}
-          className="mobile-tap w-full rounded-2xl p-4 bg-gray-50 border border-gray-200 flex items-center gap-3"
-        >
-          <div className="w-10 h-10 rounded-xl bg-blue-500/15 flex items-center justify-center flex-shrink-0">
-            <Zap size={18} className="text-blue-400" />
-          </div>
-          <div className="flex-1 text-left">
-            <p className="text-[13px] font-bold text-[#171717]">探索全部工具</p>
-            <p className="text-[11px] text-gray-400 mt-0.5">发现更多AI创作能力</p>
-          </div>
-          <ArrowRight size={16} className="text-gray-300" />
-        </button>
+      {/* ===== 核心功能列表 ===== */}
+      <div className="px-4 pt-2 pb-4">
+        <h2 className="text-[14px] font-semibold text-gray-900 mb-3">核心功能</h2>
+        <div className="space-y-2">
+          {CORE_FEATURES.map((feature) => {
+            const Icon = feature.icon;
+            return (
+              <button
+                key={feature.id}
+                onClick={() => handleFeatureClick(feature.id)}
+                className="mobile-tap w-full flex items-center gap-3 p-3.5 bg-white rounded-xl border border-gray-100 active:bg-gray-50 transition-colors"
+              >
+                <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                  <Icon size={20} className="text-blue-500" />
+                </div>
+                <div className="flex-1 text-left min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[14px] font-medium text-gray-900">{feature.title}</span>
+                    {feature.tag && (
+                      <span className="text-[9px] font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{feature.tag}</span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-gray-400 mt-0.5 truncate">{feature.description}</p>
+                </div>
+                <ArrowRight size={16} className="text-gray-300 flex-shrink-0" />
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* ===== 底部留白 ===== */}
@@ -243,7 +220,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigateToTool, onNavigate
             style={{ maxHeight: '70vh' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 pt-5 pb-3">
               <div className="flex items-center gap-2">
-                <h3 className="text-[16px] font-extrabold text-[#171717]">通知</h3>
+                <h3 className="text-[16px] font-bold text-gray-900">通知</h3>
                 <span className="text-[12px] text-gray-400">({notifications.length})</span>
               </div>
               <button onClick={() => setShowNotifModal(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100">
@@ -255,7 +232,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigateToTool, onNavigate
                 <span className="text-[11px] text-gray-400">{unreadNotifs} 条未读</span>
                 {unreadNotifs > 0 && (
                   <button onClick={() => setNotifDismissed(prev => new Set(notifications.map(n => n.id)))}
-                    className="text-[11px] text-blue-400 font-medium">全部已读</button>
+                    className="text-[11px] text-blue-500 font-medium">全部已读</button>
                 )}
               </div>
               {notifications.length === 0 ? (
@@ -268,20 +245,20 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigateToTool, onNavigate
               ) : notifications.map((n) => {
                 const isUnread = !notifDismissed.has(n.id);
                 return (
-                <div key={n.id} className={`rounded-2xl p-4 transition-all ${isUnread ? 'bg-gray-50 border border-gray-200' : 'bg-gray-50'}`}>
+                <div key={n.id} className={`rounded-xl p-4 transition-all ${isUnread ? 'bg-blue-50 border border-blue-100' : 'bg-gray-50'}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className={`text-[13px] ${isUnread ? 'font-bold text-[#171717]' : 'font-medium text-gray-500'}`}>{n.title}</p>
-                        {isUnread && <span className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />}
+                        <p className={`text-[13px] ${isUnread ? 'font-semibold text-gray-900' : 'font-medium text-gray-500'}`}>{n.title}</p>
+                        {isUnread && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />}
                       </div>
-                      {n.content && <p className={`text-[11px] mt-1.5 leading-relaxed ${isUnread ? 'text-gray-500' : 'text-gray-300'}`}>{n.content}</p>}
+                      {n.content && <p className={`text-[11px] mt-1.5 leading-relaxed ${isUnread ? 'text-gray-600' : 'text-gray-300'}`}>{n.content}</p>}
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       {n.created_at && <span className="text-[10px] text-gray-300 whitespace-nowrap">{new Date(n.created_at).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })}</span>}
                       {isUnread && (
                         <button onClick={() => setNotifDismissed(prev => new Set([...prev, n.id]))}
-                          className="text-[10px] text-blue-400 font-medium">已读</button>
+                          className="text-[10px] text-blue-500 font-medium">已读</button>
                       )}
                     </div>
                   </div>

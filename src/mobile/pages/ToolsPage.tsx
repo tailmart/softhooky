@@ -140,7 +140,7 @@ export const ToolsPage: React.FC<ToolsPageProps> = ({ onNavigateToTool }) => {
                       </div>
                       <p className="text-[11px] text-gray-400 mt-1 truncate">{tool.desc}</p>
                     </div>
-                    <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center flex-shrink-0 group-hover:bg-white/[0.08] transition-colors">
+                    <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center flex-shrink-0 group-hover:bg-gray-200 transition-colors">
                       <ChevronRight size={16} className="text-gray-300" />
                     </div>
                   </div>

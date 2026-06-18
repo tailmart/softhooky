@@ -340,13 +340,13 @@ export const MobileToolTemplate: React.FC<MobileToolTemplateProps> = ({ config, 
   const canGenerate = !!((!needsUpload || hasUploads) && (textInput.trim() || !config.textInputRequired));
 
   return (
-    <div className="flex flex-col h-full bg-[#0a0a0a]">
+    <div className="flex flex-col h-full bg-white">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-[#0a0a0a] flex-shrink-0">
-        <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.06] mobile-tap">
-          <X size={16} className="text-white/40" />
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 bg-white flex-shrink-0">
+        <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 mobile-tap">
+          <X size={16} className="text-gray-500" />
         </button>
-        <h1 className="text-base font-bold text-white">{config.title}</h1>
+        <h1 className="text-base font-bold text-[#171717]">{config.title}</h1>
         {isAuthenticated && user && (
           <div className="ml-auto flex items-center gap-1 bg-blue-500/10 px-2.5 py-1 rounded-full">
             <Coins size={12} className="text-blue-400" />

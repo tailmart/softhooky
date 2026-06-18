@@ -4,6 +4,7 @@ import { MobileLayout } from './MobileLayout';
 import { HomePage } from './pages/HomePage';
 import { ToolsPage } from './pages/ToolsPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { MobileVideoPage } from './pages/MobileVideoPage';
 import { PluginPage } from './pages/PluginPage';
 import { MobileAuth } from './plugins/MobileAuth';
 import { TabId } from './components/BottomTabs';
@@ -77,6 +78,9 @@ export const MobileApp: React.FC = () => {
         <div className={`absolute inset-0 overflow-y-auto ${activeTab === 'tools' ? 'z-10' : 'z-0 opacity-0 pointer-events-none'}`}>
           <ToolsPage onNavigateToTool={handleNavigateToTool} />
         </div>
+        <div className={`absolute inset-0 overflow-y-auto ${activeTab === 'video' ? 'z-10' : 'z-0 opacity-0 pointer-events-none'}`}>
+          <MobileVideoPage />
+        </div>
         <div className={`absolute inset-0 overflow-y-auto ${activeTab === 'profile' ? 'z-10' : 'z-0 opacity-0 pointer-events-none'}`}>
           <ProfilePage onNavigateToPlugin={handleNavigateToTool} />
         </div>
@@ -86,10 +90,10 @@ export const MobileApp: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-blue-900/50 border-t-blue-400 rounded-full animate-spin" />
-          <span className="text-sm text-white/30">加载中...</span>
+          <span className="text-sm text-gray-400">加载中...</span>
         </div>
       </div>
     );
@@ -98,7 +102,7 @@ export const MobileApp: React.FC = () => {
   return (
     <>
       {activePlugin ? (
-        <div className="min-h-screen bg-[#0a0a0a] flex flex-col">
+        <div className="min-h-screen bg-white flex flex-col">
           <div className="flex-1 min-h-0">
             {renderContent()}
           </div>
@@ -107,6 +111,7 @@ export const MobileApp: React.FC = () => {
         <MobileLayout
           activeTab={activeTab}
           onTabChange={handleTabChange}
+          onNavigateToPlugin={handleNavigateToTool}
         >
           {renderContent()}
         </MobileLayout>

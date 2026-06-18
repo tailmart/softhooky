@@ -1,7 +1,7 @@
 import React from 'react';
-import { Home, Sparkles, User } from 'lucide-react';
+import { Home, Sparkles, User, Film } from 'lucide-react';
 
-export type TabId = 'home' | 'tools' | 'profile';
+export type TabId = 'home' | 'tools' | 'video' | 'profile';
 
 interface TabItem {
   id: TabId;
@@ -12,6 +12,7 @@ interface TabItem {
 const TABS: TabItem[] = [
   { id: 'home', label: '首页', icon: Home },
   { id: 'tools', label: '创作', icon: Sparkles },
+  { id: 'video', label: '视频', icon: Film },
   { id: 'profile', label: '我的', icon: User },
 ];
 

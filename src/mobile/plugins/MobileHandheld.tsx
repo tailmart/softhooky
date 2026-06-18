@@ -167,24 +167,24 @@ export const MobileHandheld: React.FC<MobileHandheldProps> = ({ onBack }) => {
 
   const Picker = ({ label, value, options, onSelect, id }: { label: string; value: string; options: { value: string; label: string }[]; onSelect: (v: string) => void; id: string }) => (
     <div>
-      <label className="text-xs font-semibold text-white/40 mb-2 block">{label}</label>
-      <button onClick={() => setSheet(id)} className="w-full flex items-center justify-between px-4 py-3 bg-white/[0.04] rounded-xl border border-white/[0.06] text-sm">
-        <span className="text-white">{options.find(o => o.value === value)?.label || value}</span>
-        <ChevronDown size={16} className="text-white/30" />
+      <label className="text-xs font-semibold text-gray-500 mb-2 block">{label}</label>
+      <button onClick={() => setSheet(id)} className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 text-sm">
+        <span className="text-[#171717]">{options.find(o => o.value === value)?.label || value}</span>
+        <ChevronDown size={16} className="text-gray-400" />
       </button>
       {sheet === id && (
         <div className="fixed inset-0 z-[100] flex items-end" onClick={() => setSheet(null)}>
           <div className="absolute inset-0 bg-black/60" />
-          <div className="relative w-full bg-[#141414] rounded-t-3xl pb-[calc(16px+env(safe-area-inset-bottom))] animate-mobile-slide-up" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-white/[0.06]">
-              <h3 className="text-base font-bold text-white">{label}</h3>
-              <button onClick={() => setSheet(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.06]"><X size={16} className="text-white/40" /></button>
+          <div className="relative w-full bg-white rounded-t-3xl pb-[calc(16px+env(safe-area-inset-bottom))] animate-mobile-slide-up" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-200">
+              <h3 className="text-base font-bold text-[#171717]">{label}</h3>
+              <button onClick={() => setSheet(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100"><X size={16} className="text-gray-500" /></button>
             </div>
             <div className="max-h-[40vh] overflow-y-auto px-3 py-2">
               {options.map(o => (
-                <button key={o.value} onClick={() => { onSelect(o.value); setSheet(null); }} className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl my-0.5 ${value === o.value ? 'bg-white/[0.06] font-semibold' : 'hover:bg-white/[0.04]'}`}>
-                  <span className={`text-sm ${value === o.value ? 'text-white' : 'text-white/50'}`}>{o.label}</span>
-                  {value === o.value && <Check size={18} className="text-white" />}
+                <button key={o.value} onClick={() => { onSelect(o.value); setSheet(null); }} className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl my-0.5 ${value === o.value ? 'bg-gray-100 font-semibold' : 'hover:bg-gray-50'}`}>
+                  <span className={`text-sm ${value === o.value ? 'text-[#171717]' : 'text-gray-500'}`}>{o.label}</span>
+                  {value === o.value && <Check size={18} className="text-[#171717]" />}
                 </button>
               ))}
             </div>
@@ -196,27 +196,27 @@ export const MobileHandheld: React.FC<MobileHandheldProps> = ({ onBack }) => {
 
   const ChipGroup = ({ label, options, value, onChange }: { label: string; options: string[]; value: string; onChange: (v: string) => void }) => (
     <div>
-      <label className="text-xs font-semibold text-white/40 mb-2 block">{label}</label>
+      <label className="text-xs font-semibold text-gray-500 mb-2 block">{label}</label>
       <div className="mobile-scroll-x -mx-1"><div className="flex gap-2 px-1">
-        {options.map(o => <button key={o} onClick={() => onChange(o)} className={`mobile-tap flex-shrink-0 px-4 py-2.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${value === o ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' : 'bg-white/[0.04] text-white/40 border border-white/[0.06]'}`}>{o}</button>)}
+        {options.map(o => <button key={o} onClick={() => onChange(o)} className={`mobile-tap flex-shrink-0 px-4 py-2.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${value === o ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' : 'bg-gray-50 text-gray-500 border border-gray-200'}`}>{o}</button>)}
       </div></div>
     </div>
   );
 
   return (
-    <div className="flex flex-col h-full bg-[#0a0a0a]">
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-[#0a0a0a] flex-shrink-0">
-        <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.06] mobile-tap"><X size={16} className="text-white/40" /></button>
-        <h1 className="text-base font-bold text-white">手持产品</h1>
+    <div className="flex flex-col h-full bg-white">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 bg-white flex-shrink-0">
+        <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 mobile-tap"><X size={16} className="text-gray-500" /></button>
+        <h1 className="text-base font-bold text-[#171717]">手持产品</h1>
         {isAuthenticated && user && <div className="ml-auto flex items-center gap-1 bg-blue-500/10 px-2.5 py-1 rounded-full"><Coins size={12} className="text-blue-400" /><span className="text-xs font-semibold text-blue-400">{Number(user.credits || 0).toFixed(1)}</span></div>}
       </div>
       <div className="flex-1 overflow-y-auto">
         <div className="px-4 pt-4 pb-32 space-y-4">
           <div>
-            <label className="text-xs font-semibold text-white/40 mb-2 block">上传产品图 <span className="text-red-400">*</span></label>
+            <label className="text-xs font-semibold text-gray-500 mb-2 block">上传产品图 <span className="text-red-400">*</span></label>
             <div className="flex gap-2.5 flex-wrap">
-              {images.map((url, i) => <div key={i} className="relative w-[80px] h-[80px] rounded-2xl overflow-hidden bg-white/[0.04] border border-white/[0.06]"><img src={url} className="w-full h-full object-cover" /><button onClick={() => setImages(p => p.filter((_, j) => j !== i))} className="absolute top-1 right-1 w-5 h-5 bg-black/50 rounded-full flex items-center justify-center"><X size={10} className="text-white" /></button></div>)}
-              {images.length < 3 && <button onClick={() => fileRef.current?.click()} className="w-[80px] h-[80px] rounded-2xl border-2 border-dashed border-white/20 flex flex-col items-center justify-center bg-white/[0.04]"><Plus size={22} className="text-white/30" /><span className="text-[9px] text-white/30">上传</span></button>}
+              {images.map((url, i) => <div key={i} className="relative w-[80px] h-[80px] rounded-2xl overflow-hidden bg-gray-50 border border-gray-200"><img src={url} className="w-full h-full object-cover" /><button onClick={() => setImages(p => p.filter((_, j) => j !== i))} className="absolute top-1 right-1 w-5 h-5 bg-black/50 rounded-full flex items-center justify-center"><X size={10} className="text-white" /></button></div>)}
+              {images.length < 3 && <button onClick={() => fileRef.current?.click()} className="w-[80px] h-[80px] rounded-2xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center bg-gray-50"><Plus size={22} className="text-gray-400" /><span className="text-[9px] text-gray-400">上传</span></button>}
             </div>
             <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={handleUpload} />
           </div>
@@ -227,23 +227,23 @@ export const MobileHandheld: React.FC<MobileHandheldProps> = ({ onBack }) => {
 
           {models.length > 0 && (
             <div>
-              <label className="text-xs font-semibold text-white/40 mb-2 block">模型</label>
-              <button onClick={() => setSheet('model')} className="w-full flex items-center justify-between px-4 py-3 bg-white/[0.04] rounded-xl border border-white/[0.06] text-sm">
-                <span className="text-white">{models.find(m => m.value === selectedModel)?.label}</span>
-                <ChevronDown size={16} className="text-white/30" />
+              <label className="text-xs font-semibold text-gray-500 mb-2 block">模型</label>
+              <button onClick={() => setSheet('model')} className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 text-sm">
+                <span className="text-[#171717]">{models.find(m => m.value === selectedModel)?.label}</span>
+                <ChevronDown size={16} className="text-gray-400" />
               </button>
               {sheet === 'model' && (
                 <div className="fixed inset-0 z-[100] flex items-end" onClick={() => setSheet(null)}>
                   <div className="absolute inset-0 bg-black/60" />
-                  <div className="relative w-full bg-[#141414] rounded-t-3xl pb-[calc(16px+env(safe-area-inset-bottom))] animate-mobile-slide-up" onClick={e => e.stopPropagation()}>
-                    <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-white/[0.06]">
-                      <h3 className="text-base font-bold text-white">选择模型</h3>
-                      <button onClick={() => setSheet(null)} className="w-8 h-8 rounded-full bg-white/[0.06] flex items-center justify-center"><X size={16} className="text-white/40" /></button>
+                  <div className="relative w-full bg-white rounded-t-3xl pb-[calc(16px+env(safe-area-inset-bottom))] animate-mobile-slide-up" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-200">
+                      <h3 className="text-base font-bold text-[#171717]">选择模型</h3>
+                      <button onClick={() => setSheet(null)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"><X size={16} className="text-gray-500" /></button>
                     </div>
                     <div className="px-3 py-2">{models.map(m => (
-                      <button key={m.value} onClick={() => { setSelectedModel(m.value); setSheet(null); }} className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl my-0.5 ${selectedModel === m.value ? 'bg-white/[0.06] font-semibold' : ''}`}>
-                        <span className="text-sm text-white">{m.label}</span>
-                        {selectedModel === m.value && <Check size={18} className="text-white" />}
+                      <button key={m.value} onClick={() => { setSelectedModel(m.value); setSheet(null); }} className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl my-0.5 ${selectedModel === m.value ? 'bg-gray-100 font-semibold' : ''}`}>
+                        <span className="text-sm text-[#171717]">{m.label}</span>
+                        {selectedModel === m.value && <Check size={18} className="text-[#171717]" />}
                       </button>
                     ))}</div>
                   </div>
@@ -253,18 +253,18 @@ export const MobileHandheld: React.FC<MobileHandheldProps> = ({ onBack }) => {
           )}
 
           <div>
-            <label className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-2 block">比例</label>
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">比例</label>
             <RatioPicker options={RATIOS} selected={ratio} onChange={setRatio} />
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-2 block">生成张数</label>
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 block">生成张数</label>
             <div className="flex items-center gap-3">
               <button onClick={() => setCount(p => Math.max(1, p - 1))}
-                className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-lg font-medium text-white">-</button>
-              <span className="w-10 text-center text-base font-semibold text-white">{count}</span>
+                className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center text-lg font-medium text-[#171717]">-</button>
+              <span className="w-10 text-center text-base font-semibold text-[#171717]">{count}</span>
               <button onClick={() => setCount(p => Math.min(6, p + 1))}
-                className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-lg font-medium text-white">+</button>
+                className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center text-lg font-medium text-[#171717]">+</button>
             </div>
           </div>
 
@@ -276,11 +276,11 @@ export const MobileHandheld: React.FC<MobileHandheldProps> = ({ onBack }) => {
           {error && <div className="bg-red-500/10 border border-red-500/20 rounded-2xl px-4 py-3"><p className="text-xs text-red-400">{error}</p></div>}
 
           {results.length > 0 && <div>
-            <div className="flex items-center gap-2 mb-3"><ImageIcon size={16} className="text-white" /><h2 className="text-sm font-bold text-white">生成结果</h2></div>
+            <div className="flex items-center gap-2 mb-3"><ImageIcon size={16} className="text-[#171717]" /><h2 className="text-sm font-bold text-[#171717]">生成结果</h2></div>
             <div className="grid grid-cols-2 gap-3">{results.map((url, i) => (
               <div key={i} className="mobile-card overflow-hidden">
-                <div className="aspect-square bg-white/[0.04]"><img src={url} className="w-full h-full object-contain cursor-pointer" onClick={() => setExpandedImage(url)} loading="lazy" /></div>
-                <div className="flex px-3 py-2.5 border-t border-white/[0.04]"><button onClick={() => handleDownload(url)} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-white/[0.06] text-xs font-medium text-white/40"><Download size={14} /> 下载</button></div>
+                <div className="aspect-square bg-gray-50"><img src={url} className="w-full h-full object-contain cursor-pointer" onClick={() => setExpandedImage(url)} loading="lazy" /></div>
+                <div className="flex px-3 py-2.5 border-t border-gray-100"><button onClick={() => handleDownload(url)} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-gray-100 text-xs font-medium text-gray-500"><Download size={14} /> 下载</button></div>
               </div>
             ))}</div>
           </div>}

@@ -137,20 +137,20 @@ export const MobileProductFusion: React.FC<MobileProductFusionProps> = ({ onBack
   const hasSceneSelection = sceneData.some(s => s.selected.length > 0);
 
   return (
-    <div className="flex flex-col h-full bg-[#0a0a0a]">
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-[#0a0a0a] flex-shrink-0">
-        <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.06] mobile-tap"><X size={16} className="text-white/40" /></button>
-        <h1 className="text-base font-bold text-white">产品融图</h1>
+    <div className="flex flex-col h-full bg-white">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 bg-white flex-shrink-0">
+        <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 mobile-tap"><X size={16} className="text-gray-500" /></button>
+        <h1 className="text-base font-bold text-[#171717]">产品融图</h1>
         {isAuthenticated && user && <div className="ml-auto flex items-center gap-1 bg-blue-500/10 px-2.5 py-1 rounded-full"><Coins size={12} className="text-blue-400" /><span className="text-xs font-semibold text-blue-400">{Number(user.credits || 0).toFixed(1)}</span></div>}
       </div>
       <div className="flex-1 overflow-y-auto">
         <div className="px-4 pt-4 pb-32 space-y-4">
           {/* Upload */}
           <div>
-            <label className="text-xs font-semibold text-white/40 mb-2 block">上传产品图 <span className="text-red-400">*</span></label>
+            <label className="text-xs font-semibold text-gray-500 mb-2 block">上传产品图 <span className="text-red-400">*</span></label>
             <div className="flex gap-2.5 flex-wrap">
-              {images.map((url, i) => <div key={i} className="relative w-[80px] h-[80px] rounded-2xl overflow-hidden bg-white/[0.04] border border-white/[0.06]"><img src={url} className="w-full h-full object-cover" /><button onClick={() => removeImage(i)} className="absolute top-1 right-1 w-5 h-5 bg-black/50 rounded-full flex items-center justify-center"><X size={10} className="text-white" /></button></div>)}
-              {images.length < 10 && <button onClick={() => fileRef.current?.click()} className="w-[80px] h-[80px] rounded-2xl border-2 border-dashed border-white/20 flex flex-col items-center justify-center bg-white/[0.04]"><Plus size={22} className="text-white/30" /><span className="text-[9px] text-white/30">上传</span></button>}
+              {images.map((url, i) => <div key={i} className="relative w-[80px] h-[80px] rounded-2xl overflow-hidden bg-gray-50 border border-gray-200"><img src={url} className="w-full h-full object-cover" /><button onClick={() => removeImage(i)} className="absolute top-1 right-1 w-5 h-5 bg-black/50 rounded-full flex items-center justify-center"><X size={10} className="text-white" /></button></div>)}
+              {images.length < 10 && <button onClick={() => fileRef.current?.click()} className="w-[80px] h-[80px] rounded-2xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center bg-gray-50"><Plus size={22} className="text-gray-400" /><span className="text-[9px] text-gray-400">上传</span></button>}
             </div>
             <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={handleUpload} />
           </div>
@@ -158,7 +158,7 @@ export const MobileProductFusion: React.FC<MobileProductFusionProps> = ({ onBack
           {/* 分析按钮 — 有图才显示 */}
           {images.length > 0 && sceneData.length === 0 && (
             <button onClick={handleAnalyze} disabled={isAnalyzing}
-              className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl text-sm font-semibold bg-white/[0.04] text-white border border-white/[0.06] active:bg-white/[0.06] transition-all disabled:opacity-40">
+              className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl text-sm font-semibold bg-gray-50 text-[#171717] border border-gray-200 active:bg-gray-100 transition-all disabled:opacity-40">
               {isAnalyzing ? <><Loader2 size={16} className="animate-spin" /> AI 分析产品场景...</> : <><Sparkles size={16} /> AI 分析推荐场景</>}
             </button>
           )}
@@ -167,14 +167,14 @@ export const MobileProductFusion: React.FC<MobileProductFusionProps> = ({ onBack
           {sceneData.length > 0 && (
             <div className="space-y-4">
               {sceneData.map((sd, pIdx) => (
-                <div key={pIdx} className="bg-white/[0.04] rounded-2xl border border-white/[0.06] p-4">
+                <div key={pIdx} className="bg-gray-50 rounded-2xl border border-gray-200 p-4">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-xl overflow-hidden bg-white/[0.06] flex-shrink-0">
+                    <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
                       <img src={images[pIdx]} className="w-full h-full object-cover" />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-white">产品 {pIdx + 1}</p>
-                      <p className="text-xs text-white/30">已选 {sd.selected.length}/{sd.recommended.length} 个场景{sd.wearable ? ' · 可佩戴' : ''}</p>
+                      <p className="text-sm font-semibold text-[#171717]">产品 {pIdx + 1}</p>
+                      <p className="text-xs text-gray-400">已选 {sd.selected.length}/{sd.recommended.length} 个场景{sd.wearable ? ' · 可佩戴' : ''}</p>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -183,7 +183,7 @@ export const MobileProductFusion: React.FC<MobileProductFusionProps> = ({ onBack
                       return (
                         <button key={scene} onClick={() => toggleScene(pIdx, scene)}
                           className={`mobile-tap flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-medium border transition-all ${
-                            isSelected ? 'bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/25' : 'bg-white/[0.04] text-white/50 border-white/[0.06]'
+                            isSelected ? 'bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/25' : 'bg-gray-50 text-gray-500 border-gray-200'
                           }`}>
                           {isSelected && <Check size={12} />}
                           {scene}
@@ -199,12 +199,12 @@ export const MobileProductFusion: React.FC<MobileProductFusionProps> = ({ onBack
           {/* 模型选择 */}
           {sceneData.length > 0 && models.length > 0 && (
             <div>
-              <label className="text-xs font-semibold text-white/40 mb-2 block">模型</label>
+              <label className="text-xs font-semibold text-gray-500 mb-2 block">模型</label>
               <div className="mobile-scroll-x -mx-1"><div className="flex gap-2 px-1">
                 {models.map(m => (
                   <button key={m.value} onClick={() => setSelectedModel(m.value)}
                     className={`mobile-tap flex-shrink-0 px-4 py-2.5 rounded-xl text-xs font-medium transition-all ${
-                      selectedModel === m.value ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' : 'bg-white/[0.04] text-white/40 border border-white/[0.06]'
+                      selectedModel === m.value ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' : 'bg-gray-50 text-gray-500 border border-gray-200'
                     }`}>{m.label}</button>
                 ))}
               </div></div>
@@ -214,7 +214,7 @@ export const MobileProductFusion: React.FC<MobileProductFusionProps> = ({ onBack
           {/* 比例选择 */}
           {sceneData.length > 0 && (
             <div>
-              <label className="text-xs font-semibold text-white/40 mb-2 block">比例</label>
+              <label className="text-xs font-semibold text-gray-500 mb-2 block">比例</label>
               <RatioPicker options={[
                 { value: '1:1', label: '1:1 方形' },
                 { value: '3:4', label: '3:4 竖版' },
@@ -228,11 +228,11 @@ export const MobileProductFusion: React.FC<MobileProductFusionProps> = ({ onBack
           {/* 批量数量 */}
           {sceneData.length > 0 && (
             <div>
-              <label className="text-xs font-semibold text-white/40 mb-2 block">每场景生成</label>
+              <label className="text-xs font-semibold text-gray-500 mb-2 block">每场景生成</label>
               <div className="flex items-center gap-3">
-                <button onClick={() => setBatchCount(p => Math.max(1, p - 1))} className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-lg font-medium text-white">-</button>
-                <span className="w-10 text-center text-base font-semibold text-white">{batchCount}</span>
-                <button onClick={() => setBatchCount(p => Math.min(6, p + 1))} className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-lg font-medium text-white">+</button>
+                <button onClick={() => setBatchCount(p => Math.max(1, p - 1))} className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center text-lg font-medium text-[#171717]">-</button>
+                <span className="w-10 text-center text-base font-semibold text-[#171717]">{batchCount}</span>
+                <button onClick={() => setBatchCount(p => Math.min(6, p + 1))} className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center text-lg font-medium text-[#171717]">+</button>
               </div>
             </div>
           )}
@@ -250,11 +250,11 @@ export const MobileProductFusion: React.FC<MobileProductFusionProps> = ({ onBack
 
           {/* Results */}
           {results.length > 0 && <div>
-            <div className="flex items-center gap-2 mb-3"><ImageIcon size={16} className="text-white" /><h2 className="text-sm font-bold text-white">生成结果</h2></div>
+            <div className="flex items-center gap-2 mb-3"><ImageIcon size={16} className="text-[#171717]" /><h2 className="text-sm font-bold text-[#171717]">生成结果</h2></div>
             <div className="grid grid-cols-2 gap-3">{results.map((url, i) => (
               <div key={i} className="mobile-card overflow-hidden">
-                <div className="aspect-square bg-white/[0.04]"><img src={url} className="w-full h-full object-contain cursor-pointer" onClick={() => setExpandedImage(url)} loading="lazy" /></div>
-                <div className="flex px-3 py-2.5 border-t border-white/[0.04]"><button onClick={() => handleDownload(url)} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-white/[0.06] text-xs font-medium text-white/40"><Download size={14} /> 下载</button></div>
+                <div className="aspect-square bg-gray-50"><img src={url} className="w-full h-full object-contain cursor-pointer" onClick={() => setExpandedImage(url)} loading="lazy" /></div>
+                <div className="flex px-3 py-2.5 border-t border-gray-100"><button onClick={() => handleDownload(url)} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-gray-100 text-xs font-medium text-gray-500"><Download size={14} /> 下载</button></div>
               </div>
             ))}</div>
           </div>}

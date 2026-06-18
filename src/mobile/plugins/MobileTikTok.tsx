@@ -93,48 +93,48 @@ ${tmpl?.structure.map((s, i) => `${i + 1}. ${s}`).join('\n')}
   }, [result]);
 
   return (
-    <div className="flex flex-col h-full bg-[#0a0a0a]">
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-[#0a0a0a] flex-shrink-0">
-        <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.06] mobile-tap"><X size={16} className="text-white/40" /></button>
-        <h1 className="text-base font-bold text-white">TK视频脚本</h1>
+    <div className="flex flex-col h-full bg-white">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 bg-white flex-shrink-0">
+        <button onClick={onBack} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 mobile-tap"><X size={16} className="text-gray-500" /></button>
+        <h1 className="text-base font-bold text-[#171717]">TK视频脚本</h1>
         {isAuthenticated && user && <div className="ml-auto flex items-center gap-1 bg-blue-500/10 px-2.5 py-1 rounded-full"><Coins size={12} className="text-blue-400" /><span className="text-xs font-semibold text-blue-400">{Number(user.credits || 0).toFixed(1)}</span></div>}
       </div>
       <div className="flex-1 overflow-y-auto">
         <div className="px-4 pt-4 pb-32 space-y-4">
           {/* Image Upload */}
           <div>
-            <label className="text-xs font-semibold text-white/40 mb-2 block">产品图片 <span className="text-white/20">（可选）</span></label>
+            <label className="text-xs font-semibold text-gray-500 mb-2 block">产品图片 <span className="text-gray-300">（可选）</span></label>
             <div className="flex gap-2.5 flex-wrap">
-              {images.map((url, i) => <div key={i} className="relative w-[72px] h-[72px] rounded-xl overflow-hidden bg-white/[0.04] border border-white/[0.06]"><img src={url} className="w-full h-full object-cover" /><button onClick={() => setImages(p => p.filter((_, j) => j !== i))} className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center"><X size={10} className="text-white" /></button></div>)}
-              {images.length < 3 && <button onClick={() => fileRef.current?.click()} className="w-[72px] h-[72px] rounded-xl border-2 border-dashed border-white/[0.1] flex items-center justify-center bg-white/[0.02]"><Plus size={20} className="text-white/20" /></button>}
+              {images.map((url, i) => <div key={i} className="relative w-[72px] h-[72px] rounded-xl overflow-hidden bg-gray-50 border border-gray-200"><img src={url} className="w-full h-full object-cover" /><button onClick={() => setImages(p => p.filter((_, j) => j !== i))} className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center"><X size={10} className="text-white" /></button></div>)}
+              {images.length < 3 && <button onClick={() => fileRef.current?.click()} className="w-[72px] h-[72px] rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center bg-gray-50"><Plus size={20} className="text-gray-300" /></button>}
             </div>
             <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} />
           </div>
 
           {/* Product Input */}
           <div>
-            <label className="text-xs font-semibold text-white/40 mb-2 block">产品名称 / 描述 <span className="text-red-400">*</span></label>
-            <textarea value={product} onChange={e => setProduct(e.target.value)} placeholder="例如：一款便携式蓝牙音箱，防水设计，续航20小时..." rows={3} className="w-full px-4 py-3 bg-white/[0.04] rounded-xl border border-white/[0.06] text-sm text-white placeholder-white/20 resize-none outline-none focus:border-blue-500/30 transition-colors" />
+            <label className="text-xs font-semibold text-gray-500 mb-2 block">产品名称 / 描述 <span className="text-red-400">*</span></label>
+            <textarea value={product} onChange={e => setProduct(e.target.value)} placeholder="例如：一款便携式蓝牙音箱，防水设计，续航20小时..." rows={3} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 text-sm text-[#171717] placeholder-gray-300 resize-none outline-none focus:border-blue-500/30 transition-colors" />
           </div>
 
           {/* Template Selector */}
           <div>
-            <label className="text-xs font-semibold text-white/40 mb-2 block">脚本模板</label>
+            <label className="text-xs font-semibold text-gray-500 mb-2 block">脚本模板</label>
             <div className="mobile-scroll-x -mx-1"><div className="flex gap-2 px-1 pb-1">
               {SCRIPTS.map(t => (
                 <button key={t.id} onClick={() => setSelectedTemplate(t.id)}
                   className={`mobile-tap flex-shrink-0 px-4 py-2.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
-                    selectedTemplate === t.id ? 'bg-blue-500 text-white shadow-sm shadow-blue-500/25' : 'bg-white/[0.04] text-white/40 border border-white/[0.06]'
+                    selectedTemplate === t.id ? 'bg-blue-500 text-white shadow-sm shadow-blue-500/25' : 'bg-gray-50 text-gray-500 border border-gray-200'
                   }`}>{t.label}</button>
               ))}
             </div></div>
-            <p className="text-[11px] text-white/20 mt-1.5">{SCRIPTS.find(t => t.id === selectedTemplate)?.title}</p>
+            <p className="text-[11px] text-gray-300 mt-1.5">{SCRIPTS.find(t => t.id === selectedTemplate)?.title}</p>
           </div>
 
           {/* Language */}
           <div>
-            <label className="text-xs font-semibold text-white/40 mb-2 block">语言</label>
-            <div className="flex gap-2">{LANGUAGES.map(l => <button key={l.value} onClick={() => setLang(l.value)} className={`mobile-tap flex-1 py-2.5 rounded-xl text-xs font-medium transition-all ${lang === l.value ? 'bg-blue-500 text-white shadow-sm shadow-blue-500/25' : 'bg-white/[0.04] text-white/40 border border-white/[0.06]'}`}>{l.label}</button>)}</div>
+            <label className="text-xs font-semibold text-gray-500 mb-2 block">语言</label>
+            <div className="flex gap-2">{LANGUAGES.map(l => <button key={l.value} onClick={() => setLang(l.value)} className={`mobile-tap flex-1 py-2.5 rounded-xl text-xs font-medium transition-all ${lang === l.value ? 'bg-blue-500 text-white shadow-sm shadow-blue-500/25' : 'bg-gray-50 text-gray-500 border border-gray-200'}`}>{l.label}</button>)}</div>
           </div>
 
           {/* Generate */}
@@ -145,14 +145,14 @@ ${tmpl?.structure.map((s, i) => `${i + 1}. ${s}`).join('\n')}
 
           {error && <div className="bg-red-500/10 border border-red-500/20 rounded-2xl px-4 py-3"><p className="text-xs text-red-400">{error}</p></div>}
 
-          {result && <div className="bg-white/[0.03] rounded-2xl border border-white/[0.06] p-4">
+          {result && <div className="bg-gray-50 rounded-2xl border border-gray-200 p-4">
             <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2"><Sparkles size={14} className="text-blue-400" /><span className="text-xs font-semibold text-white/60">脚本内容</span></div>
-              <button onClick={handleCopy} className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-white/[0.06] text-xs font-medium text-white/40">
+              <div className="flex items-center gap-2"><Sparkles size={14} className="text-blue-400" /><span className="text-xs font-semibold text-gray-600">脚本内容</span></div>
+              <button onClick={handleCopy} className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 text-xs font-medium text-gray-500">
                 {copied ? <><Check size={12} className="text-green-400" /> 已复制</> : <><Copy size={12} /> 复制</>}
               </button>
             </div>
-            <p className="text-sm text-white/40 leading-relaxed whitespace-pre-wrap">{result}</p>
+            <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-wrap">{result}</p>
           </div>}
         </div>
       </div>
