@@ -44,10 +44,6 @@ export const CreditCheckModal: React.FC<CreditCheckModalProps> = ({
               <span className="text-[#525252]">图片生成 (nano-banana-2)</span>
               <span className="font-semibold text-[#171717]">0.3 积分/次</span>
             </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-[#525252]">视频生成 (veo3.1)</span>
-              <span className="font-semibold text-[#171717]">0.5 积分/次</span>
-            </div>
           </div>
         </div>
         

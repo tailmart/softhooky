@@ -12,6 +12,7 @@ import { ReEditModal } from '../../components/ReEditModal';
 import { ModelSpeedNote } from '../../components/ModelSpeedNote';
 import { LoadingAnimation } from '../../components/LoadingAnimation';
 import { LANGUAGES, getSavedLanguage, saveLanguage } from '../../constants/languages';
+import { getPricing } from '../../services/pricingService';
 
 const ASPECT_RATIOS = [
   { value: '9:16', label: '9:16' },
@@ -46,13 +47,6 @@ interface BannerCard {
 
 export const BannerPage: React.FC = () => {
   const [models, setModels] = useState<{ value: string; label: string }[]>([]);
-  useEffect(() => {
-    getAvailableModels().then(m => {
-      const sorted = m.filter(x => x.enabled).sort((a, b) => a.sort_order - b.sort_order);
-      setModels(sorted.map(x => ({ value: x.model_id, label: x.label })));
-      if (sorted.length > 0) setSelectedModel('gpt-image-2');
-    });
-  }, []);
   const [productImages, setProductImages] = useState<{ file: File; preview: string }[]>([]);
   const [bannerTitle, setBannerTitle] = useState('');
   const [bannerSubtitle, setBannerSubtitle] = useState('');
@@ -71,8 +65,30 @@ export const BannerPage: React.FC = () => {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [reEditImage, setReEditImage] = useState<string | null>(null);
+  const [generatePrice, setGeneratePrice] = useState(0.3);
   const deepAnalysisRef = useRef('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    getAvailableModels().then(m => {
+      const sorted = m.filter(x => x.enabled && x.model_id !== 'agnes-image-2.1-flash').sort((a, b) => a.sort_order - b.sort_order);
+      setModels(sorted.map(x => ({ value: x.model_id, label: x.label })));
+      if (sorted.length > 0) setSelectedModel('gpt-image-2');
+    });
+  }, []);
+
+  // 获取生成价格
+  useEffect(() => {
+    getPricing().then(p => {
+      if (selectedModel === 'gpt-image-2') {
+        setGeneratePrice(p.gpt_image2_generation || 0.3);
+      } else if (selectedModel === 'agnes-image-2.1-flash') {
+        setGeneratePrice(p.agnes_image_generation || 0.3);
+      } else {
+        setGeneratePrice(p.nanobann2_generation || 0.3);
+      }
+    });
+  }, [selectedModel]);
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('image/'));
@@ -359,10 +375,15 @@ export const BannerPage: React.FC = () => {
             </button>
           )}
           {analysisResult.length > 0 && !isProcessing && (
-            <button onClick={handleGenerate}
-              className="w-full bg-[#171717] text-white py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-[#27272A] transition-all shadow-sm">
-              <Wand2 size={18} /> 生成Banner图 ({analysisResult.length * selectedRatios.length}张)
-            </button>
+            <div className="space-y-2">
+              <button onClick={handleGenerate}
+                className="w-full bg-[#171717] text-white py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-[#27272A] transition-all shadow-sm">
+                <Wand2 size={18} /> 生成Banner图 ({analysisResult.length * selectedRatios.length}张)
+              </button>
+              <p className="text-xs text-amber-600 font-medium text-center">
+                消耗 {(generatePrice * analysisResult.length * selectedRatios.length).toFixed(1)} 积分 ({generatePrice.toFixed(1)}/张)
+              </p>
+            </div>
           )}
           {(analyzing || isProcessing) && (
             <div className="text-center text-xs text-gray-400 bg-gray-100 rounded-xl py-3">

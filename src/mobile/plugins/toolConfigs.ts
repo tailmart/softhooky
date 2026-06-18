@@ -102,34 +102,6 @@ const BANNER_PROMPT = `你是一位资深的电商Banner视觉设计师。分析
 - 标题醒目、视觉冲击力强
 - 适合首页Banner轮播，文案风格电商化`;
 
-const POSTER_PROMPT = `你是一位资深平面设计师和品牌视觉专家。分析用户上传的图片（可能是产品图、Logo、素材图）和海报需求，设计一张营销海报。
-
-请仔细分析：
-1. **图片分析**：识别每张图片的内容（产品、Logo、背景素材等）。Logo类图片需要突出展示，产品图需要作为视觉主体
-2. **构图规划**：如何安排各元素在海报中的位置（标题位置、产品位置、Logo位置、文案位置、装饰元素）
-3. **色彩方案**：建议主色调、辅助色，基于产品/品牌的调性
-4. **排版设计**：标题字体风格、文案排版方式、层级关系
-
-## 输出格式 - STRICT JSON:
-{
-  "layout": "描述整体构图布局（如：上下结构，上半部分为产品展示区，下半部分为文案区）",
-  "colorScheme": "色彩方案说明",
-  "elements": [
-    {"type":"标题","description":"标题的排版位置和字体风格"},
-    {"type":"产品图","description":"产品图如何展示和处理"},
-    {"type":"Logo","description":"Logo的放置位置和大小"},
-    {"type":"文案","description":"营销文案的排版方式"},
-    {"type":"装饰","description":"背景或装饰元素设计"}
-  ],
-  "designBrief": "一段完整的设计说明，描述最终海报的效果"
-}
-
-## 原则
-- 如果用户上传了Logo图片，Logo应放置在海报顶部或角落显眼位置
-- 产品图片应作为视觉中心或核心展示元素
-- 多张图片需要合理安排融合，避免杂乱
-- 输出使用目标语言`;
-
 const FUSION_PROMPT = `请分析这张产品图片。判断该产品是否适合被人佩戴或穿戴（如手表、首饰、耳机、眼镜、帽子、领带、围巾、鞋、包等）。返回JSON格式：{"wearable":true/false,"scenes":["场景1","场景2","场景3","场景4","场景5","场景6"]}。如果wearable为true，则scenes中务必包含"人物佩戴近景图"；如果wearable为false，则推荐6个常规场景类型。`;
 
 const CLONE_PROMPT = `你是一位资深的电商视觉版式设计师。你的任务是：分析用户上传的产品图片和模板参考图，规划一套"版式裂变"方案。
@@ -396,36 +368,6 @@ export const BANNER_CONFIG: ToolConfig = {
   defaultCount: 1,
   maxCount: 8,
   resultType: 'image',
-};
-
-export const POSTER_CONFIG: ToolConfig = {
-  id: 'poster',
-  title: '智能海报设计',
-  description: '上传产品图片和文案，AI 设计营销海报',
-  uploadType: 'product',
-  maxUploads: 3,
-  hasAnalysis: true,
-  analysisPrompt: POSTER_PROMPT,
-  textInputLabel: '海报文案',
-  textInputPlaceholder: '输入海报上要显示的文案内容...',
-  textInput2Label: '海报描述（可选）',
-  textInput2Placeholder: '描述海报风格、色调要求等',
-  defaultModel: 'nanobann2',
-  models: COMMON_MODELS,
-  aspectRatios: [
-    { value: '2:3', label: '2:3 竖版' },
-    { value: '3:4', label: '3:4 海报' },
-    { value: '9:16', label: '9:16 手机' },
-    { value: '1:1', label: '1:1 方形' },
-  ],
-  defaultAspectRatio: '2:3',
-  languages: LANGUAGES,
-  hasCountSelector: true,
-  defaultCount: 1,
-  maxCount: 6,
-  promptSuffix: `按照以上分析方案中的布局、色彩、设计说明来执行。专业营销海报风格，视觉冲击力强，8K超高清。多张时每张使用不同的构图布局，不能雷同。`,
-  resultType: 'image',
-  autoGenerate: true,
 };
 
 export const PRODUCT_FUSION_CONFIG: ToolConfig = {

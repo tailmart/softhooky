@@ -31,18 +31,6 @@ export default function PricingPage({ token }: PricingPageProps) {
       const data = await response.json()
       if (data.success) {
         const list = data.data || [];
-        if (!list.find((i: any) => i.key === 'veo31_video')) {
-          list.push({ id: 0, key: 'veo31_video', name: 'Veo3.1视频生成', price: 1, enabled: 1 });
-        }
-        if (!list.find((i: any) => i.key === 'veo31_video_fast')) {
-          list.push({ id: 0, key: 'veo31_video_fast', name: 'Veo3.1 Fast视频生成', price: 2, enabled: 1 });
-        }
-        if (!list.find((i: any) => i.key === 'veo31_video_4k')) {
-          list.push({ id: 0, key: 'veo31_video_4k', name: 'Veo3.1视频生成 4K', price: 2, enabled: 1 });
-        }
-        if (!list.find((i: any) => i.key === 'veo31_video_fast_4k')) {
-          list.push({ id: 0, key: 'veo31_video_fast_4k', name: 'Veo3.1 Fast视频生成 4K', price: 4, enabled: 1 });
-        }
         setPricing(list);
       }
     } catch (error) {

@@ -8,8 +8,10 @@ import { pool } from "./src/server/db";
 import FormData from "form-data";
 import nodemailer from "nodemailer";
 import crypto from "crypto";
+import sharp from "sharp";
 import { startCleanupScheduler } from "./src/server/cleanup-expired-images";
 import fs from "fs";
+import path from "path";
 
 // 图片代理缓存：后台下载完的图片直接存这里，代理不用重新去 xgapi.top 拉
 const proxyImageCache = new Map<string, { buffer: Buffer; contentType: string; timestamp: number }>();
@@ -448,31 +450,25 @@ function clearSiteConfigCache() {
     console.log('ℹ️ generated column 修复失败:', error.message?.substring(0, 100));
   }
 
-  // 初始化视频定价（默认值）
+  // 添加 status 列到 generated_images（用于视频任务状态追踪）
   try {
-    const defaultPricing: { key: string; name: string; price: number }[] = [
-      { key: 'gemini_video_4s', name: 'Gemini Omini 视频 4秒', price: 3 },
-      { key: 'gemini_video_8s', name: 'Gemini Omini 视频 8秒', price: 3 },
-      { key: 'gemini_video_10s', name: 'Gemini Omini 视频 10秒', price: 3 },
-      { key: 'veo31_video', name: 'Veo3.1 视频生成', price: 1 },
-      { key: 'veo31_video_fast', name: 'Veo3.1 视频生成(Fast)', price: 1 },
-      { key: 'veo31_video_4k', name: 'Veo3.1 视频生成 4K', price: 2 },
-      { key: 'veo31_video_fast_4k', name: 'Veo3.1 视频生成(Fast) 4K', price: 2 },
-    ];
-    for (const p of defaultPricing) {
-      await pool.execute(
-        'INSERT IGNORE INTO pricing_config (`key`, name, price, enabled) VALUES (?, ?, ?, 1)',
-        [p.key, p.name, p.price]
-      );
+    const [statusCols] = await pool.execute(`SHOW COLUMNS FROM generated_images LIKE 'status'`);
+    if ((statusCols as any[]).length === 0) {
+      await pool.execute(`ALTER TABLE generated_images ADD COLUMN status VARCHAR(20) DEFAULT 'completed' COMMENT '任务状态: pending/completed/failed'`);
+      console.log('✅ generated_images.status 列已添加');
     }
-    console.log('✅ 视频定价初始化完成');
-  } catch (error) {
-    console.log('ℹ️ 视频定价初始化失败:', error);
+  } catch (error: any) {
+    console.log('ℹ️ status 列添加失败:', error.message?.substring(0, 100));
   }
+
+
 
   // 初始化图片生成定价（默认值）
   try {
-    const imagePricing: { key: string; name: string; price: number }[] = [];
+    const imagePricing: { key: string; name: string; price: number }[] = [
+      { key: 'agnes_image_generation', name: 'Agnes Image 2.1 Flash 生图', price: 0.3 },
+      { key: 'agnes_image_edit', name: 'Agnes Image 2.1 Flash 编辑', price: 0.3 },
+    ];
     for (const p of imagePricing) {
       await pool.execute(
         'INSERT IGNORE INTO pricing_config (`key`, name, price, enabled) VALUES (?, ?, ?, 1)',
@@ -484,27 +480,43 @@ function clearSiteConfigCache() {
     console.log('ℹ️ 图片生成定价初始化失败:', error);
   }
 
-  // 清理已下架的 Sora-2 价格配置
+  // 清理已下架的价格配置
   try {
-    const sora2Keys = ['sora2_video_4s', 'sora2_video_8s', 'sora2_video_12s'];
-    for (const key of sora2Keys) {
+    const removedKeys = [
+      'sora2_video_4s', 'sora2_video_8s', 'sora2_video_12s', // Sora-2
+      'gemini_video_4s', 'gemini_video_8s', 'gemini_video_10s', // Gemini Omini
+      'veo31_video', 'veo31_video_fast', 'veo31_video_4k', 'veo31_video_fast_4k', // Veo3.1
+      'deepseek_chat', // AI文案对话
+      'seedream_generation', 'seedream_img2img', // Seedream 文生图/图生图
+      'omni_fast', 'agnes_video', // Omni Fast, Agnes Video
+    ];
+    for (const key of removedKeys) {
       await pool.execute('DELETE FROM pricing_config WHERE `key` = ?', [key]);
+      // 同时清理代理自定义定价
+      await pool.execute('DELETE FROM agent_pricing WHERE pricing_key = ?', [key]);
     }
-    console.log('✅ 已清理 Sora-2 视频定价配置');
+    console.log('✅ 已清理已下架的价格配置');
   } catch (error) {
-    console.log('ℹ️ Sora-2 视频定价清理失败:', error);
+    console.log('ℹ️ 价格配置清理失败:', error);
   }
 
-  // 初始化聊天定价（默认值）
+  // 初始化视频生成定价
   try {
-    await pool.execute(
-      "INSERT IGNORE INTO pricing_config (`key`, name, price, enabled) VALUES (?, ?, ?, 1)",
-      ['deepseek_chat', 'AI文案对话', 0.01]
-    );
-    console.log('✅ 聊天定价初始化完成');
+    const videoPricing = [
+      { key: 'grok_video_15_max', name: 'Grok Video 1.5 Max', price: 0.8 },
+      { key: 'grok_video_15_pro', name: 'Grok Video 1.5 Pro', price: 0.7 },
+    ];
+    for (const p of videoPricing) {
+      await pool.execute(
+        'INSERT INTO pricing_config (`key`, name, price, enabled) VALUES (?, ?, ?, 1) ON DUPLICATE KEY UPDATE price = VALUES(price), name = VALUES(name)',
+        [p.key, p.name, p.price]
+      );
+    }
+    console.log('✅ 视频生成定价初始化完成');
   } catch (error) {
-    console.log('ℹ️ 聊天定价初始化失败:', error);
+    console.log('ℹ️ 视频生成定价初始化失败:', error);
   }
+
 })();
 
 // 初始化代理系统表
@@ -759,6 +771,8 @@ function clearSiteConfigCache() {
     const defaultModels = [
       { model_id: 'gpt-image-2', label: 'GPT-Image2', enabled: 1, sort_order: 0 },
       { model_id: 'nanobann2', label: 'Nanobann2', enabled: 1, sort_order: 1 },
+      { model_id: 'grok-video-1.5-pro', label: 'Grok Video 1.5 Pro', enabled: 1, sort_order: 10 },
+      { model_id: 'grok-video-1.5-max', label: 'Grok Video 1.5 Max', enabled: 1, sort_order: 11 },
     ];
     for (const m of defaultModels) {
       await pool.execute(
@@ -793,13 +807,11 @@ function clearSiteConfigCache() {
       { nav_id: 'tryon', label: '产品试穿', category: '素材工作台', sort_order: 4 },
       { nav_id: 'three-view', label: '三视图生成', category: '素材工作台', sort_order: 5 },
       { nav_id: 'product-9grid', label: '产品展示图', category: '素材工作台', sort_order: 6 },
-      { nav_id: 'deepseek-chat', label: '电商文案助手', category: 'AI辅助工具', sort_order: 0 },
       { nav_id: 'detailClone', label: '版式裂变', category: '店铺上架素材', sort_order: 0 },
       { nav_id: 'carousel', label: '产品轮播图', category: '店铺上架素材', sort_order: 1 },
       { nav_id: 'amazon-image-gen', label: '亚马逊生图', category: '店铺上架素材', sort_order: 2 },
       { nav_id: 'detail2', label: '详情页设计', category: '店铺上架素材', sort_order: 3 },
       { nav_id: 'banner', label: 'Banner设计', category: '店铺上架素材', sort_order: 4 },
-      { nav_id: 'poster', label: '营销海报设计', category: '店铺上架素材', sort_order: 5 },
     ];
     for (const n of defaultNavItems) {
       await pool.execute(
@@ -930,6 +942,19 @@ function clearSiteConfigCache() {
     console.log('✅ model_library 表初始化完成');
   } catch (error) {
     console.log('ℹ️ model_library 表可能已存在或创建失败:', (error as any)?.message?.substring(0, 100));
+  }
+})();
+
+// 添加 thumbnail_url 列（如果不存在）
+(async () => {
+  try {
+    const [cols] = await pool.execute(`SHOW COLUMNS FROM generated_images LIKE 'thumbnail_url'`);
+    if ((cols as any[]).length === 0) {
+      await pool.execute(`ALTER TABLE generated_images ADD COLUMN thumbnail_url VARCHAR(500) NULL COMMENT '视频封面URL' AFTER image_url`);
+      console.log('✅ generated_images 表已添加 thumbnail_url 列');
+    }
+  } catch (error) {
+    console.log('ℹ️ thumbnail_url 列可能已存在:', (error as any)?.message?.substring(0, 100));
   }
 })();
 
@@ -2648,23 +2673,21 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
     try {
       // 自动同步前端新增的导航项到数据库
       // 清理已下架的旧导航项
-      await pool.execute("DELETE FROM nav_config WHERE nav_id IN ('nano-gen', 'detail', 'sora2-video', 'styleCopy', 'gpt54-chat', 'gemini-video', 'veo31', 'handheld', 'xiaohongshu', 'social', 'storyboard', 'tk-video')");
+      await pool.execute("DELETE FROM nav_config WHERE nav_id IN ('nano-gen', 'detail', 'sora2-video', 'styleCopy', 'gpt54-chat', 'tryon', 'carousel', 'deepseek-chat')");
       const REQUIRED_NAV_ITEMS = [
         { nav_id: 'chat-gen', label: '创意生图', category: '素材工作台', enabled: 1, sort_order: 0 },
         { nav_id: 'workflow', label: '工作流生图', category: '素材工作台', enabled: 1, sort_order: 1 },
         { nav_id: 'productRefine', label: '产品精修', category: '素材工作台', enabled: 1, sort_order: 2 },
         { nav_id: 'productFusion', label: '产品融图', category: '素材工作台', enabled: 1, sort_order: 3 },
         { nav_id: 'productTryon', label: '产品穿搭', category: '素材工作台', enabled: 1, sort_order: 4 },
-        { nav_id: 'tryon', label: '产品试穿', category: '素材工作台', enabled: 1, sort_order: 5 },
+        { nav_id: 'product-9grid', label: '产品展示图', category: '素材工作台', enabled: 1, sort_order: 5 },
         { nav_id: 'three-view', label: '三视图生成', category: '素材工作台', enabled: 1, sort_order: 6 },
+        { nav_id: 'image-edit-region', label: '区域编辑', category: '素材工作台', enabled: 1, sort_order: 7 },
         { nav_id: 'detailClone', label: '版式裂变', category: '店铺上架素材', enabled: 1, sort_order: 0 },
-        { nav_id: 'carousel', label: '产品轮播图', category: '店铺上架素材', enabled: 1, sort_order: 1 },
         { nav_id: 'amazon-image-gen', label: '亚马逊生图', category: '店铺上架素材', enabled: 1, sort_order: 2 },
         { nav_id: 'detail2', label: '详情页设计', category: '店铺上架素材', enabled: 1, sort_order: 3 },
         { nav_id: 'banner', label: 'Banner设计', category: '店铺上架素材', enabled: 1, sort_order: 4 },
-        { nav_id: 'poster', label: '营销海报设计', category: '店铺上架素材', enabled: 1, sort_order: 5 },
-
-        { nav_id: 'deepseek-chat', label: '电商文案助手', category: 'AI辅助工具', enabled: 1, sort_order: 0 },
+        { nav_id: 'image-translate', label: '图片转译', category: '店铺上架素材', enabled: 1, sort_order: 5 },
       ];
       for (const item of REQUIRED_NAV_ITEMS) {
         const [existing]: any = await pool.execute('SELECT nav_id FROM nav_config WHERE nav_id = ?', [item.nav_id]);
@@ -2689,7 +2712,7 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
   app.get("/api/admin/nav", adminMiddleware, async (req: any, res) => {
     try {
       // 清理已删除的旧导航项
-      await pool.execute("DELETE FROM nav_config WHERE nav_id IN ('nano-gen', 'detail', 'sora2-video', 'styleCopy', 'gpt54-chat', 'gemini-video', 'veo31', 'handheld', 'xiaohongshu', 'social', 'storyboard', 'tk-video')");
+      await pool.execute("DELETE FROM nav_config WHERE nav_id IN ('nano-gen', 'detail', 'sora2-video', 'styleCopy', 'gpt54-chat', 'tryon', 'carousel', 'deepseek-chat')");
       const [rows]: any = await pool.execute(
         'SELECT nav_id, label, category, enabled, sort_order FROM nav_config ORDER BY sort_order ASC'
       );
@@ -5429,10 +5452,10 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
         console.log('⏭️ 跳过扣费（图片生成时已扣费）');
       } else {
         try {
-          const savePricingKey = isVideo ? 'gemini_video_4s' : 'nanobann2_generation';
+          const savePricingKey = 'nanobann2_generation';
           const deductAmount = await getUserEffectivePricing(parentUserId, savePricingKey);
-          const deductType = isVideo ? 'video' : 'generate';
-          const deductDesc = isVideo ? '视频生成' : (prompt ? prompt.substring(0, 30) : '图片生成');
+          const deductType = 'generate';
+          const deductDesc = prompt ? prompt.substring(0, 30) : '图片生成';
           
           console.log('💰 开始扣费:', { deductAmount, deductType, deductDesc, parentUserId });
           
@@ -5515,17 +5538,18 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
       const queryParams = req.user.isSubUser ? [imageId, userId] : [imageId, userId, parentUserId];
 
       const [rows] = await pool.execute(
-        `SELECT image_url FROM generated_images WHERE id = ? AND ${userCondition}`,
+        `SELECT image_url, thumbnail_url FROM generated_images WHERE id = ? AND ${userCondition}`,
         queryParams
       );
       const imageUrl = (rows as any[])[0]?.image_url;
+      const thumbnailUrl = (rows as any[])[0]?.thumbnail_url;
 
-      if (!imageUrl) {
-        return res.status(404).json({ success: false, message: '图片不存在或无权删除' });
+      if ((rows as any[]).length === 0) {
+        return res.status(404).json({ success: false, message: '记录不存在或无权删除' });
       }
 
       // 从COS删除图片（只处理COS URL）
-      if (imageUrl.includes(process.env.COS_PUBLIC_URL || '')) {
+      if (imageUrl && imageUrl.includes(process.env.COS_PUBLIC_URL || '')) {
         try {
           const key = imageUrl.replace(process.env.COS_PUBLIC_URL + '/', '');
           await cosClient.send(new DeleteObjectCommand({
@@ -5538,6 +5562,20 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
         }
       } else {
         console.log(`⏭️ 跳过非COS图片: ${imageUrl}`);
+      }
+
+      // 删除COS封面图
+      if (thumbnailUrl && thumbnailUrl.includes(process.env.COS_PUBLIC_URL || '')) {
+        try {
+          const thumbKey = thumbnailUrl.replace(process.env.COS_PUBLIC_URL + '/', '');
+          await cosClient.send(new DeleteObjectCommand({
+            Bucket: process.env.COS_BUCKET!,
+            Key: thumbKey
+          }));
+          console.log('✅ COS封面已删除:', thumbKey);
+        } catch (cosError: any) {
+          console.error('删除COS封面失败:', cosError.message);
+        }
       }
 
       await pool.execute(
@@ -5771,13 +5809,18 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
 
     // 根据模型选择不同的 API 密钥和扣费
     const isGptImage2 = model === 'gpt-image-2';
-    const apiModel = isGptImage2
-      ? 'gpt-image-2'
-      : ((model === 'nanobann2' || model === 'nano') ? 'gemini-3.1-flash-image-preview' : (model || 'gemini-3.1-flash-image-preview'));
+    const isAgnes = model === 'agnes-image-2.1-flash';
+    const apiModel = isAgnes
+      ? 'agnes-image-2.1-flash'
+      : (isGptImage2
+        ? 'gpt-image-2'
+        : ((model === 'nanobann2' || model === 'nano') ? 'gemini-3.1-flash-image-preview' : (model || 'gemini-3.1-flash-image-preview')));
 
-    const API_KEY = isGptImage2
-      ? (process.env.IMAGE_GEN_API_KEY_1 || '')
-      : (process.env.IMAGE_GEN_API_KEY_2 || '');
+    const API_KEY = isAgnes
+      ? 'sk-U0BAM3m1kYJ0ZTQtTFUZdBueaOMxUjfJ8t7zu8o0wjhETs3F'
+      : (isGptImage2
+        ? (process.env.IMAGE_GEN_API_KEY_1 || '')
+        : (process.env.IMAGE_GEN_API_KEY_2 || ''));
 
     console.log('📤 Image generation request:', {
       userId,
@@ -5791,9 +5834,9 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
 
     try {
       // 从数据库获取价格（考虑代理自定义定价）
-      const pricingKey = isGptImage2 ? 'gpt_image2_generation' : 'nanobann2_generation';
+      const pricingKey = isAgnes ? 'agnes_image_generation' : (isGptImage2 ? 'gpt_image2_generation' : 'nanobann2_generation');
       const COST = await getUserEffectivePricing(parentUserId, pricingKey);
-      console.log('💰 COST DEBUG:', { pricingKey, COST, isGptImage2, parentUserId });
+      console.log('💰 COST DEBUG:', { pricingKey, COST, isGptImage2, isAgnes, parentUserId });
 
       const mainUser = await userDb.findById(parentUserId);
       const totalCost = COST * generateCount;
@@ -5849,8 +5892,14 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
       // 获取多张图片URL（generations API 原生支持 n）
       let rawImageUrls: string[] = [];
       try {
-        console.log('generations API:', { model: apiModel, isGptImage2, n: generateCount, payload });
-        const resp = await axios.post('https://api.xgapi.top/v1/images/generations', payload, {
+        console.log('generations API:', { model: apiModel, isGptImage2, isAgnes, n: generateCount, payload });
+        
+        // 根据模型选择不同的API端点
+        const apiUrl = isAgnes 
+          ? 'https://apihub.agnes-ai.com/v1/images/generations'
+          : 'https://api.xgapi.top/v1/images/generations';
+        
+        const resp = await axios.post(apiUrl, payload, {
           headers: { Authorization: 'Bearer ' + API_KEY, 'Content-Type': 'application/json' }, timeout: 300000
         });
         console.log('generations API response:', JSON.stringify(resp.data).substring(0, 500));
@@ -5859,8 +5908,8 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
         }
       } catch (e) { console.log('generations failed:', e.message); }
 
-      // fallback: chat completions（只取1张）
-      if (rawImageUrls.length === 0 && !isGptImage2) {
+      // fallback: chat completions（只取1张，agnes模型不走fallback）
+      if (rawImageUrls.length === 0 && !isGptImage2 && !isAgnes) {
         try {
           const chatPayload = {
             model: apiModel,
@@ -5887,7 +5936,7 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
 
       // ★★★ 同步下载图片、上传COS、写库，返回COS URL ★★★
       const actualCost = COST * rawImageUrls.length;
-      const modelLabel = isGptImage2 ? '(GPT-Image2)' : '';
+      const modelLabel = isAgnes ? '(Agnes)' : (isGptImage2 ? '(GPT-Image2)' : '');
       let cosUrls: string[] = [];
       try {
         cosUrls = await Promise.all(rawImageUrls.map(async (rawUrl: string) => {
@@ -5966,13 +6015,18 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
 
     // 根据模型选择不同的 API 密钥和扣费
     const isGptImage2 = model === 'gpt-image-2';
-    const apiModel = isGptImage2
-      ? 'gpt-image-2'
-      : ((model === 'nanobann2' || model === 'nano') ? 'gemini-3.1-flash-image-preview' : (model || 'gemini-3.1-flash-image-preview'));
+    const isAgnes = model === 'agnes-image-2.1-flash';
+    const apiModel = isAgnes
+      ? 'agnes-image-2.1-flash'
+      : (isGptImage2
+        ? 'gpt-image-2'
+        : ((model === 'nanobann2' || model === 'nano') ? 'gemini-3.1-flash-image-preview' : (model || 'gemini-3.1-flash-image-preview')));
 
-    const API_KEY = isGptImage2
-      ? (process.env.IMAGE_GEN_API_KEY_1 || '')
-      : (process.env.IMAGE_GEN_API_KEY_2 || '');
+    const API_KEY = isAgnes
+      ? 'sk-U0BAM3m1kYJ0ZTQtTFUZdBueaOMxUjfJ8t7zu8o0wjhETs3F'
+      : (isGptImage2
+        ? (process.env.IMAGE_GEN_API_KEY_1 || '')
+        : (process.env.IMAGE_GEN_API_KEY_2 || ''));
 
     console.log('📥 /api/images/edits request received!');
     const bodyForLog: any = { ...req.body };
@@ -5988,6 +6042,7 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
       imagesCount: images?.length,
       model: apiModel,
       isGptImage2,
+      isAgnes,
       size,
       quality,
       aspectRatio
@@ -6000,9 +6055,9 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
 
     try {
       // 从数据库获取价格（考虑代理自定义定价）
-      const pricingKey = isGptImage2 ? 'gpt_image2_edit' : 'nanobann2_edit';
+      const pricingKey = isAgnes ? 'agnes_image_edit' : (isGptImage2 ? 'gpt_image2_edit' : 'nanobann2_edit');
       const COST = await getUserEffectivePricing(parentUserId, pricingKey);
-      console.log('💰 EDIT COST DEBUG:', { pricingKey, COST, isGptImage2, parentUserId });
+      console.log('💰 EDIT COST DEBUG:', { pricingKey, COST, isGptImage2, isAgnes, parentUserId });
 
       const mainUser = await userDb.findById(parentUserId);
       
@@ -6159,6 +6214,80 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
               }
             };
             console.log('Extracted image URLs:', imageUrls.length > 0 ? imageUrls : '(none)');
+          } else if (isAgnes) {
+            // agnes-image-2.1-flash: 使用 images/generations API (图生图模式)
+            const imageContents = imageBuffers.map(img => ({
+              type: 'image_url',
+              image_url: {
+                url: `data:image/${img.extension === 'jpg' ? 'jpeg' : img.extension};base64,${img.buffer.toString('base64')}`
+              }
+            }));
+
+            const agnesPayload: any = {
+              model: apiModel,
+              prompt: prompt,
+              n: 1,
+            };
+
+            // 根据分辨率缩放尺寸
+            const agnesResScale = quality?.toLowerCase() === '4k' ? 4 : quality?.toLowerCase() === '2k' ? 2 : 1;
+            const agnesSizeMap: Record<string, { w: number; h: number }> = {
+              '1:1': { w: 1024, h: 1024 }, '2:3': { w: 1024, h: 1536 }, '3:2': { w: 1536, h: 1024 },
+              '3:4': { w: 1024, h: 1360 }, '4:3': { w: 1360, h: 1024 }, '4:5': { w: 1024, h: 1280 },
+              '5:4': { w: 1280, h: 1024 }, '9:16': { w: 1024, h: 2048 }, '16:9': { w: 2048, h: 1152 },
+              '21:9': { w: 2560, h: 1088 }, '1:4': { w: 768, h: 2048 }, '4:1': { w: 2048, h: 768 },
+              '1:8': { w: 768, h: 4096 }, '8:1': { w: 4096, h: 768 },
+            };
+
+            if (aspectRatio && aspectRatio !== '智能' && aspectRatio !== 'auto') {
+              agnesPayload.aspect_ratio = aspectRatio;
+              const base = agnesSizeMap[aspectRatio] || { w: 1024, h: 1024 };
+              agnesPayload.size = `${base.w * agnesResScale}x${base.h * agnesResScale}`;
+            }
+
+            // 添加图片到extra_body
+            agnesPayload.extra_body = {
+              image: imageContents.map(img => img.image_url.url)
+            };
+
+            if (retryCount === 0) {
+              console.log('Calling agnes images/generations API with images (图生图)');
+              console.log('- model:', apiModel);
+              console.log('- prompt:', prompt);
+              console.log('- images count:', imageBuffers.length);
+              console.log('- aspectRatio:', aspectRatio);
+            } else {
+              console.log(`Retrying agnes API (attempt ${retryCount + 1}/${maxRetries + 1})...`);
+            }
+
+            const agnesResponse = await axios.post("https://apihub.agnes-ai.com/v1/images/generations", agnesPayload, {
+              headers: {
+                'Authorization': `Bearer ${API_KEY}`,
+                'Content-Type': 'application/json'
+              },
+              timeout: 300000
+            });
+
+            console.log('✅ Agnes API response:', JSON.stringify(agnesResponse.data).substring(0, 500));
+
+            // 从agnes响应中提取图片URL
+            const imageUrls: string[] = [];
+            const agnesData = agnesResponse.data;
+
+            if (agnesData?.data) {
+              const dataArray = Array.isArray(agnesData.data) ? agnesData.data : [agnesData.data];
+              dataArray.forEach((item: any) => {
+                if (item.url) imageUrls.push(item.url);
+              });
+            }
+
+            // 包装为统一格式 { data: [{ url }] }
+            apiResponse = {
+              data: {
+                data: imageUrls.map(url => ({ url }))
+              }
+            };
+            console.log('Extracted image URLs:', imageUrls.length > 0 ? imageUrls : '(none)');
           } else {
             // nanobann2: 使用 chat completions API (图生图模式)
             // 将图片 Buffer 转为 base64 data URL
@@ -6278,7 +6407,7 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
       }
 
       // ★★★ 同步下载图片、上传COS、写库，返回COS URL ★★★
-      const modelLabel = isGptImage2 ? '(GPT-Image2)' : '';
+      const modelLabel = isAgnes ? '(Agnes)' : (isGptImage2 ? '(GPT-Image2)' : '');
       let cosUrls: string[] = [];
       try {
         cosUrls = await Promise.all(rawUrls.map(async (rawUrl: string) => {
@@ -7873,41 +8002,6 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
     }
   });
 
-  // ==================== Veo3.1 视频任务持久化 ====================
-  // 保存视频任务（提交时记录，轮询时更新状态和URL）
-  app.post("/api/video/tasks/save", authMiddleware, async (req: any, res: any) => {
-    try {
-      const userId = req.user.id;
-      const parentUserId = req.user.parentUserId || req.user.id;
-      const { taskId, prompt, model, aspectRatio, status, progress, videoUrl } = req.body;
-      if (!taskId) return res.status(400).json({ error: 'taskId 必填' });
-
-      // 检查是否已存在
-      const [existing] = await pool.execute(
-        'SELECT id FROM generated_images WHERE task_id = ? AND user_id = ?',
-        [taskId, userId]
-      );
-      if ((existing as any[]).length > 0) {
-        // 更新
-        await pool.execute(
-          'UPDATE generated_images SET image_url = ?, prompt = ?, model = ?, aspect_ratio = ?, status = ? WHERE task_id = ? AND user_id = ?',
-          [videoUrl || null, prompt || null, model || null, aspectRatio || null, status || 'processing', taskId, userId]
-        );
-      } else {
-        // 插入
-        const isSubUser = userId !== parentUserId;
-        await pool.execute(
-          'INSERT INTO generated_images (user_id, parent_user_id, image_url, prompt, model, aspect_ratio, type, task_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [userId, isSubUser ? parentUserId : null, videoUrl || null, prompt || null, model || null, aspectRatio || null, 'video', taskId, status || 'processing']
-        );
-      }
-      res.json({ success: true });
-    } catch (err: any) {
-      console.error('❌ 保存视频任务失败:', err.message);
-      res.status(500).json({ error: '保存失败' });
-    }
-  });
-
   // 创意生图专用：获取带 [chatgen] 标记的图片
   app.get("/api/chat/images", authMiddleware, async (req: any, res: any) => {
     try {
@@ -7945,145 +8039,565 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
     }
   });
 
-  // ==================== Veo3.1 视频生成 API ====================
-  app.post("/api/video/seedance", authMiddleware, async (req: any, res: any) => {
-    const { prompt, model, aspectRatio, resolution, size, images, quantity, seconds, imgMode, duration, seed } = req.body;
-    const userId = req.user.id;
-    const parentUserId = req.user.parentUserId || req.user.id;
-    const subUserId = req.user.isSubUser ? userId : undefined;
-    const genCount = Math.min(Math.max(parseInt(quantity) || 1, 1), 4);
-
+  // 查询单个视频任务状态（只读数据库）
+  app.get("/api/video/query/:taskId", authMiddleware, async (req: any, res: any) => {
     try {
-      const isFast = model?.includes('fast');
-      const pricingKey = isFast
-        ? (resolution === '4k' ? 'veo31_video_fast_4k' : 'veo31_video_fast')
-        : (resolution === '4k' ? 'veo31_video_4k' : 'veo31_video');
-      const defaultPrice = isFast ? (resolution === '4k' ? 2 : 1) : (resolution === '4k' ? 2 : 1);
-      const COST = await getUserEffectivePricing(parentUserId, pricingKey).catch(() => defaultPrice) || defaultPrice;
-      const totalCost = COST * genCount;
+      const userId = req.user.id;
+      const taskId = req.params.taskId;
 
-      const mainUser = await userDb.findById(parentUserId);
-      if (!mainUser || mainUser.credits < totalCost) {
-        return res.status(400).json({ error: `积分不足，需要 ${totalCost} 积分，当前 ${mainUser?.credits || 0} 积分` });
+      let [rows] = await pool.execute(
+        `SELECT id, status, image_url, thumbnail_url, prompt, model, created_at FROM generated_images WHERE id = ? AND user_id = ? AND type = 'video'`,
+        [taskId, userId]
+      );
+      if ((rows as any[]).length === 0) {
+        [rows] = await pool.execute(
+          `SELECT id, status, image_url, thumbnail_url, prompt, model, created_at FROM generated_images WHERE user_id = ? AND type = 'video' AND prompt LIKE ? ORDER BY created_at DESC LIMIT 1`,
+          [userId, `%[ext:${taskId}]%`]
+        );
+      }
+      const task = (rows as any[])[0];
+
+      if (!task) {
+        return res.status(404).json({ success: false, message: '任务不存在' });
       }
 
-      const VEO_API_KEY = process.env.VEO_API_KEY || '';
-      let taskIds: string[] = [];
+      if (task.status === 'completed' && task.image_url) {
+        return res.json({ success: true, data: { status: 'completed', video_url: task.image_url, thumbnail_url: task.thumbnail_url, progress: 100 } });
+      }
+      if (task.status === 'failed') {
+        return res.json({ success: true, data: { status: 'failed' } });
+      }
 
-      if (images && Array.isArray(images) && images.length > 0 && images.some(Boolean)) {
-        // 图生视频：使用 FormData
-        const formData = new FormData();
-        formData.append('model', model || 'veo-3.1-generate-preview');
-        formData.append('prompt', prompt || '');
-        formData.append('seconds', String(seconds || duration || 8));
-        formData.append('size', size || '1280x720');
+      // pending 状态 - 尝试实时查询外部API
+      const extMatch = task.prompt?.match(/\[ext:([^\]]+)\]/);
+      const externalTaskId = extMatch?.[1];
 
-        // base64 图片转 buffer 附加到 form
-        for (const img of images) {
-          if (img) {
-            const base64Data = img.replace(/^data:image\/\w+;base64,/, '');
-            const buffer = Buffer.from(base64Data, 'base64');
-            formData.append('input_reference', buffer, { filename: 'reference.jpg', contentType: 'image/jpeg' });
+      if (!externalTaskId) {
+        const createdAt = new Date((task as any).created_at).getTime();
+        if (Date.now() - createdAt > 3 * 60 * 1000) {
+          await pool.execute(`UPDATE generated_images SET status = 'failed' WHERE id = ?`, [task.id]);
+          return res.json({ success: true, data: { status: 'failed' } });
+        }
+        return res.json({ success: true, data: { status: 'pending', progress: 0 } });
+      }
+
+      // 实时查外部API
+      const apiKey = process.env.VIDEO_GEN_API_KEY || process.env.IMAGE_GEN_API_KEY_1;
+      try {
+        const statusRes = await axios.get(
+          `https://api.xgapi.top/v1/videos/${externalTaskId}`,
+          {
+            headers: { 'Accept': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+            timeout: 10000
+          }
+        );
+        const sd = statusRes.data;
+        let videoUrl = sd?.video_url || sd?.output_url || sd?.url || sd?.metadata?.url;
+        const apiStatus = sd?.status;
+        const progress = typeof sd?.progress === 'number' ? sd.progress : parseInt(sd?.progress || '0');
+        const done = apiStatus === 'completed' || apiStatus === 'SUCCESS' || apiStatus === 'succeeded';
+        
+        // 修复omni-fast模型返回的URL格式问题
+        if (videoUrl && videoUrl.includes('localhost:3001')) {
+          const vidMatch = videoUrl.match(/\/v1\/videos\/([^/]+)\/content/);
+          if (vidMatch) {
+            videoUrl = `https://api.xgapi.top/v1/videos/${vidMatch[1]}/content`;
+            console.log('🔧 修复omni-fast视频URL(查询):', videoUrl);
           }
         }
 
-        if (imgMode === 'first_last') {
-          // 首尾帧模式会在前端传两个图，第二个作为 last_frame
-          if (images.length >= 2 && images[1]) {
-            const base64Data = images[1].replace(/^data:image\/\w+;base64,/, '');
-            const buffer = Buffer.from(base64Data, 'base64');
-            formData.append('last_frame', buffer, { filename: 'last_frame.jpg', contentType: 'image/jpeg' });
-          }
+        if (done && videoUrl) {
+          // 上传到COS
+          let finalUrl = videoUrl;
+          try {
+            const videoResp = await axios.get(videoUrl, { responseType: 'arraybuffer', timeout: 300000 });
+            const videoBuffer = Buffer.from(videoResp.data);
+            const now = new Date();
+            const userPath = (task as any).prompt?.match(/parentUserId:(\d+)/)?.[1] || userId;
+            const fileName = `${userPath}/${now.getFullYear()}/${(now.getMonth()+1).toString().padStart(2,'0')}/video-${Date.now()}-${Math.random().toString(36).substring(2,8)}.mp4`;
+            await cosClient.send(new PutObjectCommand({
+              Bucket: process.env.COS_BUCKET!,
+              Key: fileName,
+              Body: videoBuffer,
+              ContentType: 'video/mp4',
+            }));
+            finalUrl = `${process.env.COS_PUBLIC_URL}/${fileName}`;
+          } catch {}
+          await pool.execute(`UPDATE generated_images SET image_url = ?, status = 'completed' WHERE id = ?`, [finalUrl, task.id]);
+          // 异步提取视频封面
+          extractVideoThumbnail(finalUrl, task.id.toString()).then(thumbUrl => {
+            if (thumbUrl) pool.execute(`UPDATE generated_images SET thumbnail_url = ? WHERE id = ?`, [thumbUrl, task.id]);
+          }).catch(() => {});
+          return res.json({ success: true, data: { status: 'completed', video_url: finalUrl, progress: 100 } });
         }
-
-        console.log('🎬 Veo3.1 image-to-video request:', { userId, model, size, seconds, promptLength: prompt?.length });
-
-        const resp = await axios.post('https://api.xgapi.top/v1/videos', formData, {
-          headers: { Authorization: 'Bearer ' + VEO_API_KEY, ...formData.getHeaders() },
-          timeout: 120000,
-          maxBodyLength: Infinity,
-        });
-
-        const submitData = resp.data?.data || resp.data;
-        const taskId = submitData?.id || resp.data?.id || submitData?.task_id || resp.data?.task_id || submitData?.taskId || resp.data?.taskId;
-        if (taskId) taskIds.push(taskId);
-      } else {
-        // 文生视频：JSON
-        const payload: any = {
-          model: model || 'veo-3.1-generate-preview',
-          prompt: prompt || '',
-          duration: seconds || duration || 8,
-          size: size || '1280x720',
-        };
-        // 可选 metadata
-        const metadata: any = {};
-        if (aspectRatio) metadata.aspectRatio = aspectRatio;
-        if (resolution) metadata.resolution = resolution;
-        metadata.negativePrompt = 'blurry, watermark, distorted, low quality';
-        if (seed) metadata.seed = seed;
-        payload.metadata = metadata;
-
-        console.log('🎬 Veo3.1 text-to-video request:', { userId, model, size, duration, promptLength: prompt?.length });
-
-        const resp = await axios.post('https://api.xgapi.top/v1/videos', payload, {
-          headers: { Authorization: 'Bearer ' + VEO_API_KEY, 'Content-Type': 'application/json' },
-          timeout: 120000,
-        });
-
-        const submitData = resp.data?.data || resp.data;
-        const taskId = submitData?.id || resp.data?.id || submitData?.task_id || resp.data?.task_id || submitData?.taskId || resp.data?.taskId;
-        if (taskId) taskIds.push(taskId);
+        if (done && !videoUrl) {
+          await pool.execute(`UPDATE generated_images SET status = 'completed' WHERE id = ?`, [task.id]);
+          return res.json({ success: true, data: { status: 'completed', progress: 100 } });
+        }
+        if (apiStatus === 'failed' || apiStatus === 'error') {
+          await pool.execute(`UPDATE generated_images SET status = 'failed' WHERE id = ?`, [task.id]);
+          return res.json({ success: true, data: { status: 'failed' } });
+        }
+        return res.json({ success: true, data: { status: 'pending', progress: progress || 0 } });
+      } catch {
+        return res.json({ success: true, data: { status: 'pending', progress: 0 } });
       }
-
-      if (taskIds.length === 0) {
-        throw new Error('视频生成API返回异常，未能获取任务ID');
-      }
-
-      // 扣费
-      await creditTransactionDb.deduct(parentUserId, totalCost, 'video', `Veo3.1视频生成${genCount}个`, parentUserId, subUserId);
-
-      const updatedUser = await userDb.findById(parentUserId);
-      res.json({ success: true, taskIds, remainingCredits: updatedUser?.credits || 0 });
     } catch (err: any) {
-      console.error('❌ Veo3.1 video generation error:', err.message, err.response?.data);
-      const xgError = err.response?.data;
-      const errorMsg = xgError?.error?.message || (typeof xgError?.error === 'string' ? xgError.error : '') || err.message || '视频生成失败';
-      res.status(500).json({ error: errorMsg });
+      console.error('❌ 查询视频任务失败:', err.message);
+      res.status(500).json({ success: false, message: '查询失败' });
     }
   });
 
-  // Veo3.1 视频状态轮询
-  app.get("/api/video/seedance/status/:taskId", authMiddleware, async (req: any, res: any) => {
-    const { taskId } = req.params;
+  // ==================== Video Media Library API ====================
+  // 获取 Video Studio 专属媒体库
+  app.get("/api/video/media-library", authMiddleware, async (req: any, res) => {
     try {
-      const VEO_API_KEY = process.env.VEO_API_KEY || '';
-      // 优先使用 video/generations 查询（带结果地址）
-      let resp;
-      try {
-        resp = await axios.get(`https://api.xgapi.top/v1/video/generations/${taskId}`, {
-          headers: { Authorization: 'Bearer ' + VEO_API_KEY },
-          timeout: 30000,
-        });
-      } catch {
-        // 降级为 /v1/videos/{taskId}
-        resp = await axios.get(`https://api.xgapi.top/v1/videos/${taskId}`, {
-          headers: { Authorization: 'Bearer ' + VEO_API_KEY },
-          timeout: 30000,
+      const userId = req.user.id;
+      const parentUserId = req.user.parentUserId || req.user.id;
+      const page = parseInt(req.query.page as string) || 1;
+      const pageSize = parseInt(req.query.pageSize as string) || 20;
+      const mediaType = req.query.type as string; // 'video', 'video-script', 'video-social', 'all'
+
+      const result = await generatedImagesDb.getVideoMedia(userId, parentUserId, page, pageSize, mediaType);
+
+      // 添加自动删除提示
+      const displayItems = (result.items || []).map((item: any) => ({
+        ...item,
+        model: normalizeModelForDisplay(item.model) + getAutoDeleteInfo(item.created_at),
+      }));
+
+      res.json({
+        success: true,
+        data: displayItems,
+        pagination: {
+          page: result.page,
+          pageSize: result.pageSize,
+          total: result.total,
+          totalPages: result.totalPages
+        }
+      });
+    } catch (error: any) {
+      console.error('获取视频媒体库失败:', error);
+      res.status(500).json({ success: false, message: '获取视频媒体库失败' });
+    }
+  });
+
+  // 删除单条视频媒体（含COS文件删除）
+  app.delete("/api/video/media/:id", authMiddleware, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const parentUserId = req.user.parentUserId || req.user.id;
+      const mediaId = parseInt(req.params.id);
+
+      const imageUrl = await generatedImagesDb.deleteVideoMedia(mediaId, userId, parentUserId);
+
+      if (!imageUrl) {
+        return res.status(404).json({ success: false, message: '记录不存在或无权删除' });
+      }
+
+      // 从COS删除文件
+      if (imageUrl.includes(process.env.COS_PUBLIC_URL || '')) {
+        try {
+          const key = imageUrl.replace(process.env.COS_PUBLIC_URL + '/', '');
+          await cosClient.send(new DeleteObjectCommand({
+            Bucket: process.env.COS_BUCKET!,
+            Key: key
+          }));
+          console.log('✅ COS文件已删除:', key);
+        } catch (cosError: any) {
+          console.error('删除COS文件失败:', cosError.message);
+        }
+      }
+
+      res.json({ success: true, message: '媒体已删除' });
+    } catch (error: any) {
+      console.error('删除视频媒体失败:', error);
+      res.status(500).json({ success: false, message: '删除失败' });
+    }
+  });
+
+  // 批量删除视频媒体
+  app.post("/api/video/media/batch-delete", authMiddleware, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const parentUserId = req.user.parentUserId || req.user.id;
+      const { ids } = req.body;
+
+      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ success: false, message: '请提供要删除的ID列表' });
+      }
+
+      const deletedRecords = await generatedImagesDb.batchDeleteVideoMedia(ids, userId, parentUserId);
+
+      // 批量删除COS文件
+      let cosDeletedCount = 0;
+      for (const record of deletedRecords) {
+        if (record.image_url && record.image_url.includes(process.env.COS_PUBLIC_URL || '')) {
+          try {
+            const key = record.image_url.replace(process.env.COS_PUBLIC_URL + '/', '');
+            await cosClient.send(new DeleteObjectCommand({
+              Bucket: process.env.COS_BUCKET!,
+              Key: key
+            }));
+            cosDeletedCount++;
+          } catch (cosError: any) {
+            console.error('删除COS文件失败:', record.image_url, cosError.message);
+          }
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `已删除 ${deletedRecords.length} 条记录`,
+        deletedCount: deletedRecords.length,
+        cosDeletedCount
+      });
+    } catch (error: any) {
+      console.error('批量删除视频媒体失败:', error);
+      res.status(500).json({ success: false, message: '批量删除失败' });
+    }
+  });
+
+  // 清理过期视频媒体
+  app.post("/api/video/media/cleanup", authMiddleware, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const parentUserId = req.user.parentUserId || req.user.id;
+
+      const expiredRecords = await generatedImagesDb.cleanupExpiredVideoMedia(userId, parentUserId);
+
+      // 删除COS文件
+      let cosDeletedCount = 0;
+      for (const record of expiredRecords) {
+        if (record.image_url && record.image_url.includes(process.env.COS_PUBLIC_URL || '')) {
+          try {
+            const key = record.image_url.replace(process.env.COS_PUBLIC_URL + '/', '');
+            await cosClient.send(new DeleteObjectCommand({
+              Bucket: process.env.COS_BUCKET!,
+              Key: key
+            }));
+            cosDeletedCount++;
+          } catch (cosError: any) {
+            console.error('删除COS文件失败:', record.image_url, cosError.message);
+          }
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `已清理 ${expiredRecords.length} 条过期记录`,
+        cleanedCount: expiredRecords.length,
+        cosDeletedCount
+      });
+    } catch (error: any) {
+      console.error('清理过期视频媒体失败:', error);
+      res.status(500).json({ success: false, message: '清理失败' });
+    }
+  });
+
+  // ==================== Video Generation API ====================
+  // 提取视频第一帧作为封面
+  async function extractVideoThumbnail(videoUrl: string, taskId: string): Promise<string | null> {
+    try {
+      const { execSync } = require('child_process');
+      const { tmpdir } = require('os');
+      const { join } = require('path');
+      
+      const tmpVideo = join(tmpdir(), `video_${taskId}.mp4`);
+      const tmpThumb = join(tmpdir(), `thumb_${taskId}.jpg`);
+      
+      // 下载视频
+      const response = await axios.get(videoUrl, { responseType: 'arraybuffer', timeout: 60000 });
+      fs.writeFileSync(tmpVideo, Buffer.from(response.data));
+      
+      // 提取第一帧
+      execSync(`ffmpeg -y -i "${tmpVideo}" -ss 00:00:01 -vframes 1 -q:v 2 "${tmpThumb}"`, { timeout: 15000 });
+      
+      // 上传到COS
+      const thumbBuffer = fs.readFileSync(tmpThumb);
+      const cosKey = `video_thumbnails/${Date.now()}_${taskId}.jpg`;
+      
+      await cosClient.send(new PutObjectCommand({
+        Bucket: process.env.COS_BUCKET!,
+        Key: cosKey,
+        Body: thumbBuffer,
+        ContentType: 'image/jpeg',
+      }));
+      
+      // 清理临时文件
+      try { fs.unlinkSync(tmpVideo); } catch {}
+      try { fs.unlinkSync(tmpThumb); } catch {}
+      
+      const thumbnailUrl = `${process.env.COS_PUBLIC_URL}/${cosKey}`;
+      console.log('✅ 视频封面已生成:', thumbnailUrl);
+      return thumbnailUrl;
+    } catch (error: any) {
+      console.error('⚠️ 视频封面生成失败:', error.message);
+      return null;
+    }
+  }
+
+  // 视频生成（异步任务）
+  app.post("/api/video/generate", authMiddleware, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const parentUserId = req.user.parentUserId || req.user.id;
+      const { model, prompt, imageUrl, aspectRatio, duration, firstFrame, lastFrame } = req.body;
+
+      // 验证模型
+      const validModels = ['grok-video-1.5-max', 'grok-video-1.5-pro'];
+      if (!validModels.includes(model)) {
+        return res.status(400).json({ success: false, message: '不支持的模型' });
+      }
+
+      // 验证时长
+      const validDurations = [10, 15];
+      const videoDuration = validDurations.includes(duration) ? duration : 10;
+
+      // 防重复：检查5分钟内是否有相同用户+相同prompt+相同model的进行中任务
+      const [existingRows] = await pool.execute(
+        `SELECT id, image_url, status FROM generated_images 
+         WHERE user_id = ? AND model = ? AND prompt = ? AND type = 'video' 
+         AND created_at > DATE_SUB(NOW(), INTERVAL 5 MINUTE)
+         ORDER BY created_at DESC LIMIT 1`,
+        [userId, model, prompt]
+      );
+      const existing = (existingRows as any[])[0];
+      if (existing) {
+        // 如果已有任务且还未完成，返回已有任务，不重复扣费
+        if (!existing.image_url || existing.status === 'pending') {
+          return res.json({
+            success: true,
+            message: '任务已存在，正在生成中',
+            model,
+            deducted: 0,
+            taskId: existing.id,
+            duplicate: true
+          });
+        }
+        // 如果已完成，也返回已有结果
+        return res.json({
+          success: true,
+          message: '视频已生成',
+          model,
+          deducted: 0,
+          taskId: existing.id,
+          videoUrl: existing.image_url,
+          duplicate: true
         });
       }
 
-      const data = resp.data;
-      // 兼容不同 API 版本的字段名
-      const inner = data.data || data;
-      res.json({
-        status: inner.status || data.status || 'processing',
-        progress: inner.progress || inner.progress_percent || inner.percentage || data.progress || 0,
-        url: inner.url || inner.video_url || inner.result_url || data.url || inner.output?.url || inner.output?.[0]?.url || data.result?.url || '',
-        error: inner.error || data.error || undefined,
+      // 扣费
+      const pricingKeyMap: Record<string, string> = {
+        'grok-video-1.5-max': 'grok_video_15_max',
+        'grok-video-1.5-pro': 'grok_video_15_pro',
+      };
+      const pricingKey = pricingKeyMap[model] || 'grok_video_15_pro';
+      const [pricingRows] = await pool.execute(
+        'SELECT price FROM pricing_config WHERE `key` = ? AND enabled = 1',
+        [pricingKey]
+      );
+      const unitPrice = (pricingRows as any[])[0]?.price || 0;
+
+      if (unitPrice > 0) {
+        const [creditsRows] = await pool.execute(
+          'SELECT id, remaining_amount FROM credit_buckets WHERE user_id = ? AND (expires_at IS NULL OR expires_at > NOW()) ORDER BY expires_at ASC',
+          [parentUserId]
+        );
+        const buckets = creditsRows as any[];
+        const totalCredits = buckets.reduce((sum: number, b: any) => sum + Number(b.remaining_amount), 0);
+
+        if (totalCredits < unitPrice) {
+          return res.status(400).json({ success: false, message: '积分不足' });
+        }
+
+        // 扣费
+        let remaining = unitPrice;
+        for (const bucket of buckets) {
+          if (remaining <= 0) break;
+          const deduct = Math.min(remaining, Number(bucket.remaining_amount));
+          await pool.execute(
+            'UPDATE credit_buckets SET remaining_amount = remaining_amount - ? WHERE id = ?',
+            [deduct, bucket.id]
+          );
+          remaining -= deduct;
+        }
+
+        // 记录消费
+        await pool.execute(
+          'INSERT INTO credit_transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)',
+          [parentUserId, 'video_generation', -unitPrice, `视频生成: ${model}`]
+        );
+      }
+
+      // 先插入一条 pending 记录，返回 task_id
+      const [insertResult] = await pool.execute(
+        `INSERT INTO generated_images (user_id, parent_user_id, image_url, prompt, model, type, aspect_ratio, status, created_at, expires_at) 
+         VALUES (?, ?, '', ?, ?, 'video', ?, 'pending', NOW(), DATE_ADD(NOW(), INTERVAL 3 DAY))`,
+        [userId, parentUserId, `${prompt} [${videoDuration}s]`, model, aspectRatio || '16:9']
+      );
+      const dbTaskId = (insertResult as any).insertId;
+
+      console.log('视频生成参数:', { model, prompt: prompt.substring(0, 50), aspectRatio, duration: videoDuration, imageUrl: imageUrl ? '有' : '无' });
+
+      // 通用函数：下载视频并上传到COS
+      const uploadVideoToCos = async (videoUrl: string): Promise<string> => {
+        try {
+          console.log('📹 下载视频并上传到COS...');
+          const videoResp = await axios.get(videoUrl, { responseType: 'arraybuffer', timeout: 300000 });
+          const videoBuffer = Buffer.from(videoResp.data);
+          const now = new Date();
+          const fileName = `${parentUserId}/${now.getFullYear()}/${(now.getMonth()+1).toString().padStart(2,'0')}/video-${Date.now()}-${Math.random().toString(36).substring(2,8)}.mp4`;
+          await cosClient.send(new PutObjectCommand({
+            Bucket: process.env.COS_BUCKET!,
+            Key: fileName,
+            Body: videoBuffer,
+            ContentType: 'video/mp4',
+          }));
+          const finalUrl = `${process.env.COS_PUBLIC_URL}/${fileName}`;
+          console.log('✅ 视频已上传COS:', finalUrl);
+          return finalUrl;
+        } catch (cosErr: any) {
+          console.error('❌ COS上传失败，使用原URL:', cosErr.message);
+          return videoUrl;
+        }
+      };
+
+      // ========== Grok Video 模型 ==========
+      const apiKey = process.env.VIDEO_GEN_API_KEY || process.env.IMAGE_GEN_API_KEY_1;
+      const grokModel = model === 'grok-video-1.5-max' ? 'grok-video-1.5-max' : 'grok-video-1.5-pro';
+
+      const formData = new FormData();
+      formData.append('model', grokModel);
+      formData.append('prompt', prompt);
+      formData.append('aspect_ratio', aspectRatio || '9:16');
+      formData.append('seconds', String(videoDuration));
+      formData.append('size', '720P');
+
+      if (imageUrl && imageUrl.startsWith('data:')) {
+        const base64Data = imageUrl.split(',')[1];
+        let imgBuf: Buffer = Buffer.from(base64Data, 'base64');
+        try {
+          const targetW = aspectRatio === '9:16' ? 720 : 1280;
+          const targetH = aspectRatio === '9:16' ? 1280 : 720;
+          const processed = await sharp(imgBuf)
+            .resize(targetW, targetH, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 1 } })
+            .toBuffer();
+          imgBuf = Buffer.from(processed);
+          console.log(`📸 参考图已调整为 ${targetW}x${targetH} (${aspectRatio})，保留完整内容`);
+        } catch (e: any) {
+          console.error('参考图调整失败，使用原图:', e.message);
+        }
+        formData.append('input_reference', imgBuf, { filename: 'reference.png', contentType: 'image/png' });
+      }
+
+      axios.post('https://api.xgapi.top/v1/videos', formData, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          ...formData.getHeaders()
+        },
+        maxBodyLength: Infinity,
+        timeout: 60000
+      }).then(async (response: any) => {
+        const responseData = response.data;
+        console.log('视频API响应:', JSON.stringify(responseData).substring(0, 2000));
+
+        const externalTaskId = responseData?.id || responseData?.task_id || responseData?.data?.id;
+        if (!externalTaskId) {
+          console.error('视频API未返回任务ID:', responseData);
+          await pool.execute(`UPDATE generated_images SET status = 'failed' WHERE id = ?`, [dbTaskId]);
+          return;
+        }
+
+        console.log('视频任务已创建，外部ID:', externalTaskId);
+        await pool.execute(
+          `UPDATE generated_images SET prompt = CONCAT(prompt, ' [ext:', ?, ']') WHERE id = ?`,
+          [externalTaskId, dbTaskId]
+        );
+
+        const pollVideo = async (attempts = 0) => {
+          if (attempts >= 60) {
+            console.error('视频任务超时:', externalTaskId);
+            await pool.execute(`UPDATE generated_images SET status = 'failed' WHERE id = ?`, [dbTaskId]);
+            return;
+          }
+          try {
+            const statusRes = await axios.get(`https://api.xgapi.top/v1/videos/${externalTaskId}`, {
+              headers: { 'Authorization': `Bearer ${apiKey}` },
+              timeout: 15000
+            });
+            const statusData = statusRes.data;
+            console.log(`视频任务状态(${attempts + 1}):`, JSON.stringify(statusData).substring(0, 500));
+
+            const status = statusData?.status || statusData?.data?.status;
+            const videoUrl = statusData?.video_url || statusData?.metadata?.url || statusData?.video?.url || statusData?.data?.video?.url || statusData?.output?.url;
+
+            if (videoUrl || status === 'SUCCESS' || status === 'completed' || status === 'succeeded') {
+              if (videoUrl) {
+                const finalUrl = await uploadVideoToCos(videoUrl);
+                await pool.execute(`UPDATE generated_images SET image_url = ?, status = 'completed' WHERE id = ?`, [finalUrl, dbTaskId]);
+                console.log('✅ 视频生成完成:', finalUrl);
+              } else {
+                await pool.execute(`UPDATE generated_images SET status = 'completed' WHERE id = ?`, [dbTaskId]);
+                console.log('✅ 视频API返回成功但无URL:', statusData);
+              }
+            } else if (status === 'failed' || status === 'error') {
+              await pool.execute(`UPDATE generated_images SET status = 'failed' WHERE id = ?`, [dbTaskId]);
+              console.error('❌ 视频生成失败:', statusData);
+            } else {
+              setTimeout(() => pollVideo(attempts + 1), 5000);
+            }
+          } catch (pollErr: any) {
+            console.error('轮询视频状态失败:', pollErr.message);
+            setTimeout(() => pollVideo(attempts + 1), 5000);
+          }
+        };
+        setTimeout(() => pollVideo(), 3000);
+      }).catch(async (error: any) => {
+        console.error('视频API请求失败:', error.response?.data || error.message);
+        await pool.execute(`UPDATE generated_images SET status = 'failed' WHERE id = ?`, [dbTaskId]);
       });
-    } catch (err: any) {
-      console.error('❌ Veo3.1 status poll error:', err.message);
-      res.json({ status: 'failed', progress: 0, error: err.message || '查询状态失败' });
+
+      // 立即返回，不等待视频生成完成
+      res.json({
+        success: true,
+        message: '视频生成任务已提交',
+        model,
+        deducted: unitPrice,
+        taskId: dbTaskId
+      });
+
+    } catch (error: any) {
+      console.error('视频生成API错误:', error);
+      res.status(500).json({ success: false, message: '视频生成失败' });
+    }
+  });
+
+  // ==================== COS 视频代理 ====================
+  app.get("/api/cos-proxy", async (req: any, res) => {
+    const url = req.query.url as string;
+    const allowedDomains = ['cos.ap-beijing.myqcloud.com', 'soruxgpt.com', 'agnes-ai.space', 'xgapi.top'];
+    if (!url || !allowedDomains.some(d => url.includes(d))) {
+      return res.status(400).json({ error: 'Invalid URL' });
+    }
+    try {
+      const response = await axios.get(url, {
+        responseType: 'stream',
+        headers: { Range: req.headers.range || '' },
+        timeout: 120000,
+      });
+      res.set({
+        'Content-Type': response.headers['content-type'] || 'video/mp4',
+        'Content-Length': response.headers['content-length'],
+        'Content-Range': response.headers['content-range'],
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'public, max-age=86400',
+      });
+      res.status(response.status);
+      response.data.pipe(res);
+    } catch (e: any) {
+      console.error('COS代理失败:', e.message);
+      res.status(500).json({ error: 'Proxy failed' });
     }
   });
 
@@ -8272,6 +8786,47 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
           console.error('❌ 数据库迁移失败:', err.message);
         }
       }
+
+      // 自动删除5天前的生成内容（COS+数据库）
+      const cleanupOldContent = async () => {
+        try {
+          const [rows] = await pool.execute(
+            `SELECT id, image_url, thumbnail_url FROM generated_images WHERE created_at < DATE_SUB(NOW(), INTERVAL 5 DAY)`
+          );
+          const items = rows as any[];
+          if (items.length === 0) return;
+          
+          console.log(`🗑️ 开始清理 ${items.length} 条5天前的生成记录...`);
+          
+          for (const item of items) {
+            // 删除COS图片
+            if (item.image_url && item.image_url.includes(process.env.COS_PUBLIC_URL || '')) {
+              try {
+                const key = item.image_url.replace(process.env.COS_PUBLIC_URL + '/', '');
+                await cosClient.send(new DeleteObjectCommand({ Bucket: process.env.COS_BUCKET!, Key: key }));
+              } catch {}
+            }
+            // 删除COS封面
+            if (item.thumbnail_url && item.thumbnail_url.includes(process.env.COS_PUBLIC_URL || '')) {
+              try {
+                const key = item.thumbnail_url.replace(process.env.COS_PUBLIC_URL + '/', '');
+                await cosClient.send(new DeleteObjectCommand({ Bucket: process.env.COS_BUCKET!, Key: key }));
+              } catch {}
+            }
+            // 删除数据库记录
+            await pool.execute(`DELETE FROM generated_images WHERE id = ?`, [item.id]);
+          }
+          
+          console.log(`✅ 已清理 ${items.length} 条过期记录`);
+        } catch (error: any) {
+          console.error('❌ 自动清理失败:', error.message);
+        }
+      };
+      
+      // 启动时立即执行一次清理
+      cleanupOldContent();
+      // 每24小时执行一次
+      setInterval(cleanupOldContent, 24 * 60 * 60 * 1000);
     }, 100);
 
     console.log(`📝 Available routes:`);
@@ -8308,11 +8863,6 @@ app.put("/api/admin/models/:modelId", adminMiddleware, async (req: any, res) => 
     }
   });
 }
-
-startServer().catch((err) => {
-  console.error('❌ 启动服务器失败:', err);
-  process.exit(1);
-});
 
 startServer().catch((err) => {
   console.error('❌ 启动服务器失败:', err);

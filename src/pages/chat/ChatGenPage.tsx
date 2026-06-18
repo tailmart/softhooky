@@ -137,6 +137,8 @@ export const ChatGenPage: React.FC = () => {
     getPricing().then(p => {
       if (selectedModel === 'gpt-image-2') {
         setGeneratePrice(p.gpt_image2_generation || 0.3);
+      } else if (selectedModel === 'agnes-image-2.1-flash') {
+        setGeneratePrice(p.agnes_image_generation || 0.3);
       } else {
         setGeneratePrice(p.nanobann2_generation || 0.3);
       }
@@ -393,7 +395,8 @@ export const ChatGenPage: React.FC = () => {
 
   const MODEL_LABELS: Record<string, string> = {
     nanobann2: 'NanoBanana2',
-    'gpt-image-2': 'GPT-Image2'
+    'gpt-image-2': 'GPT-Image2',
+    'agnes-image-2.1-flash': 'Agnes Image 2.1 Flash'
   };
 
   const examplePrompts = [
@@ -402,49 +405,7 @@ export const ChatGenPage: React.FC = () => {
     '一杯冒着热气的拿铁咖啡放在窗台上，窗外是秋天的红叶',
   ];
 
-  // 5大核心功能案例
-  const showcaseFeatures = [
-    {
-      title: '故事板',
-      subtitle: 'AI 分镜生成',
-      desc: '输入剧本，自动生成专业影视分镜画面',
-      image: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=professional+film+storyboard+frames+cinematic+shot+sequence+dark+background+blue+accent+lighting&image_size=landscape_4_3',
-      navId: 'storyboard',
-      color: 'from-violet-500 to-indigo-600',
-    },
-    {
-      title: '小红书种草',
-      subtitle: '一键生成笔记',
-      desc: '封面+文案+5张配图，完整种草笔记',
-      image: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=xiaohongshu+social+media+post+aesthetic+flat+lay+product+photography+pastel+colors+minimalist&image_size=landscape_4_3',
-      navId: 'xiaohongshu',
-      color: 'from-rose-500 to-pink-600',
-    },
-    {
-      title: '社媒POV出图',
-      subtitle: '第一视角场景图',
-      desc: '适配Ins/TikTok/FB，多平台一键出图',
-      image: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=social+media+content+creation+first+person+perspective+lifestyle+product+shot+modern+aesthetic+dark&image_size=landscape_4_3',
-      navId: 'social',
-      color: 'from-amber-500 to-orange-600',
-    },
-    {
-      title: '视频生成',
-      subtitle: '图片变营销视频',
-      desc: '上传图片，AI生成短视频广告',
-      image: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=product+video+production+cinematic+motion+graphics+marketing+video+dark+background+blue+neon+light&image_size=landscape_4_3',
-      navId: 'gemini-video',
-      color: 'from-emerald-500 to-teal-600',
-    },
-    {
-      title: 'TK带货图片',
-      subtitle: '产品商业大片',
-      desc: '上传产品图，AI生成TikTok风格带货海报',
-      image: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=tiktok+style+product+photography+commercial+photo+studio+lighting+modern+aesthetic+dark+background&image_size=landscape_4_3',
-      navId: 'chat-gen',
-      color: 'from-blue-500 to-cyan-500',
-    },
-  ];
+
 
   // 真正的瀑布流：根据图片URL生成稳定的伪随机高度
   const getRandomHeight = (url: string) => {
@@ -511,15 +472,18 @@ export const ChatGenPage: React.FC = () => {
                 <Wand2 size={40} className="text-blue-500" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">开始创作</h2>
-              <p className="text-gray-500 mb-8">输入描述，AI 为你生成精美图片</p>
-              
+              <p className="text-gray-500 mb-8">选择功能，AI 为你生成精美内容</p>
+
+
+
+              {/* 示例描述 */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl w-full">
                 {examplePrompts.map((ep, i) => (
                   <motion.button
                     key={i}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.1 }}
+                    transition={{ delay: i * 0.1 + 0.5 }}
                     onClick={() => { setPrompt(ep); setIsOptimized(false); }}
                     className="p-4 bg-white rounded-xl border border-gray-200 hover:border-blue-300 hover:shadow-lg transition-all text-left"
                   >
@@ -530,8 +494,21 @@ export const ChatGenPage: React.FC = () => {
             </div>
           )}
 
-          {!loadingImages && generatedImages.length > 0 && (
+          {(!loadingImages && (generatedImages.length > 0 || loading)) && (
             <div className={masonryClass}>
+              {/* Loading占位框 - 在瀑布流最前面 */}
+              {loading && Array.from({ length: Math.min(generateCount, 1) }).map((_, i) => (
+                <motion.div
+                  key={`loading-placeholder-${i}`}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="aspect-square rounded-xl bg-white border-2 border-blue-500 border-dashed flex flex-col items-center justify-center break-inside-avoid"
+                >
+                  <Loader2 size={28} className="text-blue-500 animate-spin mb-2" />
+                  <span className="text-xs text-blue-500 font-medium">生成中...</span>
+                </motion.div>
+              ))}
+
               {generatedImages.map((img, idx) => (
                 <motion.div
                   key={img.url}
@@ -606,20 +583,6 @@ export const ChatGenPage: React.FC = () => {
             </div>
           )}
 
-          {loading && (
-            <div className={masonryClass}>
-              {Array.from({ length: generateCount }).map((_, i) => (
-                <motion.div
-                  key={`loading-${i}`}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="aspect-square rounded-xl bg-gray-200 animate-pulse flex items-center justify-center break-inside-avoid"
-                >
-                  <Loader2 size={24} className="text-gray-400 animate-spin" />
-                </motion.div>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* 右侧：控制面板 */}
@@ -669,49 +632,59 @@ export const ChatGenPage: React.FC = () => {
             </div>
 
             {/* 模型选择 */}
-            <div className="p-4 border-b border-gray-200">
+            <div className="p-4 pb-6 border-b border-gray-200">
               <div className="flex items-center gap-2 mb-3">
                 <Sparkles size={14} className="text-blue-500" />
                 <span className="text-xs font-medium text-gray-600">生成模型</span>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-3">
                 <button
                   onClick={() => setSelectedModel('nanobann2')}
-                  className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-all ${
+                  className={`flex flex-col items-center justify-center py-3 px-2 rounded-xl border-2 transition-all ${
                     selectedModel === 'nanobann2'
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-sm'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
                   }`}
                 >
                   <span className="text-xs font-semibold">NanoBanana2</span>
                 </button>
                 <button
                   onClick={() => setSelectedModel('gpt-image-2')}
-                  className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-all ${
+                  className={`flex flex-col items-center justify-center py-3 px-2 rounded-xl border-2 transition-all ${
                     selectedModel === 'gpt-image-2'
-                      ? 'border-amber-500 bg-amber-50 text-amber-700'
-                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                      ? 'border-amber-500 bg-amber-50 text-amber-700 shadow-sm'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
                   }`}
                 >
                   <span className="text-xs font-semibold">GPT-Image2</span>
+                </button>
+                <button
+                  onClick={() => setSelectedModel('agnes-image-2.1-flash')}
+                  className={`flex flex-col items-center justify-center py-3 px-2 rounded-xl border-2 transition-all ${
+                    selectedModel === 'agnes-image-2.1-flash'
+                      ? 'border-purple-500 bg-purple-50 text-purple-700 shadow-sm'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <span className="text-xs font-semibold">Agnes</span>
                 </button>
               </div>
             </div>
 
             {/* 生图设置 */}
-            <div className="p-4 border-b border-gray-200 space-y-4">
+            <div className="p-4 pb-6 border-b border-gray-200 space-y-5">
               {/* 分辨率 */}
               <div>
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-3">
                   <Monitor size={14} className="text-emerald-500" />
                   <span className="text-xs font-medium text-gray-600">分辨率</span>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                   {['2K', '4K'].map((res) => (
                     <button
                       key={res}
                       onClick={() => setResolution(res)}
-                      className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
+                      className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-all ${
                         resolution === res
                           ? 'bg-blue-600 text-white'
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -725,16 +698,16 @@ export const ChatGenPage: React.FC = () => {
 
               {/* 图片比例 */}
               <div>
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-3">
                   <Crop size={14} className="text-amber-500" />
                   <span className="text-xs font-medium text-gray-600">图片比例</span>
                 </div>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-4 gap-2.5">
                   {ASPECT_RATIOS.map(size => (
                     <button 
                       key={size.value} 
                       onClick={() => setSelectedAspectRatio(size.value)}
-                      className={`flex flex-col items-center justify-center gap-1 py-2.5 rounded-lg transition-all ${
+                      className={`flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl transition-all ${
                         selectedAspectRatio === size.value
                           ? 'bg-blue-600 text-white'
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -751,24 +724,27 @@ export const ChatGenPage: React.FC = () => {
 
               {/* 生成张数 */}
               <div>
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-3">
                   <ImagePlus size={14} className="text-violet-500" />
                   <span className="text-xs font-medium text-gray-600">生成张数</span>
                 </div>
                 <select
                   value={generateCount}
                   onChange={(e) => setGenerateCount(Number(e.target.value))}
-                  className="w-full py-2 px-3 rounded-lg text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200 outline-none cursor-pointer hover:border-gray-300 focus:border-blue-400 focus:bg-white transition-all"
+                  className="w-full py-2.5 px-3 rounded-xl text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200 outline-none cursor-pointer hover:border-gray-300 focus:border-blue-400 focus:bg-white transition-all"
                 >
                   {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
                     <option key={num} value={num}>{num} 张</option>
                   ))}
                 </select>
+                <p className="text-[11px] text-amber-500 font-medium mt-2">
+                  消耗 {(generatePrice * generateCount).toFixed(1)} 积分
+                </p>
               </div>
             </div>
 
             {/* AI 优化开关 */}
-            <div className="p-4 border-b border-gray-200">
+            <div className="p-4 pb-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <div>
                   <label className="text-sm font-medium text-gray-700">AI 优化提示词</label>
@@ -807,31 +783,30 @@ export const ChatGenPage: React.FC = () => {
               </div>
             )}
 
-            <div className="flex gap-2">
+            <div className="flex gap-3 items-end">
               <textarea
                 ref={textareaRef}
                 value={prompt}
                 onChange={(e) => { setPrompt(e.target.value); setIsOptimized(false); autoResize(); }}
                 onKeyDown={handleKeyDown}
                 placeholder="描述你想要生成的图片..."
-                className="flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="flex-1 resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 rows={2}
               />
               <button
                 onClick={handleGenerate}
                 disabled={loading || optimizing || (!prompt.trim() && uploadedImages.length === 0)}
-                className="px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                className="px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
               >
                 {loading || optimizing ? (
-                  <Loader2 size={18} className="animate-spin" />
+                  <Loader2 size={20} className="animate-spin" />
                 ) : (
-                  <Send size={18} />
+                  <Send size={20} />
                 )}
               </button>
             </div>
-            <div className="flex items-center justify-between mt-2">
-              <span className="text-xs text-gray-500">Enter 发送 · Shift+Enter 换行</span>
-              <span className="text-xs text-gray-500">{selectedAspectRatio} · {resolution}</span>
+            <div className="flex items-center justify-center mt-2">
+              <span className="text-[11px] text-gray-400">Enter 发送 · Shift+Enter 换行</span>
             </div>
           </div>
         </aside>

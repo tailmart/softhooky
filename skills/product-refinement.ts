@@ -36,7 +36,6 @@ type ProductType =
   | 'amazon-image-gen'
   | 'detail-page'
   | 'banner'
-  | 'poster'
   | 'xiaohongshu'
   | 'social-pov'
   | 'storyboard'
@@ -55,7 +54,6 @@ const CREDITS_CONFIG: Record<ProductType, { nano: number; gpt: number }> = {
   'amazon-image-gen': { nano: 20, gpt: 40 },
   'detail-page': { nano: 30, gpt: 60 },
   'banner': { nano: 15, gpt: 30 },
-  'poster': { nano: 15, gpt: 30 },
   'xiaohongshu': { nano: 10, gpt: 20 },
   'social-pov': { nano: 10, gpt: 20 },
   'storyboard': { nano: 25, gpt: 50 },
@@ -72,7 +70,6 @@ const PRODUCT_TYPE_NAMES: Record<ProductType, string> = {
   'amazon-image-gen': '亚马逊生图',
   'detail-page': '详情页设计',
   'banner': 'Banner设计',
-  'poster': '智能海报设计',
   'xiaohongshu': '小红书种草图文',
   'social-pov': '社媒POV出图',
   'storyboard': '故事板',
@@ -186,7 +183,7 @@ export class ProductRefinementSkill {
   getProductCategories(): Record<string, ProductType[]> {
     return {
       '场景融合': ['recommend', 'three-view'],
-      '电商': ['style-transfer', 'standalone-carousel', 'amazon-image-gen', 'detail-page', 'banner', 'poster'],
+      '电商': ['style-transfer', 'standalone-carousel', 'amazon-image-gen', 'detail-page', 'banner'],
       '社媒': ['xiaohongshu', 'social-pov'],
       '视频': ['storyboard', 'tk-script'],
       '工具': ['copywriting'],
@@ -363,8 +360,7 @@ export class ProductRefinementSkill {
       '5': 'amazon-image-gen',
       '6': 'detail-page',
       '7': 'banner',
-      '8': 'poster',
-      '9': 'xiaohongshu',
+      '8': 'xiaohongshu',
       '10': 'social-pov',
       '11': 'storyboard',
       '12': 'tk-script',
@@ -509,10 +505,6 @@ export class ProductRefinementSkill {
 - 产品图片：[请上传]
 - 营销文案：[请输入]
 - 活动信息：[请输入]`,
-      'poster': `请为我生成智能海报：
-- 产品图片：[请上传]
-- 主标题：[请输入]
-- 副标题：[请输入]`,
       'xiaohongshu': `请为我生成小红书种草图文：
 - 产品图片：[请上传]
 - 种草文案：[请输入]

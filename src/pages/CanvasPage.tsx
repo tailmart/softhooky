@@ -14,16 +14,12 @@ const HandheldPage = React.lazy(() => import('./plugins/HandheldPage').then(m =>
 const DetailClonePage = React.lazy(() => import('./plugins/DetailClonePage').then(m => ({ default: m.DetailClonePage })));
 const ProductFusionPage = React.lazy(() => import('./plugins/ProductFusionPage').then(m => ({ default: m.ProductFusionPage })));
 const ProductRefinePage = React.lazy(() => import('./plugins/ProductRefinePage').then(m => ({ default: m.ProductRefinePage })));
-const GeminiVideoPage = React.lazy(() => import('./plugins/GeminiVideoPage').then(m => ({ default: m.GeminiVideoPage })));
 const ImageLibraryPage = React.lazy(() => import('./plugins/ImageLibraryPage').then(m => ({ default: m.ImageLibraryPage })));
 const ImageEditRegionPage = React.lazy(() => import('./plugins/ImageEditRegionPage').then(m => ({ default: m.ImageEditRegionPage })));
 const ImageTranslatePage = React.lazy(() => import('./plugins/ImageTranslatePage').then(m => ({ default: m.ImageTranslatePage })));
 
 const ThreeViewPage = React.lazy(() => import('./plugins/ThreeViewPage').then(m => ({ default: m.ThreeViewPage })));
-const Veo31VideoPage = React.lazy(() => import('./plugins/Veo31VideoPage').then(m => ({ default: m.Veo31VideoPage })));
 
-const PosterPage = React.lazy(() => import('./plugins/PosterPage').then(m => ({ default: m.PosterPage })));
-const EcommercePosterPage = React.lazy(() => import('./plugins/EcommercePosterPage').then(m => ({ default: m.EcommercePosterPage })));
 const ProductTryonPage = React.lazy(() => import('./plugins/ProductTryonPage').then(m => ({ default: m.ProductTryonPage })));
 const Product9GridPage = React.lazy(() => import('./plugins/Product9GridPage').then(m => ({ default: m.Product9GridPage })));
 const ChatGenPageWrapper = React.lazy(() => import('./chat/ImageGenPageWrapper').then(m => ({ default: m.ChatGenPageWrapper })));
@@ -118,8 +114,6 @@ const NAV_IDS = {
   IMAGE_EDIT_REGION: 'image-edit-region',
   THREE_VIEW: 'three-view',
   LANDING: 'landing',
-  GEMINI_VIDEO: 'gemini-video',
-  VEO31: 'veo31',
 } as const;
 
 const PLUGIN_LABELS: Record<string, string> = {
@@ -137,11 +131,7 @@ const PLUGIN_LABELS: Record<string, string> = {
   'image-library': 'Image Library',
   'image-edit-region': '区域编辑',
   'image-translate': '图片转译',
-  'gemini-video': 'Gemini Omini视频',
   'three-view': '三视图生成',
-  poster: '营销海报设计',
-  'ecommerce-poster': '电商海报设计',
-  'veo31': 'Veo.1视频生成',
   workflow: '工作流生图',
 };
 
@@ -161,10 +151,6 @@ const PLUGIN_COMPONENTS: Record<string, React.FC> = {
   'image-edit-region': ImageEditRegionPage,
   'image-translate': ImageTranslatePage,
   'three-view': ThreeViewPage,
-  'veo31': Veo31VideoPage,
-  poster: PosterPage,
-  'ecommerce-poster': EcommercePosterPage,
-  'gemini-video': GeminiVideoPage,
   workflow: WorkflowPage,
 };
 
@@ -388,8 +374,6 @@ export const CanvasPage: React.FC = () => {
     { id: 'three-view', icon: Layout, label: '三视图生成', desc: '上传产品图，生成正面+侧面+背面三视图', color: 'from-[#171717] to-[#404040]' },
     { id: 'image-edit-region', icon: Wand2, label: '区域编辑', desc: '圈选图片区域，AI智能修改内容或替换产品', color: 'from-[#6366F1] to-[#8B5CF6]' },
     { id: 'image-translate', icon: Globe, label: '图片转译', desc: '上传海报图片，AI自动提取文案并翻译替换为多语言版本', color: 'from-[#171717] to-[#404040]' },
-    { id: 'poster', icon: Layout, label: '营销海报设计', desc: '上传图片和文案，AI设计营销海报', color: 'from-[#171717] to-[#404040]' },
-    { id: 'ecommerce-poster', icon: Layout, label: '电商海报设计', desc: '上传产品图，AI分析后自动生成电商海报', color: 'from-[#171717] to-[#404040]' },
   ];
 
   const renderPluginView = () => {

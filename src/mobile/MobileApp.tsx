@@ -10,29 +10,13 @@ import { TabId } from './components/BottomTabs';
 import './index.css';
 
 const PLUGIN_LABELS: Record<string, string> = {
-  'nano-gen': 'TK带货图片',
-  'deepseek-chat': 'AI文案助手',
-  'xiaohongshu': '小红书种草图文',
-  'social': '社媒POV出图',
-  'amazon-image-gen': '亚马逊生图',
-  'banner': 'Banner设计',
-  'detail': '详情页设计',
-  'detail2': '详情页设计',
-  'tryon': '产品穿搭',
-  'handheld': '手持产品',
-  'detailClone': '智能设计克隆',
-  'productFusion': '场景融合',
-  'productRefine': '产品精修',
-  'product-9grid': '产品展示图',
-  'image-library': '图片图库',
   'storyboard': '故事板',
-  'three-view': '三视图生成',
-  'gemini-video': '视频生成',
-  'veo31': 'Veo3.1视频',
-  'tk-video': 'TK视频脚本',
-  'poster': '营销海报设计',
+  'nano-gen': 'TK带货图片',
+  'xiaohongshu': '小红书种草',
+  'social': '社媒POV出图',
   'recharge': '充值',
   'records': '消费记录',
+  'image-library': '图库',
   'coupon': '优惠券',
 };
 

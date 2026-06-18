@@ -1,16 +1,16 @@
-import React, { useState, Suspense } from 'react';
+import React, { useState, Suspense, useEffect } from 'react';
 import { Film, Share2, FileImage, Sparkles, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Clapperboard, Coins, CreditCard, History, Users, Image as ImageIcon, Gift, TrendingUp, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSiteConfig } from '../contexts/SiteConfigContext';
+import { AuthModal } from '../components/AuthModal';
+import { logout as authLogout } from '../services/authService';
 
-const GeminiVideoPage = React.lazy(() => import('./plugins/GeminiVideoPage').then(m => ({ default: m.GeminiVideoPage })));
-const Veo31VideoPage = React.lazy(() => import('./plugins/Veo31VideoPage').then(m => ({ default: m.Veo31VideoPage })));
 const XiaohongshuPage = React.lazy(() => import('./plugins/XiaohongshuPage').then(m => ({ default: m.XiaohongshuPage })));
 const SocialMediaPage = React.lazy(() => import('./plugins/SocialMediaPage').then(m => ({ default: m.SocialMediaPage })));
 const StoryboardPage = React.lazy(() => import('./plugins/StoryboardPage').then(m => ({ default: m.StoryboardPage })));
 const TikTokVideoPage = React.lazy(() => import('./plugins/TikTokVideoPage').then(m => ({ default: m.TikTokVideoPage })));
 
-type TabId = 'gemini' | 'veo31' | 'xiaohongshu' | 'social' | 'storyboard' | 'tk-video';
+type TabId = 'xiaohongshu' | 'social' | 'storyboard' | 'tk-video';
 
 interface TabItem { id: TabId; label: string; icon: React.ElementType; }
 interface Category { id: string; label: string; icon: React.ElementType; color: string; items: TabItem[]; }
@@ -28,8 +28,6 @@ const CATEGORIES: Category[] = [
     items: [
       { id: 'storyboard', label: '故事板', icon: Clapperboard },
       { id: 'tk-video', label: 'TK脚本图', icon: Film },
-      { id: 'gemini', label: 'Gemini Omini', icon: Film },
-      { id: 'veo31', label: 'Veo3.1 视频', icon: Film },
     ],
   },
 ];
@@ -54,11 +52,29 @@ const VideoProjectPage: React.FC = () => {
   const [showCouponModal, setShowCouponModal] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
-  const { user, logout } = useAuth();
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const { user, setUser } = useAuth();
   const { config } = useSiteConfig();
 
   const isLoggedIn = !!user?.email;
   const getInitial = (email: string) => email?.charAt(0).toUpperCase() || '?';
+
+  // 监听登录态变化（如401过期），显示登录弹窗
+  useEffect(() => {
+    const handler = () => {
+      setUser(null);
+      setShowAuthModal(true);
+    };
+    window.addEventListener('auth-state-changed', handler);
+    return () => window.removeEventListener('auth-state-changed', handler);
+  }, [setUser]);
+
+  // 退出登录：仅清除本地状态，不跳转页面
+  const handleLogout = () => {
+    authLogout();
+    setUser(null);
+    setShowUserMenu(false);
+  };
 
   React.useEffect(() => {
     const u = JSON.parse(sessionStorage.getItem('user') || '{}');
@@ -78,8 +94,6 @@ const VideoProjectPage: React.FC = () => {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'gemini': return <GeminiVideoPage />;
-      case 'veo31': return <Veo31VideoPage />;
       case 'xiaohongshu': return <XiaohongshuPage />;
       case 'social': return <SocialMediaPage />;
       case 'storyboard': return <StoryboardPage />;
@@ -273,7 +287,7 @@ const VideoProjectPage: React.FC = () => {
                         <button onClick={() => { setShowUserMenu(false); setShowPrivacyModal(true); }}
                           className="text-xs text-gray-400 hover:text-gray-600 transition-colors">隐私政策</button>
                       </div>
-                      <button onClick={() => { logout(); setShowUserMenu(false); }}
+                      <button onClick={handleLogout}
                         className="flex items-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-medium text-red-500 hover:bg-red-50 transition-all">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -286,9 +300,10 @@ const VideoProjectPage: React.FC = () => {
               )}
             </div>
           ) : (
-            <div className="text-center">
-              <span className="text-[11px] text-[#ccc]">请先登录</span>
-            </div>
+            <button onClick={() => setShowAuthModal(true)}
+              className="w-full text-center py-2 text-[11px] text-blue-500 hover:text-blue-600 transition-colors">
+              请先登录
+            </button>
           )}
         </div>
       </div>
@@ -301,6 +316,12 @@ const VideoProjectPage: React.FC = () => {
           </div>
         </Suspense>
       </div>
+
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onLoginSuccess={() => setShowAuthModal(false)}
+      />
     </div>
   );
 };

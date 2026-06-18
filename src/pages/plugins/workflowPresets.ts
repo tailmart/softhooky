@@ -191,24 +191,6 @@ export const WORKFLOW_PRESETS: WorkflowPreset[] = [
       { id: 'c9-3', sourceId: 'gen-9', sourcePort: 'out', targetId: 'out-9', targetPort: 'in' },
     ],
   },
-  {
-    id: 'poster-design',
-    name: '营销海报设计',
-    description: '上传产品图、Logo、素材图，AI分析后生成营销海报设计方案',
-    category: '营销设计',
-    icon: 'Copy',
-    nodes: [
-      { id: 'start-10', type: 'start', position: { x: 60, y: 60 }, data: { description: '上传产品图片 + Logo + 素材图', referenceImages: [] } },
-      { id: 'analyze-10', type: 'imageAnalyze', position: { x: 60 + GX, y: 60 }, data: { instruction: '分析产品图和素材图，给出海报设计方案：排版布局、色彩方案、字体搭配、视觉层级。考虑产品卖点和目标受众。' } },
-      { id: 'gen-10', type: 'imageEdit', position: { x: 60 + GX * 2, y: 60 }, data: { model: 'nanobann2', aspectRatio: '9:16', resolution: '2K', prompt: '营销海报，产品突出展示，排版精致，色彩搭配专业，包含标题区和产品展示区，商业广告级别' } },
-      { id: 'out-10', type: 'output', position: { x: 60 + GX * 3, y: 60 }, data: { saveToLibrary: true } },
-    ],
-    connections: [
-      { id: 'c10-1', sourceId: 'start-10', sourcePort: 'out', targetId: 'analyze-10', targetPort: 'in' },
-      { id: 'c10-2', sourceId: 'analyze-10', sourcePort: 'out', targetId: 'gen-10', targetPort: 'in' },
-      { id: 'c10-3', sourceId: 'gen-10', sourcePort: 'out', targetId: 'out-10', targetPort: 'in' },
-    ],
-  },
   // ===== 社交媒体 =====
   {
     id: 'xiaohongshu',

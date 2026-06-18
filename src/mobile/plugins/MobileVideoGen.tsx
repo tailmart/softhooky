@@ -17,35 +17,6 @@ interface VideoGenConfig {
   defaultPrice: number;
 }
 
-const GEMINI_CONFIG: VideoGenConfig = {
-  title: 'Gemini视频',
-  description: '上传产品图，AI 生成产品展示视频',
-  apiEndpoint: '/api/video/gemini',
-  statusEndpoint: '/api/video/gemini/status',
-  defaultModel: 'gemini-2.0-flash-exp',
-  durations: [
-    { value: 4, label: '4秒' },
-    { value: 8, label: '8秒' },
-    { value: 10, label: '10秒' },
-  ],
-  pricingKey: 'gemini_video_4s',
-  defaultPrice: 3,
-};
-
-const VEO31_CONFIG: VideoGenConfig = {
-  title: 'Veo3.1视频',
-  description: '上传产品图，AI 生成高质量产品视频',
-  apiEndpoint: '/api/video/seedance',
-  statusEndpoint: '/api/video/seedance/status',
-  defaultModel: 'veo-3.1-fast',
-  models: [
-    { value: 'veo-3.1-fast', label: 'Veo3.1 快速' },
-    { value: 'veo-3.1-hd', label: 'Veo3.1 高清' },
-  ],
-  pricingKey: 'veo31_video',
-  defaultPrice: 1,
-};
-
 const RATIOS = [
   { value: '9:16', label: '9:16 竖屏' },
   { value: '16:9', label: '16:9 横屏' },
@@ -262,4 +233,4 @@ export const MobileVideoGen: React.FC<MobileVideoGenProps> = ({ config, onBack }
   );
 };
 
-export { GEMINI_CONFIG, VEO31_CONFIG };
+export { GEMINI_CONFIG };

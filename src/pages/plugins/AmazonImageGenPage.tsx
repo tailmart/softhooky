@@ -13,6 +13,7 @@ import { ModelSpeedNote } from '../../components/ModelSpeedNote';
 import { LoadingAnimation } from '../../components/LoadingAnimation';
 import { Toast } from '../../components/Toast';
 import { LANGUAGES, getSavedLanguage, saveLanguage } from '../../constants/languages';
+import { getPricing } from '../../services/pricingService';
 
 const MODES = [
   { value: 'main', label: '主图' },
@@ -543,19 +544,46 @@ function extractJson<T = any>(text: string): T | null {
 
 export const AmazonImageGenPage: React.FC = () => {
   const [models, setModels] = useState<{ value: string; label: string }[]>([]);
-  useEffect(() => {
-    getAvailableModels().then(m => {
-      const sorted = m.filter(x => x.enabled).sort((a, b) => a.sort_order - b.sort_order);
-      setModels(sorted.map(x => ({ value: x.model_id, label: x.label })));
-      if (sorted.length > 0) setSelectedModel('gpt-image-2');
-    });
-  }, []);
+  const [selectedModel, setSelectedModel] = useState('');
+  const [generatePrice, setGeneratePrice] = useState(0.3);
   const [productImages, setProductImages] = useState<{ file: File; preview: string }[]>([]);
   const [productTitle, setProductTitle] = useState('');
   const [customDescription, setCustomDescription] = useState('');
   const [selectedModes, setSelectedModes] = useState<string[]>(['main']);
   const [language, setLanguage] = useState(getSavedLanguage());
   const [aspectRatio, setAspectRatio] = useState('1:1');
+  const [analyzing, setAnalyzing] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [analysisComplete, setAnalysisComplete] = useState(false);
+  const [quality, setQuality] = useState('2K');
+  const [progress, setProgress] = useState('');
+  const [deepAnalysis, setDeepAnalysis] = useState<Record<string, string> | null>(null);
+  const [results, setResults] = useState<{ url: string; title: string }[]>([]);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [reEditImage, setReEditImage] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [merging, setMerging] = useState(false);
+
+  useEffect(() => {
+    getAvailableModels().then(m => {
+      const sorted = m.filter(x => x.enabled && x.model_id !== 'agnes-image-2.1-flash').sort((a, b) => a.sort_order - b.sort_order);
+      setModels(sorted.map(x => ({ value: x.model_id, label: x.label })));
+      if (sorted.length > 0) setSelectedModel('gpt-image-2');
+    });
+  }, []);
+
+  // 获取生成价格
+  useEffect(() => {
+    getPricing().then(p => {
+      if (selectedModel === 'gpt-image-2') {
+        setGeneratePrice(p.gpt_image2_generation || 0.3);
+      } else if (selectedModel === 'agnes-image-2.1-flash') {
+        setGeneratePrice(p.agnes_image_generation || 0.3);
+      } else {
+        setGeneratePrice(p.nanobann2_generation || 0.3);
+      }
+    });
+  }, [selectedModel]);
 
   // 各模式默认比例
   const MODE_RATIOS: Record<string, { default: string; options: string[] }> = {
@@ -586,18 +614,6 @@ export const AmazonImageGenPage: React.FC = () => {
       return next;
     });
   };
-  const [selectedModel, setSelectedModel] = useState('');
-  const [analyzing, setAnalyzing] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [analysisComplete, setAnalysisComplete] = useState(false);
-  const [quality, setQuality] = useState('2K');
-  const [progress, setProgress] = useState('');
-  const [deepAnalysis, setDeepAnalysis] = useState<Record<string, string> | null>(null);
-  const [results, setResults] = useState<{ url: string; title: string }[]>([]);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const [reEditImage, setReEditImage] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const [merging, setMerging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // 存储分析结果供生成阶段使用
   const analysisRef = useRef<{
@@ -1116,6 +1132,9 @@ ${modeReqs.join('\n')}
                 className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg">
                 <Wand2 size={18} /> 开始生成
               </button>
+              <p className="text-xs text-amber-600 font-medium text-center">
+                消耗 {generatePrice.toFixed(1)} 积分/张
+              </p>
               <button onClick={() => { setAnalysisComplete(false); analysisRef.current = null; }}
                 className="w-full bg-gray-100 text-gray-600 py-2.5 rounded-xl text-xs font-medium flex items-center justify-center gap-2 hover:bg-gray-200 transition-all">
                 重新分析

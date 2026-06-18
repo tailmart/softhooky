@@ -13,6 +13,7 @@ import { ReEditModal } from '../../components/ReEditModal';
 import { ModelSpeedNote } from '../../components/ModelSpeedNote';
 import { LoadingAnimation } from '../../components/LoadingAnimation';
 import { LANGUAGES, getSavedLanguage, saveLanguage } from '../../constants/languages';
+import { getPricing } from '../../services/pricingService';
 
 interface PromptCard {
   id: number;
@@ -276,7 +277,7 @@ export const DetailPage2: React.FC = () => {
   const [models, setModels] = useState<{ value: string; label: string }[]>([]);
   useEffect(() => {
     getAvailableModels().then(m => {
-      const sorted = m.filter(x => x.enabled).sort((a, b) => a.sort_order - b.sort_order);
+      const sorted = m.filter(x => x.enabled && x.model_id !== 'agnes-image-2.1-flash').sort((a, b) => a.sort_order - b.sort_order);
       setModels(sorted.map(x => ({ value: x.model_id, label: x.label })));
       if (sorted.length > 0) {
         setSelectedModel('gpt-image-2');
@@ -293,12 +294,14 @@ export const DetailPage2: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const [isMerging, setIsMerging] = useState(false);
   const [progress, setProgress] = useState('');
+  const [genError, setGenError] = useState('');
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [deepAnalysis, setDeepAnalysis] = useState<DeepProductAnalysis | null>(null);
   const [generatedImages, setGeneratedImages] = useState<GenImage[]>([]);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [reEditImage, setReEditImage] = useState<string | null>(null);
+  const [generatePrice, setGeneratePrice] = useState(0.3);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLTextAreaElement>(null);
   const descRef = useRef<HTMLTextAreaElement>(null);
@@ -307,6 +310,19 @@ export const DetailPage2: React.FC = () => {
     el.style.height = 'auto';
     el.style.height = el.scrollHeight + 'px';
   };
+
+  // 获取生成价格
+  useEffect(() => {
+    getPricing().then(p => {
+      if (selectedModel === 'gpt-image-2') {
+        setGeneratePrice(p.gpt_image2_generation || 0.3);
+      } else if (selectedModel === 'agnes-image-2.1-flash') {
+        setGeneratePrice(p.agnes_image_generation || 0.3);
+      } else {
+        setGeneratePrice(p.nanobann2_generation || 0.3);
+      }
+    });
+  }, [selectedModel]);
 
   useEffect(() => {
     if (nameRef.current) autoResize(nameRef.current);
@@ -428,6 +444,7 @@ export const DetailPage2: React.FC = () => {
 
     setGenerating(true);
     setGeneratedImages([]);
+    setGenError('');
     imageLibraryService.clearSavedUrlsCache();
     const sections: ({ title: string; prompt: string; refImageIndices?: number[] })[] = (result?.prompts || []).length > 0
       ? (result?.prompts || []).map(c => ({ title: c.title, prompt: c.prompt, refImageIndices: c.refImageIndices }))
@@ -469,7 +486,9 @@ export const DetailPage2: React.FC = () => {
           console.error(`[详情页] 第${idx + 1}张无URL, resp:`, JSON.stringify(resp).substring(0, 300));
         }
       } catch (err: any) {
-        console.error(`[详情页] 生成第${idx + 1}张失败:`, err.message || err, err.stack);
+        const msg = err.response?.data?.error || err.response?.data?.message || err.message || '生成失败';
+        console.error(`[详情页] 生成第${idx + 1}张失败:`, msg, err.stack);
+        setGenError(msg);
       }
       doneCount++;
       setProgress(`生成中 (${doneCount}/${total})...`);
@@ -697,10 +716,15 @@ export const DetailPage2: React.FC = () => {
 
           {/* Generate Button */}
           {result && !generating && (
-            <button onClick={handleGenerate} disabled={generating}
-              className="w-full bg-[#171717] text-white py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-[#27272A] transition-all shadow-sm">
-              {generating ? <><Loader2 size={18} className="animate-spin" /> 生成中...</> : <><Sparkles size={18} /> 生成详情页配图 ({result.prompts.length}张)</>}
-            </button>
+            <div className="space-y-2">
+              <button onClick={handleGenerate} disabled={generating}
+                className="w-full bg-[#171717] text-white py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-[#27272A] transition-all shadow-sm">
+                {generating ? <><Loader2 size={18} className="animate-spin" /> 生成中...</> : <><Sparkles size={18} /> 生成详情页配图 ({result.prompts.length}张)</>}
+              </button>
+              <p className="text-xs text-amber-600 font-medium text-center">
+                消耗 {(generatePrice * result.prompts.length).toFixed(1)} 积分 ({generatePrice.toFixed(1)}/张)
+              </p>
+            </div>
           )}
 
           {/* Merge Button */}
@@ -715,6 +739,12 @@ export const DetailPage2: React.FC = () => {
             <div className="text-center text-xs text-[#A3A3A3] bg-[#F5F5F5] rounded-xl py-3">
               <Loader2 size={14} className="animate-spin inline mr-2" />
               {progress}
+            </div>
+          )}
+
+          {genError && (
+            <div className="text-center text-xs text-[#EF4444] bg-[#FEF2F2] border border-[#FECACA] rounded-xl py-3 px-4">
+              {genError}
             </div>
           )}
         </div>

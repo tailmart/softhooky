@@ -29,16 +29,6 @@ const CORE_FEATURES = [
     caseImage: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=tiktok+style+product+photography+commercial+photo+studio+lighting+modern+aesthetic+dark+background&image_size=landscape_4_3',
   },
   {
-    id: 'gemini-video',
-    title: '视频生成',
-    subtitle: '图片变营销视频',
-    description: '上传图片，AI生成短视频广告',
-    icon: Video,
-    gradient: 'from-emerald-600 to-teal-700',
-    accent: '#10b981',
-    caseImage: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=product+video+production+cinematic+motion+graphics+marketing+video+dark+background+blue+neon+light&image_size=landscape_4_3',
-  },
-  {
     id: 'xiaohongshu',
     title: '小红书种草',
     subtitle: '一键生成笔记',

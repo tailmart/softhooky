@@ -76,8 +76,6 @@ export const MobileRecharge: React.FC<MobileRechargeProps> = ({ onBack }) => {
 
   const gptPrice = pricing.gpt_image2_generation || 0.3;
   const nanoPrice = pricing.nanobann2_generation || 0.3;
-  const veoPrice = pricing.veo31_video || 1;
-  const veoFastPrice = pricing.veo31_video_fast || 2;
 
   const isCustom = customAmount !== '';
   const activePlan = PLANS.find(p => p.id === selectedPlan);
@@ -126,8 +124,6 @@ export const MobileRecharge: React.FC<MobileRechargeProps> = ({ onBack }) => {
               {[
                 { icon: Sparkles, label: 'GPT图像', price: gptPrice, color: 'text-blue-400', bg: 'bg-blue-500/10' },
                 { icon: Zap, label: 'Nano生图', price: nanoPrice, color: 'text-purple-400', bg: 'bg-purple-500/10' },
-                { icon: Video, label: 'Veo3.1视频', price: veoPrice, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-                { icon: Film, label: 'Veo3.1快速', price: veoFastPrice, color: 'text-rose-400', bg: 'bg-rose-500/10' },
               ].map(item => (
                 <div key={item.label} className={`${item.bg} rounded-xl px-3 py-2.5 flex items-center gap-2.5`}>
                   <item.icon size={16} className={item.color} />

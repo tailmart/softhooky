@@ -12,7 +12,7 @@ import { AuthModal } from './components/AuthModal';
 import { MobileApp } from './mobile/MobileApp';
 import TauriUpdater from './components/TauriUpdater';
 
-const VideoProjectPage = React.lazy(() => import('./pages/VideoProjectPage'));
+const VideoStudioPage = React.lazy(() => import('./pages/video/VideoStudioPage'));
 const WorkflowPage = React.lazy(() => import('./pages/plugins/WorkflowPage').then(m => ({ default: m.WorkflowPage })));
 
 const APP_VERSION_KEY = 'app_build_version';
@@ -43,31 +43,15 @@ const WorkflowAuthWrapper = () => {
   );
 };
 
-const VideoAuthWrapper = () => {
-  const { isAuthenticated, isLoading } = useAuth();
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) window.location.href = '/';
-  }, [isLoading, isAuthenticated]);
-
-  if (isLoading || !isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-[#F7F7F7] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#171717] border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  return (
-    <React.Suspense fallback={
-      <div className="min-h-screen bg-[#F7F7F7] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#171717] border-t-transparent rounded-full animate-spin" />
-      </div>
-    }>
-      <VideoProjectPage />
-    </React.Suspense>
-  );
-};
+const VideoRoute = () => (
+  <React.Suspense fallback={
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+    </div>
+  }>
+    <VideoStudioPage />
+  </React.Suspense>
+);
 
 type View = 'canvas';
 
@@ -205,7 +189,7 @@ export default function App() {
             <Route path="/sub-login" element={<SubAccountLoginPage />} />
             <Route path="/admin/*" element={<AdminApp />} />
             <Route path="/agent/*" element={<AgentApp />} />
-            <Route path="/video" element={<VideoAuthWrapper />} />
+            <Route path="/video" element={<VideoRoute />} />
             <Route path="/workflow" element={<WorkflowAuthWrapper />} />
             <Route path="/*" element={<AppContent />} />
           </Routes>

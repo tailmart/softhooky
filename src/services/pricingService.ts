@@ -5,11 +5,9 @@ interface Pricing {
   nanobann2_edit?: number;
   gpt_image2_generation?: number;
   gpt_image2_edit?: number;
+  agnes_image_generation?: number;
+  agnes_image_edit?: number;
   product_fusion?: number;
-  veo31_video?: number;
-  veo31_video_fast?: number;
-  veo31_video_4k?: number;
-  veo31_video_fast_4k?: number;
   [key: string]: number | undefined;
 }
 
