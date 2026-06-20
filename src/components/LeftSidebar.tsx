@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Coins, CreditCard, History, Users, Image as ImageIcon, FileImage, Video, Share2, ShoppingCart, Layout, User, Wand2, Hand, ChevronDown, ChevronRight, Copy, Layers, MessageCircle, Film, Bell, Mail, FileText, Shield, X, Gift, Clapperboard, ChevronsLeft, ChevronsRight, TrendingUp, Sparkles, ShoppingBag, Megaphone, Boxes, Languages } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
@@ -218,9 +219,11 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   const getInitial = (email: string) => email?.charAt(0).toUpperCase() || '?';
   const isLoggedIn = !!user?.email;
 
+  const navigate = useNavigate();
+
   const handleNavClick = (id: string) => {
     if (id === 'video-gen') {
-      window.open('/video', '_blank');
+      navigate('/video');
     } else {
       onSelectNav?.(id);
     }
