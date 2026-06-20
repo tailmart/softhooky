@@ -958,6 +958,7 @@ const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://127.0.0.1:3000',
   'http://127.0.0.1:3001',
+  'tauri://localhost',
 
 ];
 
@@ -969,8 +970,9 @@ app.use((req, res, next) => {
     ALLOWED_ORIGINS.includes(origin) ||
     // 开发环境：允许所有 localhost / 127.0.0.1 变体
     /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
-    // Tauri 桌面应用 WebView origin（tauri.localhost）
+    // Tauri 桌面应用 WebView origin（tauri.localhost / tauri://localhost）
     /^https?:\/\/[\w-]+\.localhost(:\d+)?$/.test(origin) ||
+    /^tauri:\/\/localhost(:\d+)?$/.test(origin) ||
     origin === 'null'
   );
 
