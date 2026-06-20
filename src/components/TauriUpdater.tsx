@@ -1,8 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Download, X, RefreshCw, CheckCircle } from 'lucide-react';
+import { Download, X, RefreshCw } from 'lucide-react';
 
-// 检测是否在 Tauri 环境中运行
+/**
+ * 检测是否在 Tauri 环境中运行
+ */
 function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI__' in window;
 }
@@ -12,77 +14,62 @@ interface UpdateInfo {
   notes: string;
 }
 
+/**
+ * 版本检查更新组件
+ *
+ * 原理：定期请求后端版本接口，有新版本时提示用户去云盘下载
+ * 不需要签名密钥、不需要 manifest，适用小团队快速迭代
+ */
 export default function TauriUpdater() {
   const [showDialog, setShowDialog] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
-  const [downloading, setDownloading] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const currentVersion = '1.1.0'; // 与 package.json 同步
 
   const checkForUpdates = useCallback(async () => {
     if (!isTauri()) return;
 
-    try {
-      const { check } = await import('@tauri-apps/plugin-updater');
-      const update = await check();
+    setChecking(true);
+    setError(null);
 
-      if (update) {
+    try {
+      // 请求后端版本接口（在服务端加一个简单的 JSON 接口即可）
+      const resp = await fetch('http://43.143.213.221/api/version');
+      if (!resp.ok) return;
+      const data = await resp.json();
+
+      if (data.version && data.version !== currentVersion) {
         setUpdateInfo({
-          version: update.version || '未知',
-          notes: update.body || '新版本可用',
+          version: data.version,
+          notes: data.notes || '新版本已发布，请下载更新',
         });
         setShowDialog(true);
       }
     } catch (err) {
-      console.log('Update check failed (非致命错误):', err);
+      // 版本检查失败不阻塞用户
+      console.log('[Update] Check failed:', err);
+    } finally {
+      setChecking(false);
     }
   }, []);
 
   useEffect(() => {
-    // 启动后延迟 5 秒检查更新
+    // 启动后 5 秒检查
     const timer = setTimeout(checkForUpdates, 5000);
     // 每 30 分钟检查一次
     const interval = setInterval(checkForUpdates, 30 * 60 * 1000);
-
     return () => {
       clearTimeout(timer);
       clearInterval(interval);
     };
   }, [checkForUpdates]);
 
-  const handleUpdate = async () => {
-    if (!updateInfo) return;
-
-    setDownloading(true);
-    setError(null);
-    setDownloadProgress(0);
-
-    try {
-      const { check } = await import('@tauri-apps/plugin-updater');
-      const update = await check();
-
-      if (update) {
-        // 下载并安装更新
-        await update.downloadAndInstall((event) => {
-          if (event.event === 'Started' && event.data.contentLength) {
-            setDownloadProgress(0);
-          } else if (event.event === 'Progress') {
-            // 更新进度
-            setDownloadProgress((prev) => Math.min(prev + 1, 99));
-          } else if (event.event === 'Finished') {
-            setDownloadProgress(100);
-          }
-        });
-
-        // 安装完成后重启应用
-        const { relaunch } = await import('@tauri-apps/plugin-process');
-        await relaunch();
-      }
-    } catch (err: any) {
-      console.error('Update failed:', err);
-      setError(err?.message || '更新失败，请稍后重试');
-      setDownloading(false);
-    }
+  const handleDownload = () => {
+    // 打开云盘下载链接
+    window.open('https://softhooky.com/download', '_blank');
+    setShowDialog(false);
   };
 
   if (!isTauri() || !showDialog || !updateInfo) return null;
@@ -94,7 +81,7 @@ export default function TauriUpdater() {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]"
-        onClick={() => !downloading && setShowDialog(false)}
+        onClick={() => setShowDialog(false)}
       >
         <motion.div
           initial={{ scale: 0.9, opacity: 0 }}
@@ -105,14 +92,12 @@ export default function TauriUpdater() {
         >
           {/* 头部 */}
           <div className="relative bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-8 text-white">
-            {!downloading && (
-              <button
-                onClick={() => setShowDialog(false)}
-                className="absolute top-4 right-4 p-1 rounded-full hover:bg-white/20 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            )}
+            <button
+              onClick={() => setShowDialog(false)}
+              className="absolute top-4 right-4 p-1 rounded-full hover:bg-white/20 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
             <div className="flex items-center gap-3 mb-3">
               <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
                 <RefreshCw className="w-6 h-6" />
@@ -125,67 +110,25 @@ export default function TauriUpdater() {
           </div>
 
           {/* 内容 */}
-          <div className="px-6 py-5">
-            {downloading ? (
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 text-gray-700">
-                  <Download className="w-5 h-5 text-blue-500 animate-bounce" />
-                  <span className="font-medium">正在下载更新...</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2.5">
-                  <motion.div
-                    className="bg-gradient-to-r from-blue-500 to-indigo-600 h-2.5 rounded-full"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${downloadProgress}%` }}
-                    transition={{ duration: 0.3 }}
-                  />
-                </div>
-                <p className="text-sm text-gray-500 text-center">{downloadProgress}%</p>
-              </div>
-            ) : error ? (
-              <div className="space-y-4">
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <p className="text-red-700 text-sm">{error}</p>
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleUpdate}
-                    className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2.5 rounded-lg font-medium transition-colors"
-                  >
-                    重试
-                  </button>
-                  <button
-                    onClick={() => setShowDialog(false)}
-                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-lg font-medium transition-colors"
-                  >
-                    稍后再说
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
-                  <p className="text-sm text-gray-600 whitespace-pre-wrap">
-                    {updateInfo.notes || '新版本包含改进和修复'}
-                  </p>
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleUpdate}
-                    className="flex-1 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white py-2.5 rounded-lg font-medium transition-all flex items-center justify-center gap-2"
-                  >
-                    <Download className="w-4 h-4" />
-                    立即更新
-                  </button>
-                  <button
-                    onClick={() => setShowDialog(false)}
-                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2.5 rounded-lg font-medium transition-colors"
-                  >
-                    稍后再说
-                  </button>
-                </div>
-              </div>
-            )}
+          <div className="px-6 py-5 space-y-4">
+            <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
+              <p className="text-sm text-gray-600 whitespace-pre-wrap">
+                {updateInfo.notes}
+              </p>
+            </div>
+            <button
+              onClick={handleDownload}
+              className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2"
+            >
+              <Download className="w-4 h-4" />
+              前往下载新版本
+            </button>
+            <button
+              onClick={() => setShowDialog(false)}
+              className="w-full text-center py-2 text-sm text-gray-500 hover:text-gray-700"
+            >
+              稍后再说
+            </button>
           </div>
         </motion.div>
       </motion.div>
