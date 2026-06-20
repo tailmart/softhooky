@@ -53,18 +53,12 @@ jobs:
       - name: Generate icons
         run: npm run tauri:icons
 
-           - name: Build Windows NSIS
-        run: npx tauri build 2>&1
+      - name: Build Windows NSIS
+        run: "npx tauri build"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
-        with:
-          tagName: v__VERSION__
-          releaseName: 'Softhooky v__VERSION__'
-          releaseBody: '${{ github.event.inputs.notes || ''Softhooky 桌面版新版本'' }}'
-          releaseDraft: false
-          prerelease: false
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
