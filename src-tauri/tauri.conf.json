@@ -42,9 +42,6 @@
       "icons/icon.ico"
     ],
     "resources": [],
-    "webviewInstallMode": {
-      "type": "bootstrapper"
-    },
     "windows": {
       "nsis": {
         "displayLanguageSelector": false,
