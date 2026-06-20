@@ -2,53 +2,69 @@ import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Download, X, RefreshCw } from 'lucide-react';
 
-/**
- * 检测是否在 Tauri 环境中运行
- */
 function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI__' in window;
+}
+
+function isWindows(): boolean {
+  return navigator.userAgent.includes('Windows');
+}
+
+function isMacOS(): boolean {
+  return navigator.userAgent.includes('Mac OS') || navigator.userAgent.includes('Intel Mac');
 }
 
 interface UpdateInfo {
   version: string;
   notes: string;
+  downloadUrl: string;
 }
 
-/**
- * 版本检查更新组件
- *
- * 原理：定期请求后端版本接口，有新版本时提示用户去云盘下载
- * 不需要签名密钥、不需要 manifest，适用小团队快速迭代
- */
 export default function TauriUpdater() {
   const [showDialog, setShowDialog] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [checking, setChecking] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const currentVersion = '1.1.0'; // 与 package.json 同步
+  const currentVersion = '1.1.0';
+
+  /** Windows: 通过 GitHub Releases 检查更新 */
+  const checkGitHubRelease = async (): Promise<UpdateInfo | null> => {
+    const resp = await fetch('https://api.github.com/repos/tailmart/softhooky/releases/latest');
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const tagVersion = (data.tag_name || '').replace(/^v/, '');
+    if (!tagVersion || tagVersion === currentVersion) return null;
+    return {
+      version: tagVersion,
+      notes: data.body || '新版本已发布',
+      downloadUrl: `https://github.com/tailmart/softhooky/releases/tag/${data.tag_name}`,
+    };
+  };
+
+  /** macOS: 通过后端 API 检查更新 */
+  const checkServerVersion = async (): Promise<UpdateInfo | null> => {
+    const resp = await fetch('http://43.143.213.221/api/version');
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    if (!data.version || data.version === currentVersion) return null;
+    return {
+      version: data.version,
+      notes: data.notes || '新版本已发布',
+      downloadUrl: 'https://softhooky.com/download',
+    };
+  };
 
   const checkForUpdates = useCallback(async () => {
     if (!isTauri()) return;
-
     setChecking(true);
-    setError(null);
 
     try {
-      // 请求后端版本接口（在服务端加一个简单的 JSON 接口即可）
-      const resp = await fetch('http://43.143.213.221/api/version');
-      if (!resp.ok) return;
-      const data = await resp.json();
-
-      if (data.version && data.version !== currentVersion) {
-        setUpdateInfo({
-          version: data.version,
-          notes: data.notes || '新版本已发布，请下载更新',
-        });
+      const info = isWindows() ? await checkGitHubRelease() : await checkServerVersion();
+      if (info) {
+        setUpdateInfo(info);
         setShowDialog(true);
       }
     } catch (err) {
-      // 版本检查失败不阻塞用户
       console.log('[Update] Check failed:', err);
     } finally {
       setChecking(false);
@@ -56,19 +72,15 @@ export default function TauriUpdater() {
   }, []);
 
   useEffect(() => {
-    // 启动后 5 秒检查
     const timer = setTimeout(checkForUpdates, 5000);
-    // 每 30 分钟检查一次
     const interval = setInterval(checkForUpdates, 30 * 60 * 1000);
-    return () => {
-      clearTimeout(timer);
-      clearInterval(interval);
-    };
+    return () => { clearTimeout(timer); clearInterval(interval); };
   }, [checkForUpdates]);
 
   const handleDownload = () => {
-    // 打开云盘下载链接
-    window.open('https://softhooky.com/download', '_blank');
+    if (updateInfo?.downloadUrl) {
+      window.open(updateInfo.downloadUrl, '_blank');
+    }
     setShowDialog(false);
   };
 
@@ -90,7 +102,6 @@ export default function TauriUpdater() {
           className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* 头部 */}
           <div className="relative bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-8 text-white">
             <button
               onClick={() => setShowDialog(false)}
@@ -109,19 +120,16 @@ export default function TauriUpdater() {
             </div>
           </div>
 
-          {/* 内容 */}
           <div className="px-6 py-5 space-y-4">
             <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
-              <p className="text-sm text-gray-600 whitespace-pre-wrap">
-                {updateInfo.notes}
-              </p>
+              <p className="text-sm text-gray-600 whitespace-pre-wrap">{updateInfo.notes}</p>
             </div>
             <button
               onClick={handleDownload}
               className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2"
             >
               <Download className="w-4 h-4" />
-              前往下载新版本
+              {isWindows() ? '从 GitHub 下载更新' : '前往下载新版本'}
             </button>
             <button
               onClick={() => setShowDialog(false)}
