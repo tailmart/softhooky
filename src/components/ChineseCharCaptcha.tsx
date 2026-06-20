@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { ShieldCheck, ShieldAlert, RefreshCw } from 'lucide-react';
+import { API_URL } from '../services/api';
 
 interface ChineseCharCaptchaProps {
   onSuccess: (token: string) => void;
@@ -41,7 +42,7 @@ export const ChineseCharCaptcha: React.FC<ChineseCharCaptchaProps> = ({ onSucces
     setClickedIndices([]);
     setClickedChars([]);
     try {
-      const resp = await fetch('/api/captcha/char-click/gen');
+      const resp = await fetch(`${API_URL}/api/captcha/char-click/gen`);
       const data = await resp.json();
       if (data.success) {
         setSessionId(data.data.id);
@@ -178,7 +179,7 @@ export const ChineseCharCaptcha: React.FC<ChineseCharCaptchaProps> = ({ onSucces
       setLoading(true);
       setErrorMsg('');
       try {
-        const resp = await fetch('/api/captcha/char-click/check', {
+        const resp = await fetch(`${API_URL}/api/captcha/char-click/check`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: sessionId, clickedChars: newClickedChars }),
