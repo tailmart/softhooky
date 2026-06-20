@@ -70,7 +70,8 @@
   },
   "optionalDependencies": {
     "@rollup/rollup-darwin-arm64": "^4.61.1",
+    "@rollup/rollup-win32-x64-msvc": "^4.61.1",
     "@rollup/rollup-linux-x64-gnu": "^4.61.1",
-    "@rollup/rollup-win32-x64-msvc": "^4.61.1"
+    "@tauri-apps/cli-win32-x64-msvc": "2.11.2"
   }
 }
