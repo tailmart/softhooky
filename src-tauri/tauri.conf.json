@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:3000",
-    "beforeBuildCommand": "VITE_API_URL=https://softhooky.com npm run vite:only",
+    "beforeBuildCommand": "npm run vite:only",
     "frontendDist": "../dist"
   },
   "app": {
