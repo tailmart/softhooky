@@ -53,8 +53,8 @@ jobs:
       - name: Generate icons
         run: npm run tauri:icons
 
-      - name: Build Windows NSIS
-        uses: tauri-apps/tauri-action@v0
+           - name: Build Windows NSIS
+        run: npx tauri build 2>&1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
