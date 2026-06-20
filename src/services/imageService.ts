@@ -26,6 +26,7 @@ export interface ImageGenerationParams {
   aspectRatio?: string;
   resolution?: string;
   n?: number;
+  type?: string; // 图片来源类型: 'chatgen' | 'edited' 等
 }
 
 export interface ImageEditParams {
@@ -34,6 +35,7 @@ export interface ImageEditParams {
   model?: string;
   resolution?: string;
   aspectRatio?: string;
+  type?: string; // 图片来源类型: 'chatgen' | 'edited' 等
 }
 
 export interface ImageGenerationResponse {
@@ -50,7 +52,7 @@ export interface ImageGenerationResponse {
  * 文生图 - 走后端 API，后端负责：扣费 + 调第三方 + R2上传 + DB保存
  */
 export const generateImage = async (params: ImageGenerationParams): Promise<ImageGenerationResponse> => {
-  const { prompt, model, aspectRatio, resolution, n } = params;
+  const { prompt, model, aspectRatio, resolution, n, type } = params;
   const token = getAuthToken();
 
   const response = await axios.post(
@@ -60,7 +62,8 @@ export const generateImage = async (params: ImageGenerationParams): Promise<Imag
       model: model || 'gemini-3.1-flash-image-preview',
       aspectRatio: aspectRatio || '智能',
       resolution: resolution || '1K',
-      n: n || 1
+      n: n || 1,
+      sourceType: type || 'chatgen'
     },
     {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -76,7 +79,7 @@ export const generateImage = async (params: ImageGenerationParams): Promise<Imag
  * 图生图/编辑 - 走后端 API，后端负责：扣费 + 调第三方 + R2上传 + DB保存
  */
 export const editImage = async (params: ImageEditParams): Promise<ImageGenerationResponse> => {
-  const { prompt, images, model, resolution, aspectRatio } = params;
+  const { prompt, images, model, resolution, aspectRatio, type } = params;
   const token = getAuthToken();
 
   const response = await axios.post(
@@ -86,7 +89,8 @@ export const editImage = async (params: ImageEditParams): Promise<ImageGeneratio
       images, // base64 data URLs 或 URLs
       model: model || 'gemini-3.1-flash-image-preview',
       size: resolution === '4K' ? '4K' : resolution === '2K' ? '2K' : '1K',
-      aspectRatio: aspectRatio || '智能'
+      aspectRatio: aspectRatio || '智能',
+      sourceType: type || 'edited'
     },
     {
       headers: {

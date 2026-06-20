@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Sparkles, Image as ImageIcon, X, Loader2, Check, ChevronDown, Download, Film, Globe } from 'lucide-react';
+import { Upload, Sparkles, Image as ImageIcon, X, Loader2, Check, ChevronDown, Download, Film, Globe, User } from 'lucide-react';
 import { analyzeMultipleImages, chatCompletion } from '../../services/aiChatService';
 import { editImage } from '../../services/imageService';
 import { imageLibraryService } from '../../services/imageLibraryService';
@@ -12,6 +12,7 @@ import { LoadingAnimation } from '../../components/LoadingAnimation';
 
 interface Shot {
   id: number;
+  phase?: string;
   画面: string;
   动作: string;
   台词: string;
@@ -54,6 +55,7 @@ const parseAnalysis = (text: string): AnalysisResult => {
       props: s.props || '',
       shots: (s.shots || []).map((shot: any, i: number) => ({
         id: i + 1,
+        phase: shot.phase || '',
         画面: shot.画面 || '',
         动作: shot.动作 || '',
         台词: shot.台词 || '',
@@ -67,12 +69,15 @@ const parseAnalysis = (text: string): AnalysisResult => {
   }
 };
 
-function buildPrompt(duration: number, langLabel: string, script: string, shotCount: number): string {
+function buildPrompt(duration: number, langLabel: string, script: string, shotCount: number, hasCharRef: boolean): string {
+  const charInstruction = hasCharRef
+    ? `\n【人物一致性要求】你必须仔细分析人物参考图（最后几张为人物参考图），将人物外貌拆分为结构化字段（性别、年龄、肤色、发型发色、面部特征、身材、穿着），在character字段中详细记录，确保所有镜头画面描述中包含一致的人物外貌特征词。`
+    : '';
   return `你是一个专业影视故事板分析师。请根据提供的参考图片和剧本文案，生成一份完整的故事板分析。
 请严格按以下JSON格式返回，不要包含其他文字：
 
 {
-  "character": "主要角色造型设定描述",
+  "character": "主要角色造型设定描述（必须包含：性别、年龄、肤色、发型发色、面部特征、身材、穿着，确保后续镜头一致性）",
   "environment": "核心场景环境描述",
   "lighting": "光影氛围描述",
   "mood": "情绪关键词（逗号分隔）",
@@ -80,7 +85,8 @@ function buildPrompt(duration: number, langLabel: string, script: string, shotCo
   "props": "道具细节描述",
   "shots": [
     {
-      "画面": "镜头画面描述",
+      "phase": "所属叙事阶段（如：开场、铺垫、高潮、转折、结尾）",
+      "画面": "镜头画面描述（必须包含与character一致的人物外貌描述词）",
       "动作": "人物动作",
       "台词": "台词或旁白",
       "景别": "远景/全景/中景/近景/特写",
@@ -93,8 +99,10 @@ function buildPrompt(duration: number, langLabel: string, script: string, shotCo
 要求：
 - 总时长严格${duration}秒
 - 严格${shotCount}个镜头，每个1-3秒
-- 镜头需有连续剧情感
+- 镜头需有连续剧情感，每个镜头画面描述中必须包含人物外貌特征词以保持一致性
+- 每个镜头必须标注phase字段，标明该镜头属于故事的哪个叙事阶段
 - 所有内容使用目标语言：${langLabel}
+${charInstruction}
 
 目标语言：${langLabel}
 剧本文案：${script}`;
@@ -135,7 +143,9 @@ export const StoryboardPage: React.FC = () => {
   const [storyboardImages, setStoryboardImages] = useState<string[]>([]);
   const [showPreview, setShowPreview] = useState(false);
   const [reEditImage, setReEditImage] = useState<string | null>(null);
+  const [characterImages, setCharacterImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const characterInputRef = useRef<HTMLInputElement>(null);
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -162,14 +172,41 @@ export const StoryboardPage: React.FC = () => {
     setUploadedImages(prev => prev.filter((_, i) => i !== idx));
   };
 
+  const handleCharacterUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []).slice(0, 3);
+    const MAX_FILE_SIZE = 20 * 1024 * 1024;
+    const oversized = files.find(f => f.size > MAX_FILE_SIZE);
+    if (oversized) {
+      alert(`图片"${oversized.name}"超过 20MB，请压缩后重新上传`);
+      e.target.value = '';
+      return;
+    }
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        if (ev.target?.result) {
+          setCharacterImages(prev => [...prev, ev.target.result as string].slice(0, 3));
+        }
+      };
+      reader.onerror = () => console.error('图片加载失败:', file.name);
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const removeCharacterImage = (idx: number) => {
+    setCharacterImages(prev => prev.filter((_, i) => i !== idx));
+  };
+
   const handleAnalyze = async () => {
     if (!requireAuth()) return;
     if (uploadedImages.length === 0 || !script.trim()) return;
     setAnalyzing(true);
     try {
       const langLabel = LANGUAGES.find(l => l.value === language)?.label || '中文';
-      const prompt = buildPrompt(duration, langLabel, script, shotCount);
-      const text = await analyzeMultipleImages(uploadedImages, prompt, { model: 'gemini-3.5-flash', maxTokens: 4096 });
+      const allImages = [...uploadedImages, ...characterImages];
+      const prompt = buildPrompt(duration, langLabel, script, shotCount, characterImages.length > 0);
+      const text = await analyzeMultipleImages(allImages, prompt, { model: 'gemini-3.5-flash', maxTokens: 4096 });
       if (!text) { alert('AI返回为空，请重试'); setAnalyzing(false); return; }
       const parsed = parseAnalysis(text);
       if (!parsed.shots || parsed.shots.length === 0) {
@@ -197,7 +234,15 @@ export const StoryboardPage: React.FC = () => {
     setOptimizing(true);
     try {
       const res = await chatCompletion([
-        { role: 'system', content: '你是一个专业剧本优化师。请优化用户提供的剧本文案，增强画面感、节奏感和影视表现力。保留原始剧情结构，优化语言表达，使其更适合生成故事板分镜。直接返回优化后的剧本，不要额外解释。' },
+        { role: 'system', content: `你是一个专业剧本优化师。请优化用户提供的剧本文案，使其更适合生成故事板分镜。
+
+优化要求：
+1. 保留原始剧情结构和核心信息
+2. 增强画面感：用具体的视觉描述替代抽象表达，每句话都能对应一个具体画面
+3. 增强节奏感：控制句子长短交替，标注节奏起伏（如：快切、慢镜、停顿）
+4. 增强影视表现力：加入景别建议（如"特写手部动作""远景全貌"）、运镜暗示（如"缓慢推进""快速摇移"）
+5. 语言简洁有力，适合15秒短视频节奏
+6. 不要添加额外解释，直接返回优化后的剧本` },
         { role: 'user', content: script },
       ]);
       if (res) setScript(res);
@@ -218,6 +263,9 @@ export const StoryboardPage: React.FC = () => {
       .join('\n');
 
     const langLabel = LANGUAGES.find(l => l.value === language)?.label || '中文';
+    const charConsistencyClause = characterImages.length > 0 && result.character
+      ? `\n【角色一致性】所有镜头中的人物必须严格遵循以下外貌特征: ${result.character}。每一帧中的人物外貌、发型、肤色、穿着必须完全一致，确保所有镜头中是同一个人。`
+      : '';
     const basePrompt = `【重要】严格遵循参考图，产品/人物外观完全保持不变。
 
 电影故事板，16:9横版，真实电影质感。
@@ -228,14 +276,16 @@ export const StoryboardPage: React.FC = () => {
 ${shotsDesc}
 
 【光线场景要求】自然真实光影，暗部有真实阴影层次，场景像实拍电影画面而非CG渲染，光线柔和自然不刻意，整体有真实摄影质感。
+${charConsistencyClause}
 
 语言：${langLabel}。`;
 
     try {
+      const allGenImages = [...uploadedImages, ...characterImages];
       const allUrls: string[] = [];
       for (let b = 0; b < batchCount; b++) {
         const prompt = batchCount > 1 ? `${basePrompt}\n\n第${b + 1}版，请使用不同的构图布局和画面风格，不能与前版雷同。` : basePrompt;
-        const res = await editImage({ prompt, images: uploadedImages, model, resolution: quality, aspectRatio: '16:9' });
+        const res = await editImage({ prompt, images: allGenImages, model, resolution: quality, aspectRatio: '16:9', type: 'edited' });
         const url = res.data?.[0]?.url || res.image_url || res.url || '';
         if (url) {
           allUrls.push(url);
@@ -294,6 +344,42 @@ ${shotsDesc}
               )}
             </div>
             <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleUpload} />
+          </div>
+
+          <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-purple-50">
+                <User size={13} className="text-purple-500" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-[#171717]">人物参考图 <span className="text-[10px] font-normal px-1.5 py-0.5 rounded-full ml-1 bg-purple-50 text-purple-500">提升一致性</span></h3>
+                <p className="text-[11px] text-gray-400">上传人物照片，确保所有分镜中角色外貌一致</p>
+              </div>
+            </div>
+            {characterImages.length > 0 && (
+              <div className="flex gap-2 mb-3">
+                {characterImages.map((img, idx) => (
+                  <div key={idx} className="relative group w-16 h-16 rounded-xl overflow-hidden bg-gray-100 border border-gray-200">
+                    <img src={img} alt="" className="w-full h-full object-cover" />
+                    <button onClick={() => removeCharacterImage(idx)} className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100"><X size={12} className="text-white" /></button>
+                    {idx === 0 && <span className="absolute bottom-0.5 left-0.5 text-[8px] px-1 py-0.5 rounded bg-black/50 text-white">主参考</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+            <input ref={characterInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleCharacterUpload} />
+            <div onClick={() => characterInputRef.current?.click()}
+              className={`border-2 border-dashed p-2.5 flex items-center justify-center gap-1.5 cursor-pointer transition-all rounded-xl ${characterImages.length > 0 ? 'border-purple-300 bg-purple-50' : 'border-gray-200 bg-gray-50 hover:border-gray-400'}`}>
+              <User size={14} className={characterImages.length > 0 ? 'text-purple-500' : 'text-gray-400'} />
+              <span className={`text-xs ${characterImages.length > 0 ? 'text-purple-500' : 'text-gray-400'}`}>
+                {characterImages.length > 0 ? `已添加${characterImages.length}张` : '上传人物参考图（可选）'}
+              </span>
+            </div>
+            {characterImages.length === 0 && (
+              <p className="text-[10px] mt-2 leading-relaxed text-gray-400">
+                上传正面人物照，AI会锁定角色外貌（发型、肤色、五官、穿着），确保分镜中每个镜头的人物是同一个人
+              </p>
+            )}
           </div>
 
           <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
@@ -436,6 +522,9 @@ ${shotsDesc}
                           <span className="w-6 h-6 bg-[#171717] text-white rounded-xl flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">{idx + 1}</span>
                           <div className="flex-1 min-w-0">
                             <div className="space-y-3">
+                              {shot.phase && (
+                                <span className="inline-block text-[10px] px-2 py-0.5 rounded-lg bg-blue-50 text-blue-600 font-medium">{shot.phase}</span>
+                              )}
                               <div><span className="text-[10px] text-gray-400 block mb-1">画面</span><textarea value={shot.画面} onChange={e => { updateShot(idx, '画面', e.target.value); e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }} rows={2} className="w-full bg-gray-50 rounded-xl px-3 py-2 text-xs border-0 focus:ring-2 focus:ring-blue-500/20 resize-none overflow-hidden text-[#171717]" ref={el => { if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }} /></div>
                               <div className="grid grid-cols-2 gap-3">
                                 <div><span className="text-[10px] text-gray-400 block mb-1">动作</span><textarea value={shot.动作} onChange={e => { updateShot(idx, '动作', e.target.value); e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }} rows={1} className="w-full bg-gray-50 rounded-xl px-3 py-2 text-xs border-0 focus:ring-2 focus:ring-blue-500/20 resize-none overflow-hidden text-[#171717]" ref={el => { if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }} /></div>

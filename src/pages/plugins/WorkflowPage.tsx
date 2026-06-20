@@ -804,8 +804,8 @@ export const WorkflowPage: React.FC = () => {
           for (const c of inC) { const u = nodeOutputs.get(c.sourceId); if (u) { if (u.prompt) p = u.prompt; if (u.images?.length) ref = u.images; } }
           p = p || '';
           let res: any;
-          if (ref.length > 0) res = await editImage({ prompt: p, images: ref, model: node.data.model, resolution: node.data.resolution, aspectRatio: node.data.aspectRatio });
-          else res = await generateImage({ prompt: p, model: node.data.model, aspectRatio: node.data.aspectRatio, resolution: node.data.resolution, n: node.data.batchSize || 1 });
+          if (ref.length > 0) res = await editImage({ prompt: p, images: ref, model: node.data.model, resolution: node.data.resolution, aspectRatio: node.data.aspectRatio, type: 'edited' });
+          else res = await generateImage({ prompt: p, model: node.data.model, aspectRatio: node.data.aspectRatio, resolution: node.data.resolution, n: node.data.batchSize || 1, type: 'edited' });
           nodeOutputs.set(node.id, { images: (res.data || []).map((i: any) => i.url), prompt: p, model: node.data.model });
           setOutputImages(prev => [...prev, ...(res.data || []).map((i: any) => i.url)]);
         } else if (node.type === 'imageEdit') {
@@ -813,8 +813,8 @@ export const WorkflowPage: React.FC = () => {
           let p = ''; let imgs: string[] = [];
           for (const c of inC) { const u = nodeOutputs.get(c.sourceId); if (u) { if (u.images?.length) imgs = u.images; if (u.prompt) p = u.prompt || p; } }
           let res: any;
-          if (imgs.length > 0) res = await editImage({ prompt: p, images: imgs, model: node.data.model, resolution: node.data.resolution, aspectRatio: node.data.aspectRatio });
-          else res = await generateImage({ prompt: p, model: node.data.model, aspectRatio: node.data.aspectRatio, resolution: node.data.resolution, n: 1 });
+          if (imgs.length > 0) res = await editImage({ prompt: p, images: imgs, model: node.data.model, resolution: node.data.resolution, aspectRatio: node.data.aspectRatio, type: 'edited' });
+          else res = await generateImage({ prompt: p, model: node.data.model, aspectRatio: node.data.aspectRatio, resolution: node.data.resolution, n: 1, type: 'edited' });
           nodeOutputs.set(node.id, { images: (res.data || []).map((i: any) => i.url), prompt: p });
           setOutputImages(prev => [...prev, ...(res.data || []).map((i: any) => i.url)]);
         } else if (node.type === 'output') {

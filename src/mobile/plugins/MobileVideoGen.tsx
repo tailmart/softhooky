@@ -3,6 +3,7 @@ import { X, Loader2, Sparkles, Plus, ChevronDown, Check, Coins, AlertTriangle, D
 import { fileToDataUrl } from '../../services/r2Service';
 import { getAuthToken } from '../../services/authService';
 import { useAuth } from '../../contexts/AuthContext';
+import { API_URL } from '../../services/api';
 import { RatioPicker } from '../components/RatioPicker';
 
 interface VideoGenConfig {
@@ -16,35 +17,6 @@ interface VideoGenConfig {
   pricingKey: string;
   defaultPrice: number;
 }
-
-const GEMINI_CONFIG: VideoGenConfig = {
-  title: 'Gemini视频',
-  description: '上传产品图，AI 生成产品展示视频',
-  apiEndpoint: '/api/video/gemini',
-  statusEndpoint: '/api/video/gemini/status',
-  defaultModel: 'gemini-2.0-flash-exp',
-  durations: [
-    { value: 4, label: '4秒' },
-    { value: 8, label: '8秒' },
-    { value: 10, label: '10秒' },
-  ],
-  pricingKey: 'gemini_video_4s',
-  defaultPrice: 3,
-};
-
-const VEO31_CONFIG: VideoGenConfig = {
-  title: 'Veo3.1视频',
-  description: '上传产品图，AI 生成高质量产品视频',
-  apiEndpoint: '/api/video/seedance',
-  statusEndpoint: '/api/video/seedance/status',
-  defaultModel: 'veo-3.1-fast',
-  models: [
-    { value: 'veo-3.1-fast', label: 'Veo3.1 快速' },
-    { value: 'veo-3.1-hd', label: 'Veo3.1 高清' },
-  ],
-  pricingKey: 'veo31_video',
-  defaultPrice: 1,
-};
 
 const RATIOS = [
   { value: '9:16', label: '9:16 竖屏' },
@@ -72,7 +44,7 @@ export const MobileVideoGen: React.FC<MobileVideoGenProps> = ({ config, onBack }
   const [sheet, setSheet] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/pricing').then(r => r.json()).then(d => {
+    fetch(`${API_URL}/api/pricing`).then(r => r.json()).then(d => {
       if (d.data?.[config.pricingKey]) setPrice(Number(d.data[config.pricingKey]));
     }).catch(() => {});
   }, [config.pricingKey]);
@@ -92,7 +64,7 @@ export const MobileVideoGen: React.FC<MobileVideoGenProps> = ({ config, onBack }
     const token = getAuthToken();
     const poll = async () => {
       try {
-        const r = await fetch(`${config.statusEndpoint}/${taskId}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+        const r = await fetch(`${API_URL}${config.statusEndpoint}/${taskId}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
         const d = await r.json();
         if (d.status === 'completed' || d.status === 'success') {
           const url = d.data?.url || d.url || d.data?.video_url || '';
@@ -118,7 +90,7 @@ export const MobileVideoGen: React.FC<MobileVideoGenProps> = ({ config, onBack }
     setIsGenerating(true); setError('');
     const token = getAuthToken();
     try {
-      const r = await fetch(config.apiEndpoint, {
+      const r = await fetch(`${API_URL}${config.apiEndpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({
@@ -262,4 +234,4 @@ export const MobileVideoGen: React.FC<MobileVideoGenProps> = ({ config, onBack }
   );
 };
 
-export { GEMINI_CONFIG, VEO31_CONFIG };
+export { GEMINI_CONFIG };

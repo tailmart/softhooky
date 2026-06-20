@@ -132,57 +132,89 @@ export default function AgentDashboard() {
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-xl font-bold text-gray-900">概览</h1>
+    <div className="space-y-8">
+      {/* 页面标题 */}
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">代理概览</h1>
+        <p className="text-sm text-gray-500 mt-1">查看您的代理数据和推广信息</p>
+      </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-5 text-white shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-indigo-100 text-xs font-medium">可用佣金</span>
-            <Wallet size={16} className="text-indigo-200" />
+      {/* 数据统计卡片 */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white shadow-xl shadow-indigo-500/20 hover:shadow-2xl hover:shadow-indigo-500/30 transition-all">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-indigo-100 text-sm font-medium">可用佣金</span>
+            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+              <Wallet size={20} className="text-white" />
+            </div>
           </div>
-          <p className="text-2xl font-bold">¥{balance.toFixed(2)}</p>
+          <p className="text-3xl font-bold">¥{balance.toFixed(2)}</p>
+          <p className="text-indigo-200 text-xs mt-2">可提现至微信/支付宝</p>
         </div>
-        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-gray-400 text-xs font-medium">累计佣金</span>
-            <TrendingUp size={16} className="text-emerald-500" />
+        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-gray-500 text-sm font-medium">累计佣金</span>
+            <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center">
+              <TrendingUp size={20} className="text-emerald-500" />
+            </div>
           </div>
-          <p className="text-2xl font-bold text-gray-900">¥{totalCommission.toFixed(2)}</p>
+          <p className="text-3xl font-bold text-gray-900">¥{totalCommission.toFixed(2)}</p>
+          <p className="text-gray-400 text-xs mt-2">历史总收益</p>
         </div>
-        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-gray-400 text-xs font-medium">客户数</span>
-            <Users size={16} className="text-blue-500" />
+        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-gray-500 text-sm font-medium">客户数</span>
+            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
+              <Users size={20} className="text-blue-500" />
+            </div>
           </div>
-          <p className="text-2xl font-bold text-gray-900">{customerCount}</p>
+          <p className="text-3xl font-bold text-gray-900">{customerCount}</p>
+          <p className="text-gray-400 text-xs mt-2">通过邀请码注册</p>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">推广邀请</h3>
+      {/* 推广邀请卡片 */}
+      <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center">
+            <Shield size={16} className="text-indigo-500" />
+          </div>
+          <h3 className="text-base font-semibold text-gray-900">推广邀请</h3>
+        </div>
         {inviteCode ? (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="flex-1 bg-gray-50 rounded-xl px-4 py-3 border border-gray-200">
-                <code className="text-base font-bold text-indigo-600 tracking-wider">{inviteCode}</code>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl px-5 py-4 border border-indigo-100">
+                <p className="text-xs text-indigo-500 mb-1">您的邀请码</p>
+                <code className="text-xl font-bold text-indigo-700 tracking-widest">{inviteCode}</code>
               </div>
               <button onClick={() => copyToClipboard(inviteCode)}
-                className="p-3 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl transition-all">
-                {copied ? <Check size={18} className="text-green-500" /> : <Copy size={18} className="text-gray-400" />}
+                className="p-3.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl transition-all shadow-md shadow-indigo-500/25">
+                {copied ? <Check size={18} /> : <Copy size={18} />}
               </button>
               <button onClick={generateInviteCode} disabled={generating}
-                className="p-3 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl transition-all">
-                <RefreshCw size={18} className={`text-gray-400 ${generating ? 'animate-spin' : ''}`} />
+                className="p-3.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl transition-all">
+                <RefreshCw size={18} className={`text-gray-500 ${generating ? 'animate-spin' : ''}`} />
               </button>
             </div>
-            <button onClick={() => copyToClipboard(getInviteLink())}
-              className="text-sm text-indigo-600 hover:text-indigo-700">
-              复制推广链接 →
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 bg-gray-50 rounded-lg px-4 py-2.5 border border-gray-200">
+                <code className="text-xs text-gray-500 truncate block">{getInviteLink()}</code>
+              </div>
+              <button onClick={() => copyToClipboard(getInviteLink())}
+                className="px-4 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-medium transition-all shadow-sm">
+                复制链接
+              </button>
+            </div>
           </div>
         ) : (
-          <p className="text-sm text-gray-400">暂无邀请码，请点击右上角刷新重新生成</p>
+          <div className="text-center py-6">
+            <p className="text-sm text-gray-400 mb-3">暂无邀请码</p>
+            <button onClick={generateInviteCode} disabled={generating}
+              className="px-6 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl text-sm font-medium transition-all shadow-md shadow-indigo-500/25">
+              {generating ? '生成中...' : '生成邀请码'}
+            </button>
+          </div>
         )}
       </div>
     </div>

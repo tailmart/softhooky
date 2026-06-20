@@ -4,35 +4,20 @@ import { MobileLayout } from './MobileLayout';
 import { HomePage } from './pages/HomePage';
 import { ToolsPage } from './pages/ToolsPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { MobileVideoPage } from './pages/MobileVideoPage';
 import { PluginPage } from './pages/PluginPage';
 import { MobileAuth } from './plugins/MobileAuth';
 import { TabId } from './components/BottomTabs';
 import './index.css';
 
 const PLUGIN_LABELS: Record<string, string> = {
-  'nano-gen': 'TK带货图片',
-  'deepseek-chat': 'AI文案助手',
-  'xiaohongshu': '小红书种草图文',
-  'social': '社媒POV出图',
-  'amazon-image-gen': '亚马逊生图',
-  'banner': 'Banner设计',
-  'detail': '详情页设计',
-  'detail2': '详情页设计',
-  'tryon': '产品穿搭',
-  'handheld': '手持产品',
-  'detailClone': '智能设计克隆',
-  'productFusion': '场景融合',
-  'productRefine': '产品精修',
-  'product-9grid': '产品展示图',
-  'image-library': '图片图库',
   'storyboard': '故事板',
-  'three-view': '三视图生成',
-  'gemini-video': '视频生成',
-  'veo31': 'Veo3.1视频',
-  'tk-video': 'TK视频脚本',
-  'poster': '营销海报设计',
+  'nano-gen': 'TK带货图片',
+  'xiaohongshu': '小红书种草',
+  'social': '社媒POV出图',
   'recharge': '充值',
   'records': '消费记录',
+  'image-library': '图库',
   'coupon': '优惠券',
 };
 
@@ -93,6 +78,9 @@ export const MobileApp: React.FC = () => {
         <div className={`absolute inset-0 overflow-y-auto ${activeTab === 'tools' ? 'z-10' : 'z-0 opacity-0 pointer-events-none'}`}>
           <ToolsPage onNavigateToTool={handleNavigateToTool} />
         </div>
+        <div className={`absolute inset-0 overflow-y-auto ${activeTab === 'video' ? 'z-10' : 'z-0 opacity-0 pointer-events-none'}`}>
+          <MobileVideoPage />
+        </div>
         <div className={`absolute inset-0 overflow-y-auto ${activeTab === 'profile' ? 'z-10' : 'z-0 opacity-0 pointer-events-none'}`}>
           <ProfilePage onNavigateToPlugin={handleNavigateToTool} />
         </div>
@@ -102,10 +90,10 @@ export const MobileApp: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-blue-900/50 border-t-blue-400 rounded-full animate-spin" />
-          <span className="text-sm text-white/30">加载中...</span>
+          <span className="text-sm text-gray-400">加载中...</span>
         </div>
       </div>
     );
@@ -114,7 +102,7 @@ export const MobileApp: React.FC = () => {
   return (
     <>
       {activePlugin ? (
-        <div className="min-h-screen bg-[#0a0a0a] flex flex-col">
+        <div className="min-h-screen bg-white flex flex-col">
           <div className="flex-1 min-h-0">
             {renderContent()}
           </div>
@@ -123,6 +111,7 @@ export const MobileApp: React.FC = () => {
         <MobileLayout
           activeTab={activeTab}
           onTabChange={handleTabChange}
+          onNavigateToPlugin={handleNavigateToTool}
         >
           {renderContent()}
         </MobileLayout>

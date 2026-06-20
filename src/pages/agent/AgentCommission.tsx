@@ -41,27 +41,35 @@ export default function AgentCommission() {
   if (loading) return <div className="flex items-center justify-center h-64"><Loader2 size={24} className="animate-spin text-indigo-500" /></div>
 
   return (
-    <div className="space-y-5">
-      <h1 className="text-xl font-bold text-gray-900">佣金明细</h1>
+    <div className="space-y-8">
+      {/* 页面标题 */}
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">佣金明细</h1>
+        <p className="text-sm text-gray-500 mt-1">查看您的佣金收益记录</p>
+      </div>
 
       {/* 统计卡片 */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm flex items-center gap-4">
-          <div className="w-11 h-11 bg-emerald-50 rounded-xl flex items-center justify-center">
-            <TrendingUp size={20} className="text-emerald-500" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">累计佣金</p>
-            <p className="text-xl font-bold text-gray-900">¥{totalCommission.toFixed(2)}</p>
+      <div className="grid grid-cols-2 gap-5">
+        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center">
+              <TrendingUp size={24} className="text-emerald-500" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">累计佣金</p>
+              <p className="text-2xl font-bold text-gray-900">¥{totalCommission.toFixed(2)}</p>
+            </div>
           </div>
         </div>
-        <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm flex items-center gap-4">
-          <div className="w-11 h-11 bg-blue-50 rounded-xl flex items-center justify-center">
-            <TrendingUp size={20} className="text-blue-500" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">可提现余额</p>
-            <p className="text-xl font-bold text-gray-900">¥{balance.toFixed(2)}</p>
+        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
+              <TrendingUp size={24} className="text-blue-500" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">可提现余额</p>
+              <p className="text-2xl font-bold text-gray-900">¥{balance.toFixed(2)}</p>
+            </div>
           </div>
         </div>
       </div>

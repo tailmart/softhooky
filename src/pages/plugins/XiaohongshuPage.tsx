@@ -12,8 +12,10 @@ import { ImagePreviewModal } from '../../components/ImagePreviewModal';
 import { ReEditModal } from '../../components/ReEditModal';
 import { ModelSpeedNote } from '../../components/ModelSpeedNote';
 import { LoadingAnimation } from '../../components/LoadingAnimation';
+import { ProductImageUpload, ProductInfoForm, GenerationSettings } from '../../components/social';
+import type { Language } from '../../components/social';
 
-const LANGUAGES: { value: string; label: string }[] = [
+const LANGUAGES: Language[] = [
   { value: 'zh', label: '简体中文' },
   { value: 'en', label: 'English' },
   { value: 'ja', label: '日本語' },
@@ -22,9 +24,7 @@ const LANGUAGES: { value: string; label: string }[] = [
   { value: 'fr', label: 'Français' },
   { value: 'de', label: 'Deutsch' },
 ];
-const ASPECT_RATIOS = [
-  { value: '3:4', label: '3:4' },
-];
+
 const IMAGE_TYPES = ['封面图', '主图', '细节图', '对比图', '使用场景图'];
 
 export const XiaohongshuPage: React.FC = () => {
@@ -40,21 +40,13 @@ export const XiaohongshuPage: React.FC = () => {
   const [productName, setProductName] = useState('');
   const [productDesc, setProductDesc] = useState('');
   const deepAnalysisRef = useRef('');
-  const productNameRef = useRef<HTMLTextAreaElement>(null);
-  const autoResize = (el: HTMLTextAreaElement) => {
-    el.style.height = 'auto';
-    el.style.height = el.scrollHeight + 'px';
-  };
-  useEffect(() => {
-    if (productNameRef.current) autoResize(productNameRef.current);
-  }, [productName]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [uploadProgress, setUploadProgress] = useState('');
   const [selectedModel, setSelectedModel] = useState('nanobann2');
   const [quality, setQuality] = useState('2K');
   const [language, setLanguage] = useState('zh');
-  const [aspectRatio, setAspectRatio] = useState('3:4');
+  const [imageCount, setImageCount] = useState(5); // 默认5张
   const [results, setResults] = useState<string[]>([]);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [reEditImage, setReEditImage] = useState<string | null>(null);
@@ -63,35 +55,8 @@ export const XiaohongshuPage: React.FC = () => {
   // AI分析结果
   const [coverKeywordsCN, setCoverKeywordsCN] = useState('');
   const [coverKeywordsEN, setCoverKeywordsEN] = useState('');
-  const [imageDescriptions, setImageDescriptions] = useState<string[]>(Array(5).fill(''));
+  const [imageDescriptions, setImageDescriptions] = useState<string[]>(Array(imageCount).fill(''));
   const [copywriting, setCopywriting] = useState('');
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []).filter((f: File) => f.type.startsWith('image/'));
-    const MAX_FILE_SIZE = 20 * 1024 * 1024;
-    const oversized = files.find(f => f.size > MAX_FILE_SIZE);
-    if (oversized) {
-      alert(`图片"${oversized.name}"超过 20MB，请压缩后重新上传`);
-      e.target.value = '';
-      return;
-    }
-    const newItems = files.map(f => ({ file: f, preview: '' }));
-    Promise.all(newItems.map(item => new Promise<void>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => { item.preview = reader.result as string; resolve(); };
-      reader.onerror = reject;
-      reader.readAsDataURL(item.file);
-    }))).then(() => {
-      setProductImages(prev => [...prev, ...newItems].slice(0, 10));
-    }).catch(err => {
-      console.error('图片处理失败:', err);
-      alert('部分图片处理失败，请尝试使用更小的图片');
-    });
-  };
-
-  const removeImage = (idx: number) => setProductImages(prev => prev.filter((_, i) => i !== idx));
 
   const handleAnalyze = async () => {
     if (!requireAuth()) return;
@@ -123,24 +88,25 @@ export const XiaohongshuPage: React.FC = () => {
       deepAnalysisRef.current = analysisContext;
       const prompt = `分析这些产品图片，为小红书帖子生成营销内容。${analysisContext}
 产品名称: ${productName || '美妆产品'}${descInfo}
-图片比例: ${aspectRatio}
+图片比例: 3:4
 目标语言: ${langLabel}
+生成张数: ${imageCount}
 
 请以JSON格式返回以下内容{
-  "coverKeywordsCN": "中文封面关键词，${aspectRatio}竖版，吸引眼球的描述",
-  "coverKeywordsEN": "English cover keywords, ${aspectRatio} ratio, Xiaohongshu viral cover",
+  "coverKeywordsCN": "中文封面关键词，3:4竖版，吸引眼球的描述",
+  "coverKeywordsEN": "English cover keywords, 3:4 ratio, Xiaohongshu viral cover",
   "imageDescriptions": [
-    "封面图描述，${aspectRatio}",
-    "主图描述，产品展示${aspectRatio}",
-    "细节图描述，材质工艺${aspectRatio}",
-    "对比图描述，使用效果${aspectRatio}",
-    "使用场景图描述，生活场景${aspectRatio}"
+    "封面图描述，3:4",
+    "主图描述，产品展示3:4",
+    "细节图描述，材质工艺3:4",
+    "对比图描述，使用效果3:4",
+    "使用场景图描述，生活场景3:4"
   ],
   "copywriting": "小红书文案，引人入胜的开头，中间的产品介绍，结尾的互动引导${langLabel}"
 }
 
 ## 重要：文案差异化要求
-- 5张图的描述必须**各有侧重，不能重复**
+- ${imageCount}张图的描述必须**各有侧重，不能重复**
 - 封面图放核心卖点大标题
 - 中间图分别从不同角度切入（功能卖点、使用场景、用户痛点、材质工艺、对比优势等）
 - 避免所有配图都用相同的句式来描述产品
@@ -152,8 +118,8 @@ export const XiaohongshuPage: React.FC = () => {
         const parsed = JSON.parse(jsonMatch[0]);
         if (parsed.coverKeywordsCN) setCoverKeywordsCN(parsed.coverKeywordsCN);
         if (parsed.coverKeywordsEN) setCoverKeywordsEN(parsed.coverKeywordsEN);
-        if (Array.isArray(parsed.imageDescriptions) && parsed.imageDescriptions.length === 5) {
-          setImageDescriptions(parsed.imageDescriptions);
+        if (Array.isArray(parsed.imageDescriptions) && parsed.imageDescriptions.length >= imageCount) {
+          setImageDescriptions(parsed.imageDescriptions.slice(0, imageCount));
         }
         if (parsed.copywriting) setCopywriting(parsed.copywriting);
       }
@@ -205,15 +171,15 @@ export const XiaohongshuPage: React.FC = () => {
       const langLabel = LANGUAGES.find(l => l.value === language)?.label || '中文';
 
       const tasks = [];
-      for (let i = 0; i < Math.min(useDescriptions.length, IMAGE_TYPES.length); i++) {
+      for (let i = 0; i < Math.min(useDescriptions.length, imageCount); i++) {
         const desc = useDescriptions[i]?.trim();
         if (!desc) continue;
 
-        const imageType = IMAGE_TYPES[i];
+        const imageType = IMAGE_TYPES[i % IMAGE_TYPES.length];
         const taskIdx = i;
         tasks.push(limit(async () => {
           setUploadProgress(`生成中${completedCount + 1}/${totalCount} ${imageType}...`);
-          const prompt = `小红书帖子图片${imageType}，${aspectRatio}比例，要求: ${langLabel}生成
+          const prompt = `小红书帖子图片${imageType}，3:4比例，要求: ${langLabel}生成
 产品名称: ${productName || '美妆产品'}
 产品卖点: ${desc}
 产品描述参考: ${productDesc || '（AI自主创意）'}${deepAnalysisRef.current}
@@ -231,12 +197,12 @@ export const XiaohongshuPage: React.FC = () => {
 重要：图片上所有文字必须使用${langLabel}，禁止使用其他语言。`;
 
           try {
-            const resp = await editImage({ prompt, images: urls, aspectRatio, resolution: quality, model: selectedModel });
+            const resp = await editImage({ prompt, images: urls, aspectRatio: '3:4', resolution: quality, model: selectedModel, type: 'edited' });
             if (resp.data?.[0]?.url) {
               const finalUrl = resp.data[0].url;
               genCount++;
               setResults(prev => [finalUrl, ...prev]);
-              imageLibraryService.saveToLibrary({ image_url: finalUrl, prompt, model: String(selectedModel || 'nanobann2'), aspect_ratio: String(aspectRatio), resolution: String(quality || '2K'), type: 'edited' });
+              imageLibraryService.saveToLibrary({ image_url: finalUrl, prompt, model: String(selectedModel || 'nanobann2'), aspect_ratio: '3:4', resolution: String(quality || '2K'), type: 'edited' });
             }
           } catch { /* 生成失败 */ }
           completedCount++;
@@ -271,98 +237,46 @@ export const XiaohongshuPage: React.FC = () => {
         </div>
         <div className="flex-1 min-w-0">
           <h1 className="text-base font-semibold text-[#171717]">小红书种草图文</h1>
-          <p className="text-[10px] text-[#A3A3A3] leading-tight">AI分析产品图 → 生成封面关键词、文案正文 + 5张配图</p>
+          <p className="text-[10px] text-[#A3A3A3] leading-tight">AI分析产品图 → 生成封面关键词、文案正文 + {imageCount}张配图</p>
         </div>
       </div>
 
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Settings */}
         <div className="w-[380px] border-r border-[#E5E5E5] overflow-y-auto p-5 space-y-4 flex-shrink-0 bg-[#FAFAFA]">
-          {/* Product Images */}
-          <div className="bg-white rounded-2xl p-4 border border-[#E5E5E5] shadow-sm">
-            <div className="flex items-center gap-3 mb-4">
-              <FileImage size={16} className="text-blue-500" />
-              <div><h3 className="text-sm font-semibold text-[#171717]">产品图片</h3><p className="text-xs text-[#A3A3A3]">AI会通过提供参考图自行选择设计</p></div>
-              <span className="ml-auto text-xs text-[#A3A3A3] bg-[#F5F5F5] px-2 py-1 rounded-xl">{productImages.length}/10</span>
-            </div>
-            {productImages.length > 0 && (
-              <div className="grid grid-cols-5 gap-2 mb-3">
-                {productImages.map((item, idx) => (
-                  <div key={idx} className="relative group aspect-square rounded-2xl overflow-hidden bg-[#F5F5F5]">
-                    <img src={item.preview} alt="" className="w-full h-full object-cover" />
-                    <button onClick={() => removeImage(idx)} className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100"><X size={12} className="text-white" /></button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <input type="file" ref={fileInputRef} onChange={handleUpload} multiple accept="image/*" className="hidden" />
-            <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-[#E5E5E5] bg-[#FAFAFA] p-3 flex flex-col items-center justify-center gap-1 hover:border-[#171717]/30 hover:bg-[#F5F5F5] transition-all cursor-pointer bg-[#FAFAFA]">
-              <Plus size={18} className="text-[#A3A3A3]" /><span className="text-xs text-[#A3A3A3]">上传产品图片</span>
-            </div>
-          </div>
+          {/* 产品图片 */}
+          <ProductImageUpload
+            images={productImages}
+            onImagesChange={setProductImages}
+            icon="file"
+          />
 
-          {/* Product Name */}
-          <div className="bg-white rounded-2xl p-4 border border-[#E5E5E5] shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <Sparkles size={14} className="text-blue-500" />
-              <span className="text-sm font-semibold text-[#171717]">产品名称</span>
-            </div>
-            <textarea value={productName} onChange={e => { setProductName(e.target.value); autoResize(e.target); }} placeholder="请输入产品名称或品牌"
-              className="w-full bg-[#F5F5F5] rounded-xl px-4 py-2.5 text-sm border-0 focus:outline-none focus:ring-2 focus:ring-[#171717]/20 text-[#171717] placeholder:text-[#BDBDBD] resize-none overflow-hidden"
-              rows={1} ref={productNameRef} />
-          </div>
+          {/* 产品信息 */}
+          <ProductInfoForm
+            productName={productName}
+            onProductNameChange={setProductName}
+            productDesc={productDesc}
+            onProductDescChange={setProductDesc}
+            nameLabel="产品名称"
+            namePlaceholder="请输入产品名称或品牌"
+          />
 
-          {/* Product Description */}
-          <div className="bg-white rounded-2xl p-4 border border-[#E5E5E5] shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <Sparkles size={14} className="text-blue-500" />
-              <span className="text-sm font-semibold text-[#171717]">产品描述（可选）</span>
-            </div>
-            <textarea value={productDesc} onChange={e => { setProductDesc(e.target.value); e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }} placeholder="产品卖点、功能、材质、使用场景..."
-              className="w-full bg-[#F5F5F5] rounded-xl p-3 text-sm border-0 focus:outline-none focus:ring-2 focus:ring-[#171717]/20 resize-none text-[#171717] placeholder:text-[#BDBDBD] overflow-hidden" rows={1}
-              ref={el => { if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }} />
-          </div>
-
-          {/* Image Settings */}
-          <div className="bg-white rounded-2xl p-4 border border-[#E5E5E5] shadow-sm">
-            <h3 className="text-sm font-semibold text-[#171717] mb-3">生成设置</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-medium text-[#A3A3A3] mb-1.5 block">语言</label>
-                <select value={language} onChange={e => setLanguage(e.target.value)}
-                  className="w-full bg-[#F5F5F5] px-3 py-2.5 rounded-xl text-sm text-[#171717] border-0 focus:outline-none focus:ring-2 focus:ring-[#171717]/20 appearance-none cursor-pointer">
-                  {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-[#A3A3A3] mb-1.5 block">图片比例</label>
-                <div className="flex items-center gap-2 bg-[#F5F5F5] rounded-xl px-4 py-2.5">
-                  <span className="text-sm font-medium text-[#171717]">3:4</span>
-                  <span className="text-[10px] text-[#A3A3A3]">小红书帖子标准比例</span>
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-[#A3A3A3] mb-1.5 block">模型</label>
-                <div className="relative">
-                  <select value={selectedModel} onChange={e => setSelectedModel(e.target.value)}
-                    className="w-full bg-[#F5F5F5] px-3 py-2.5 pr-8 rounded-xl text-sm text-[#171717] border-0 focus:outline-none focus:ring-2 focus:ring-[#171717]/20 appearance-none cursor-pointer">
-                    {models.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                  </select>
-                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                </div>
-                <ModelSpeedNote />
-              </div>
-              <div className="mt-4">
-                <label className="text-xs font-medium text-[#A3A3A3] mb-1.5 block">分辨率</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {['2K', '4K'].map(q => (
-                    <button key={q} onClick={() => setQuality(q)}
-                      className={`py-2 rounded-xl text-xs font-medium transition-all ${quality === q ? 'bg-blue-500 text-white' : 'bg-[#F5F5F5] text-gray-500 hover:bg-gray-200'}`}>{q}</button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
+          {/* 生成设置 */}
+          <GenerationSettings
+            language={language}
+            onLanguageChange={setLanguage}
+            languages={LANGUAGES}
+            selectedModel={selectedModel}
+            onModelChange={setSelectedModel}
+            quality={quality}
+            onQualityChange={setQuality}
+            imageCount={imageCount}
+            onImageCountChange={(count) => {
+              setImageCount(count);
+              setImageDescriptions(Array(count).fill(''));
+            }}
+            showImageCount={true}
+          />
 
           {/* Analyze Button */}
           {!coverKeywordsCN && !coverKeywordsEN && !isAnalyzing && (
@@ -374,7 +288,7 @@ export const XiaohongshuPage: React.FC = () => {
 
           {/* Re-analyze Button */}
           {(coverKeywordsCN || coverKeywordsEN) && !isGenerating && (
-            <button onClick={() => { setCoverKeywordsCN(''); setCoverKeywordsEN(''); setCopywriting(''); setImageDescriptions(Array(5).fill('')); setResults([]); }}
+            <button onClick={() => { setCoverKeywordsCN(''); setCoverKeywordsEN(''); setCopywriting(''); setImageDescriptions(Array(imageCount).fill('')); setResults([]); }}
               className="w-full bg-[#171717] text-white py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-[#27272A] transition-all shadow-sm">
               <Sparkles size={18} /> 重新分析
             </button>
@@ -449,20 +363,20 @@ export const XiaohongshuPage: React.FC = () => {
 
               {/* 图片描述 */}
               <div className="bg-white rounded-2xl p-4 border border-[#E5E5E5] shadow-sm">
-                <h3 className="text-sm font-semibold text-[#171717] mb-3">5张图片配图方案</h3>
+                <h3 className="text-sm font-semibold text-[#171717] mb-3">{imageCount}张图片配图方案</h3>
                 <div className="space-y-3">
-                  {IMAGE_TYPES.map((type, idx) => (
+                  {imageDescriptions.map((desc, idx) => (
                     <div key={idx} className="bg-[#FAFAFA] rounded-xl p-4 border border-[#E5E5E5]">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           <span className="w-5 h-5 bg-[#171717] text-white rounded-xl flex items-center justify-center text-[10px] font-bold">{idx + 1}</span>
-                          <label className="text-xs font-semibold text-[#171717]">{type}</label>
+                          <label className="text-xs font-semibold text-[#171717]">{IMAGE_TYPES[idx % IMAGE_TYPES.length]}</label>
                         </div>
-                        <button onClick={() => handleCopy(imageDescriptions[idx] || '', `desc${idx}`)} className="text-[10px] text-[#A3A3A3] hover:text-[#737373] flex items-center gap-1">
+                        <button onClick={() => handleCopy(desc, `desc${idx}`)} className="text-[10px] text-[#A3A3A3] hover:text-[#737373] flex items-center gap-1">
                           <Copy size={10} /> 复制
                         </button>
                       </div>
-                      <textarea value={imageDescriptions[idx] || ''} onChange={e => {
+                      <textarea value={desc} onChange={e => {
                         const updated = [...imageDescriptions]; updated[idx] = e.target.value; setImageDescriptions(updated);
                       }} className="w-full bg-white rounded-xl px-3 py-2 text-sm border border-[#E5E5E5] focus:outline-none focus:ring-2 focus:ring-[#171717]/20 text-[#171717] min-h-[60px] resize-none" />
                     </div>
@@ -516,7 +430,7 @@ export const XiaohongshuPage: React.FC = () => {
       <ReEditModal
         isOpen={!!reEditImage}
         imageUrl={reEditImage || ''}
-        aspectRatio={aspectRatio}
+        aspectRatio="3:4"
         model={selectedModel}
         resolution={quality}
         onClose={() => setReEditImage(null)}

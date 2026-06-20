@@ -1,18 +1,21 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Sparkles, X, Loader2, Plus, Image as ImageIcon, Zap, Check, ChevronDown, Download, Eye, Wand2, User } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Sparkles, X, Loader2, Plus, Image as ImageIcon, Check, Eye, Wand2, User } from 'lucide-react';
 import { fileToDataUrl } from '../../services/r2Service';
 import { editImage } from '../../services/imageService';
 import { imageLibraryService } from '../../services/imageLibraryService';
-import { analyzeMultipleImages } from '../../services/aiChatService';
 import { requireAuth } from '../../utils/authCheck';
-import { getAvailableModels } from '../../services/modelService';
 import { ImagePreviewModal } from '../../components/ImagePreviewModal';
 import { ReEditModal } from '../../components/ReEditModal';
 import ModelLibraryPicker from '../../components/ModelLibraryPicker';
 import { LANGUAGES, getSavedLanguage, saveLanguage } from '../../constants/languages';
+import { EcommerceImageUpload, EcommerceSettings, EcommerceResults } from '../../components/ecommerce';
+import { LoadingAnimation } from '../../components/LoadingAnimation';
 
-const RATIOS = ['3:4', '9:16', '16:9'];
-const QUALITIES = ['2K', '4K'];
+const ASPECT_RATIO_OPTIONS = [
+  { value: '3:4', label: '3:4 竖版' },
+  { value: '9:16', label: '9:16 手机屏' },
+  { value: '16:9', label: '16:9 横版' },
+];
 
 interface ProductTryonImage {
   file: File;
@@ -21,15 +24,6 @@ interface ProductTryonImage {
 }
 
 export const ProductTryonPage: React.FC = () => {
-  const [models, setModels] = useState<{ value: string; label: string }[]>([]);
-  useEffect(() => {
-    getAvailableModels().then(m => {
-      const sorted = m.filter(x => x.enabled).sort((a, b) => a.sort_order - b.sort_order);
-      setModels(sorted.map(x => ({ value: x.model_id, label: x.label })));
-      if (sorted.length > 0) setSelectedModel(sorted[0].model_id);
-    });
-  }, []);
-
   // 模特生成相关状态
   const [modelRefImages, setModelRefImages] = useState<ProductTryonImage[]>([]);
   const [modelBodyType, setModelBodyType] = useState<'半身' | '全身'>('全身');
@@ -75,7 +69,6 @@ export const ProductTryonPage: React.FC = () => {
   
   const modelRefFileRef = useRef<HTMLInputElement>(null);
   const finalModelFileRef = useRef<HTMLInputElement>(null);
-  const productFileRef = useRef<HTMLInputElement>(null);
 
   // 上传模特参考图片（用于融合生成真实模特）
   const handleModelRefUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -168,6 +161,7 @@ export const ProductTryonPage: React.FC = () => {
           const response = await editImage({
             prompt,
             images: imageUrls,
+            type: 'edited',
             aspectRatio: '3:4',
             resolution: '4K',
             model: 'nanobann2'
@@ -247,50 +241,6 @@ export const ProductTryonPage: React.FC = () => {
     const newItems = toAdd.map(url => ({ file: null as any, preview: url, desc: '' }))
     setModelRefImages(prev => [...prev, ...newItems].slice(0, 10))
   }
-
-  // 上传产品图片
-  const handleProductUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const inputFiles = e.target.files;
-    if (!inputFiles) return;
-    const files: File[] = [];
-    for (let i = 0; i < inputFiles.length; i++) {
-      const file = inputFiles[i];
-      if (file.type.startsWith('image/')) {
-        files.push(file);
-      }
-    }
-    if (files.length === 0) return;
-    const MAX_FILE_SIZE = 20 * 1024 * 1024;
-    const oversized = files.find((f: File) => f.size > MAX_FILE_SIZE);
-    if (oversized) {
-      alert(`图片"${oversized.name}"超过 20MB，请压缩后重新上传`);
-      e.target.value = '';
-      return;
-    }
-    const availableSlots = 10 - productImages.length;
-    if (availableSlots <= 0) {
-      alert('最多只能上传10张图片');
-      return;
-    }
-    const filesToAdd = files.slice(0, availableSlots);
-    const newItems = filesToAdd.map((f: File) => ({ file: f, preview: '', desc: '' }));
-    Promise.all(newItems.map(item => new Promise<void>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => { item.preview = reader.result as string; resolve(); };
-      reader.onerror = reject;
-      reader.readAsDataURL(item.file);
-    }))).then(() => {
-      setProductImages(prev => [...prev, ...newItems].slice(0, 10));
-    }).catch(err => {
-      console.error('图片处理失败:', err);
-      alert('部分图片处理失败，请尝试使用更小的图片');
-    });
-    e.target.value = '';
-  };
-
-  const removeProduct = (idx: number) => {
-    setProductImages(prev => prev.filter((_, i) => i !== idx));
-  };
 
   // 最终生成穿搭效果图
   const handleGenerate = async () => {
@@ -539,7 +489,8 @@ export const ProductTryonPage: React.FC = () => {
               images: [modelUrl, productUrl], 
               aspectRatio: aspectRatio, 
               resolution: quality, 
-              model: selectedModel 
+              model: selectedModel,
+              type: 'edited',
             });
             
             if (response.data?.[0]?.url) {
@@ -574,8 +525,6 @@ export const ProductTryonPage: React.FC = () => {
       window.open(url, '_blank');
     }
   };
-
-  const isModelRefMode = modelRefImages.length > 0;
 
   return (
     <div className="flex-1 flex flex-col bg-white min-w-0">
@@ -755,34 +704,14 @@ export const ProductTryonPage: React.FC = () => {
           </div>
 
           {/* 产品图片上传 */}
-          <div className="bg-white rounded-2xl p-4 border border-[#E5E5E5] shadow-sm">
-            <div className="flex items-center gap-3 mb-4">
-              <ImageIcon size={16} className="text-blue-500" />
-              <div>
-                <h3 className="text-sm font-semibold text-[#171717]">产品图片</h3>
-                <p className="text-xs text-[#A3A3A3]">1-10张产品照片</p>
-              </div>
-              <span className="ml-auto text-xs text-[#A3A3A3] bg-[#F5F5F5] px-2 py-1 rounded-xl">{productImages.length}/10</span>
-            </div>
-            {productImages.length > 0 && (
-              <div className="grid grid-cols-5 gap-2 mb-3">
-                {productImages.map((item, index) => (
-                  <div key={index} className="relative group aspect-square rounded-2xl overflow-hidden bg-[#F5F5F5]">
-                    <img src={item.preview} alt="" className="w-full h-full object-cover" />
-                    <button onClick={() => removeProduct(index)} className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100">
-                      <X size={12} className="text-white" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <input type="file" ref={productFileRef} onChange={handleProductUpload} multiple accept="image/*" className="hidden" />
-            <div onClick={() => productFileRef.current?.click()}
-              className="border-2 border-dashed border-[#E5E5E5] bg-[#FAFAFA] p-4 flex flex-col items-center justify-center gap-1.5 hover:border-blue-400 hover:bg-blue-50 transition-all cursor-pointer rounded-xl">
-              <Plus size={20} className="text-[#A3A3A3]" />
-              <span className="text-xs text-[#A3A3A3]">点击上传产品图片</span>
-            </div>
-          </div>
+          <EcommerceImageUpload
+            images={productImages as any}
+            onImagesChange={(imgs) => setProductImages(imgs.map(img => ({ ...img, desc: '' })))}
+            maxImages={10}
+            title="产品图片"
+            subtitle="1-10张产品照片"
+            icon="image"
+          />
 
           {/* 需求介绍 */}
           <div className="bg-white rounded-2xl p-4 border border-[#E5E5E5] shadow-sm">
@@ -800,52 +729,18 @@ export const ProductTryonPage: React.FC = () => {
           </div>
 
           {/* 生成设置 */}
-          <div className="bg-white rounded-2xl p-4 border border-[#E5E5E5] shadow-sm">
-            <h3 className="text-sm font-semibold text-[#171717] mb-3">生成设置</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-medium text-[#A3A3A3] mb-1.5 block">模型</label>
-                <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}
-                  className="w-full bg-[#F5F5F5] px-3 py-2.5 rounded-xl text-sm text-[#171717] border-0 focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer">
-                  {models.length > 0 ? models.map(m => <option key={m.value} value={m.value}>{m.label}</option>) : <option value="">加载中...</option>}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-[#A3A3A3] mb-1.5 block">语言</label>
-                <select value={language} onChange={(e) => { setLanguage(e.target.value); saveLanguage(e.target.value); }}
-                  className="w-full bg-[#F5F5F5] px-3 py-2.5 rounded-xl text-sm text-[#171717] border-0 focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer">
-                  {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-[#A3A3A3] mb-1.5 block">比例</label>
-                <div className="flex gap-2">
-                  {([
-                    { value: '3:4', label: '3:4', desc: '竖版' },
-                    { value: '9:16', label: '9:16', desc: '手机屏' },
-                    { value: '16:9', label: '16:9', desc: '横版' }
-                  ]).map(r => (
-                    <button key={r.value} onClick={() => setAspectRatio(r.value)}
-                      className={`flex-1 py-2.5 rounded-xl text-xs font-medium transition-all ${aspectRatio === r.value ? 'bg-blue-500 text-white shadow-md' : 'bg-[#F5F5F5] text-[#737373] hover:bg-[#EEEEEE]'}`}>
-                      <div>{r.label}</div>
-                      <div className="text-[10px] opacity-70 mt-0.5">{r.desc}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-[#A3A3A3] mb-1.5 block">分辨率</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {QUALITIES.map(q => (
-                    <button key={q} onClick={() => setQuality(q)}
-                      className={`py-2 rounded-xl text-xs font-medium transition-all ${quality === q ? 'bg-blue-500 text-white' : 'bg-[#F5F5F5] text-[#737373] hover:bg-[#EEEEEE]'}`}>
-                      {q}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
+          <EcommerceSettings
+            language={language}
+            onLanguageChange={(lang) => { setLanguage(lang); saveLanguage(lang); }}
+            languages={LANGUAGES}
+            selectedModel={selectedModel}
+            onModelChange={setSelectedModel}
+            quality={quality}
+            onQualityChange={setQuality}
+            aspectRatios={ASPECT_RATIO_OPTIONS}
+            singleRatio={aspectRatio}
+            onSingleRatioChange={setAspectRatio}
+          />
 
           {/* 生成内容选择 */}
           <div className="bg-white rounded-2xl p-4 border border-[#E5E5E5] shadow-sm">
@@ -936,29 +831,18 @@ export const ProductTryonPage: React.FC = () => {
         <div className="flex-1 overflow-y-auto p-6">
           {/* 生成中 - 无结果时显示大loading */}
           {isProcessing && results.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-16">
-              <div className="relative mb-8">
-                <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-blue-500/5 rounded-full blur-3xl animate-pulse" />
-                <div className="relative w-24 h-24 rounded-full border-4 border-[#E5E5E5] border-t-purple-500 border-r-purple-400 animate-spin" />
-              </div>
-              <div className="flex flex-col items-center gap-2 mb-6">
-                <h3 className="text-lg font-semibold text-[#171717]">正在生成穿搭图</h3>
-                <p className="text-sm text-[#A3A3A3]">AI 视觉引擎全力运行中...</p>
-              </div>
-              <div className="w-48 h-2 bg-[#F5F5F5] rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-purple-500 to-blue-400 rounded-full animate-pulse" style={{ width: '60%' }} />
-              </div>
-              <div className="flex gap-1.5 mt-6">
-                <div className="w-2 h-2 rounded-full bg-purple-500 animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-2 h-2 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-2 h-2 rounded-full bg-purple-300 animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
-            </div>
+            <LoadingAnimation
+              variant="featured"
+              title="正在生成穿搭图"
+              description="AI 视觉引擎全力运行中..."
+              showProgressBar
+              progressWidth="60%"
+            />
           )}
 
-          {/* 有结果时 - 显示结果网格 + 生成中提示 */}
-          {results.length > 0 && (
-            <>
+          {/* 结果区域 */}
+          <div className="flex-1 flex flex-col">
+            {results.length > 0 && (
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-semibold text-[#171717]">
                   生成结果 ({results.length})
@@ -966,49 +850,21 @@ export const ProductTryonPage: React.FC = () => {
                 </h2>
                 {isProcessing && (
                   <div className="flex items-center gap-2 text-xs text-[#A3A3A3] bg-[#F5F5F5] rounded-xl px-3 py-1.5">
-                    <Loader2 size={12} className="animate-spin text-purple-500" />
                     正在生成剩余图片...
                   </div>
                 )}
               </div>
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                {results.map((item, idx) => (
-                  <div key={idx} className="relative group rounded-2xl overflow-hidden bg-[#F5F5F5] border border-[#E5E5E5]">
-                    <img src={item.url} alt="" className="w-full aspect-square object-cover" />
-                    <div className="absolute top-2 left-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full backdrop-blur-sm">
-                      {item.label}
-                    </div>
-                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100 transition-all">
-                      <button onClick={() => setPreviewImage(item.url)} className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-all">
-                        <Eye size={18} className="text-white" />
-                      </button>
-                      <button onClick={() => setReEditImage(item.url)} className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-all">
-                        <Wand2 size={18} className="text-white" />
-                      </button>
-                      <button onClick={() => handleDownload(item.url)} className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center hover:bg-white/30 transition-all">
-                        <Download size={18} className="text-white" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          {/* 无结果且未生成 - 显示空状态 */}
-          {!isProcessing && results.length === 0 && (
-            <div className="h-full flex flex-col items-center justify-center text-center">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-100 to-blue-100 flex items-center justify-center mb-4">
-                <User size={32} className="text-[#A3A3A3]" />
-              </div>
-              <h3 className="text-sm font-semibold text-[#171717] mb-1">产品穿搭</h3>
-              <p className="text-xs text-[#A3A3A3] max-w-[280px]">
-                1. 上传多张参考图生成真实模特<br/>
-                2. 上传产品图片<br/>
-                3. 选择要生成的图片类型，点击生成
-              </p>
-            </div>
-          )}
+            )}
+            <EcommerceResults
+              results={results}
+              onPreview={setPreviewImage}
+              onReEdit={setReEditImage}
+              onDownload={handleDownload}
+              aspectRatio="1/1"
+              emptyTitle="产品穿搭"
+              emptyDescription="1. 上传多张参考图生成真实模特&#10;2. 上传产品图片&#10;3. 选择要生成的图片类型，点击生成"
+            />
+          </div>
         </div>
       </div>
 

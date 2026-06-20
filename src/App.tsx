@@ -11,8 +11,9 @@ import { refreshCredits } from './services/authService';
 import { AuthModal } from './components/AuthModal';
 import { MobileApp } from './mobile/MobileApp';
 import TauriUpdater from './components/TauriUpdater';
+import { API_URL } from './services/api';
 
-const VideoProjectPage = React.lazy(() => import('./pages/VideoProjectPage'));
+const VideoStudioPage = React.lazy(() => import('./pages/video/VideoStudioPage'));
 const WorkflowPage = React.lazy(() => import('./pages/plugins/WorkflowPage').then(m => ({ default: m.WorkflowPage })));
 
 const APP_VERSION_KEY = 'app_build_version';
@@ -43,31 +44,15 @@ const WorkflowAuthWrapper = () => {
   );
 };
 
-const VideoAuthWrapper = () => {
-  const { isAuthenticated, isLoading } = useAuth();
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) window.location.href = '/';
-  }, [isLoading, isAuthenticated]);
-
-  if (isLoading || !isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-[#F7F7F7] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#171717] border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  return (
-    <React.Suspense fallback={
-      <div className="min-h-screen bg-[#F7F7F7] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#171717] border-t-transparent rounded-full animate-spin" />
-      </div>
-    }>
-      <VideoProjectPage />
-    </React.Suspense>
-  );
-};
+const VideoRoute = () => (
+  <React.Suspense fallback={
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+    </div>
+  }>
+    <VideoStudioPage />
+  </React.Suspense>
+);
 
 type View = 'canvas';
 
@@ -95,7 +80,7 @@ const AppContent = () => {
   useEffect(() => {
     const checkVersion = async () => {
       try {
-        const res = await fetch('/api/app/version', { cache: 'no-store' });
+        const res = await fetch(`${API_URL}/api/app/version`, { cache: 'no-store' });
         const data = await res.json();
         if (!data?.success) return;
         const serverVersion = String(data.version);
@@ -166,7 +151,7 @@ function OAuthCallbackHandler({ children }: { children: React.ReactNode }) {
 
     (async () => {
       try {
-        const res = await fetch(`/api/auth/oauth/callback?code=${code}&state=${state}`);
+        const res = await fetch(`${API_URL}/api/auth/oauth/callback?code=${code}&state=${state}`);
         const html = await res.text();
         const m = html.match(/var payload = ({.*?});/);
         const errM = html.match(/var msg = (".*?");/);
@@ -205,7 +190,7 @@ export default function App() {
             <Route path="/sub-login" element={<SubAccountLoginPage />} />
             <Route path="/admin/*" element={<AdminApp />} />
             <Route path="/agent/*" element={<AgentApp />} />
-            <Route path="/video" element={<VideoAuthWrapper />} />
+            <Route path="/video" element={<VideoRoute />} />
             <Route path="/workflow" element={<WorkflowAuthWrapper />} />
             <Route path="/*" element={<AppContent />} />
           </Routes>

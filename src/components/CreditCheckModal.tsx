@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Coins, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { getPricing } from '../services/pricingService';
 
 interface CreditCheckModalProps {
   isOpen: boolean;
@@ -16,8 +17,28 @@ export const CreditCheckModal: React.FC<CreditCheckModalProps> = ({
   requiredCredits = 0.1
 }) => {
   const { user } = useAuth();
+  const [pricing, setPricing] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setLoading(true);
+      getPricing()
+        .then(priceData => {
+          setPricing(priceData);
+        })
+        .catch(error => {
+          console.error('获取价格配置失败:', error);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const nanobann2Price = pricing.nanobann2_generation || 0.3;
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4">
@@ -42,11 +63,7 @@ export const CreditCheckModal: React.FC<CreditCheckModalProps> = ({
           <div className="space-y-1">
             <div className="flex justify-between text-xs">
               <span className="text-[#525252]">图片生成 (nano-banana-2)</span>
-              <span className="font-semibold text-[#171717]">0.3 积分/次</span>
-            </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-[#525252]">视频生成 (veo3.1)</span>
-              <span className="font-semibold text-[#171717]">0.5 积分/次</span>
+              <span className="font-semibold text-[#171717]">{loading ? '加载中...' : `${nanobann2Price} 积分/次`}</span>
             </div>
           </div>
         </div>

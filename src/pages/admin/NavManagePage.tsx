@@ -36,11 +36,8 @@ export default function NavManagePage({ token }: { token: string }) {
           { nav_id: 'detailClone', label: '版式裂变', category: '店铺上架素材', sort_order: 0 },
           { nav_id: 'detail2', label: '详情页设计', category: '店铺上架素材', sort_order: 2 },
           { nav_id: 'banner', label: 'Banner设计', category: '店铺上架素材', sort_order: 3 },
-          { nav_id: 'poster', label: '营销海报设计', category: '店铺上架素材', sort_order: 4 },
           { nav_id: 'storyboard', label: '故事板', category: '短视频带货引流', sort_order: 0 },
           { nav_id: 'tk-video', label: 'TK脚本图', category: '短视频带货引流', sort_order: 1 },
-          { nav_id: 'gemini-video', label: 'Gemini Omini', category: '短视频带货引流', sort_order: 2 },
-          { nav_id: 'veo31', label: 'Veo3.1视频生成', category: '短视频带货引流', sort_order: 3 },
         ];
         for (const nav of ALL_NAVS) {
           if (!list.find((i: any) => i.nav_id === nav.nav_id)) {

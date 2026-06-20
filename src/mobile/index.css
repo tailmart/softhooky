@@ -40,8 +40,8 @@
 .mobile-card {
   border-radius: 16px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
 }
 
 /* Horizontal scroll */
@@ -83,12 +83,12 @@
 /* Dark theme specific overrides for mobile */
 .mobile-app input,
 .mobile-app textarea {
-  color: white;
+  color: #171717;
 }
 
 .mobile-app input::placeholder,
 .mobile-app textarea::placeholder {
-  color: rgba(255, 255, 255, 0.2);
+  color: #a3a3a3;
 }
 
 /* Scrollbar for dark theme */

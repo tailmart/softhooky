@@ -11,7 +11,7 @@
     "start": "node server.cjs",
     "preview": "vite preview",
     "vite:only": "vite build",
-    "clean": "rm -rf dist",
+    "clean": "node scripts/clean.mjs",
     "lint": "tsc --noEmit",
     "migrate": "tsx run-migrations.ts",
     "publish": "node publish.js",
@@ -69,6 +69,8 @@
     "vite": "^6.4.3"
   },
   "optionalDependencies": {
-    "@rollup/rollup-darwin-arm64": "^4.61.1"
+    "@rollup/rollup-darwin-arm64": "^4.61.1",
+    "@rollup/rollup-linux-x64-gnu": "^4.61.1",
+    "@rollup/rollup-win32-x64-msvc": "^4.61.1"
   }
 }

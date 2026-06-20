@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Send, Plus, Trash2, ChevronLeft, Image as ImageIcon, X, Loader2, MessageCircle, Copy, Check, Paperclip, Tag, FileText, Megaphone, Zap, Sparkles } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { getAuthToken } from '../../services/authService';
+import { API_URL } from '../../services/api';
 
 interface Message {
   type: 'user' | 'ai';
@@ -21,7 +22,7 @@ const loadServerMessages = async (): Promise<Message[]> => {
   try {
     const token = getAuthToken();
     if (!token) return [];
-    const res = await fetch('/api/chat/deepseek/messages', { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${API_URL}/api/chat/deepseek/messages`, { headers: { Authorization: `Bearer ${token}` } });
     if (res.ok) {
       const data = await res.json();
       if (data.success && data.messages && data.messages.length > 0) return data.messages;
@@ -35,7 +36,7 @@ const saveServerMessages = async (messages: Message[]) => {
   try {
     const token = getAuthToken();
     if (!token) return;
-    await fetch('/api/chat/deepseek/messages', {
+    await fetch(`${API_URL}/api/chat/deepseek/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ messages: messages.slice(-30) }),
@@ -64,27 +65,27 @@ const MarkdownText: React.FC<{ content: string }> = ({ content }) => {
 
     // 分隔线：---  ***  ——— 等
     if (/^[-—*]{3,}$/.test(line) || /^—+$/.test(line)) {
-      elements.push(<div key={i} className="border-t border-white/[0.06] my-2" />);
+      elements.push(<div key={i} className="border-t border-gray-200 my-2" />);
       i++; continue;
     }
 
     // ### / ## 标题
     const headingMatch = line.match(/^#{1,4}\s+(.+)/);
     if (headingMatch) {
-      elements.push(<h3 key={i} className="text-sm font-bold text-white mt-3 mb-1">{headingMatch[1]}</h3>);
+      elements.push(<h3 key={i} className="text-sm font-bold text-[#171717] mt-3 mb-1">{headingMatch[1]}</h3>);
       i++; continue;
     }
 
     // **整行加粗**
     if (/^\*\*.+\*\*$/.test(line)) {
-      elements.push(<p key={i} className="text-sm font-semibold text-white">{line.replace(/^\*\*|\*\*$/g, '')}</p>);
+      elements.push(<p key={i} className="text-sm font-semibold text-[#171717]">{line.replace(/^\*\*|\*\*$/g, '')}</p>);
       i++; continue;
     }
 
     // 列表项 - 或 *
     if (/^[-*]\s/.test(line)) {
       const text = line.replace(/^[-*]\s+/, '');
-      elements.push(<div key={i} className="flex gap-2 text-sm text-white/50"><span className="text-white/30 mt-1 flex-shrink-0">•</span><span>{renderInline(text)}</span></div>);
+      elements.push(<div key={i} className="flex gap-2 text-sm text-gray-600"><span className="text-gray-400 mt-1 flex-shrink-0">•</span><span>{renderInline(text)}</span></div>);
       i++; continue;
     }
 
@@ -92,7 +93,7 @@ const MarkdownText: React.FC<{ content: string }> = ({ content }) => {
     if (/^\d+[.、）)]?\s/.test(line)) {
       const num = line.match(/^\d+/)?.[0] || '';
       const text = line.replace(/^\d+[.、）)]?\s+/, '');
-      elements.push(<div key={i} className="flex gap-2 text-sm text-white/50"><span className="text-white/30 w-4 flex-shrink-0 text-right">{num}.</span><span className="flex-1">{renderInline(text)}</span></div>);
+      elements.push(<div key={i} className="flex gap-2 text-sm text-gray-600"><span className="text-gray-400 w-4 flex-shrink-0 text-right">{num}.</span><span className="flex-1">{renderInline(text)}</span></div>);
       i++; continue;
     }
 
@@ -102,12 +103,12 @@ const MarkdownText: React.FC<{ content: string }> = ({ content }) => {
       // 跳过表头分隔行 |---|---|
       if (cells.length > 0 && cells.every((c: string) => /^[-:]+$/.test(c.replace(/\s/g, '')))) { i++; continue; }
       // 跳过表格后的空行
-      elements.push(<div key={i} className="flex gap-1 text-sm text-white/50 bg-white/[0.06] rounded-lg px-3 py-1.5 my-1">{cells.map((c: string, j: number) => <span key={j} className="flex-1 text-xs">{renderInline(c)}</span>)}</div>);
+      elements.push(<div key={i} className="flex gap-1 text-sm text-gray-600 bg-gray-100 rounded-lg px-3 py-1.5 my-1">{cells.map((c: string, j: number) => <span key={j} className="flex-1 text-xs">{renderInline(c)}</span>)}</div>);
       i++; continue;
     }
 
     // 普通段落 — 内联渲染加粗
-    elements.push(<p key={i} className="text-sm text-white/50 leading-relaxed">{renderInline(line)}</p>);
+    elements.push(<p key={i} className="text-sm text-gray-600 leading-relaxed">{renderInline(line)}</p>);
     i++;
   }
   return <div className="space-y-0.5">{elements}</div>;
@@ -119,7 +120,7 @@ const renderInline = (text: string): React.ReactNode => {
   const parts = text.split(/(\*\*.*?\*\*)/g);
   return parts.map((p, j) => {
     if (p.startsWith('**') && p.endsWith('**')) {
-      return <strong key={j} className="font-semibold text-white">{p.slice(2, -2)}</strong>;
+      return <strong key={j} className="font-semibold text-[#171717]">{p.slice(2, -2)}</strong>;
     }
     // 去掉多余的 * 标记（非加粗的单个*）
     return p.replace(/\*/g, '');
@@ -258,7 +259,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onBack }) => {
           : userText,
       });
 
-      const res = await fetch('/api/chat/deepseek', {
+      const res = await fetch(`${API_URL}/api/chat/deepseek`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ messages: historyMessages }),
@@ -293,7 +294,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onBack }) => {
       <div>
         <div className="px-4 pt-4 pb-3">
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-xl font-bold text-white">AI 对话</h1>
+            <h1 className="text-xl font-bold text-[#171717]">AI 对话</h1>
             <button onClick={createNewChat} className="mobile-tap flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-full text-xs font-medium shadow-lg shadow-blue-500/25">
               <Plus size={14} /> 新对话
             </button>
@@ -306,17 +307,17 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onBack }) => {
             </div>
           ) : conversations.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16">
-              <div className="w-16 h-16 rounded-2xl bg-white/[0.04] flex items-center justify-center mb-3 shadow-sm border border-white/[0.06]">
-                <MessageCircle size={28} className="text-white/20" />
+              <div className="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center mb-3 shadow-sm border border-gray-200">
+                <MessageCircle size={28} className="text-gray-300" />
               </div>
-              <p className="text-sm font-medium text-white/30 mb-4">开始你的第一段 AI 对话</p>
+              <p className="text-sm font-medium text-gray-400 mb-4">开始你的第一段 AI 对话</p>
               <div className="flex flex-wrap justify-center gap-2 px-4">
                 {QUICK_ACTIONS.map(qa => {
                   const Icon = qa.icon;
                   return (
                     <button key={qa.id} onClick={() => { createNewChat(); setTimeout(() => handleQuickAction(qa.prompt), 100); }}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-white/[0.04] rounded-full border border-white/[0.06] text-xs text-white/40 mobile-tap">
-                      <Icon size={13} className="text-white/30" /> {qa.label}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-gray-50 rounded-full border border-gray-200 text-xs text-gray-500 mobile-tap">
+                      <Icon size={13} className="text-gray-400" /> {qa.label}
                     </button>
                   );
                 })}
@@ -325,18 +326,18 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onBack }) => {
           ) : (
             conversations.map(conv => (
               <button key={conv.id} onClick={() => { setActiveConvId(conv.id); setShowList(false); }}
-                className="mobile-tap w-full bg-white/[0.04] rounded-2xl p-4 border border-white/[0.06] flex items-center gap-3">
+                className="mobile-tap w-full bg-gray-50 rounded-2xl p-4 border border-gray-200 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-500/25">
                   <span className="text-white text-xs font-bold">{conv.title.charAt(0) || '?'}</span>
                 </div>
                 <div className="flex-1 text-left min-w-0">
-                  <p className="text-sm font-semibold text-white truncate">{conv.title}</p>
-                  <p className="text-xs text-white/30 truncate mt-0.5">{conv.messages[conv.messages.length - 1]?.content || '空对话'}</p>
+                  <p className="text-sm font-semibold text-[#171717] truncate">{conv.title}</p>
+                  <p className="text-xs text-gray-400 truncate mt-0.5">{conv.messages[conv.messages.length - 1]?.content || '空对话'}</p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <span className="text-[10px] text-white/20">{new Date(conv.updatedAt).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })}</span>
+                  <span className="text-[10px] text-gray-300">{new Date(conv.updatedAt).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })}</span>
                   <span onClick={(e) => deleteConv(conv.id, e)} className="mobile-tap w-7 h-7 flex items-center justify-center rounded-full hover:bg-red-500/10 cursor-pointer">
-                    <Trash2 size={13} className="text-white/20" />
+                    <Trash2 size={13} className="text-gray-300" />
                   </span>
                 </div>
               </button>
@@ -350,12 +351,12 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onBack }) => {
   // 聊天视图
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-[#0a0a0a] flex-shrink-0">
-        <button onClick={() => { setShowList(true); setActiveConvId(null); }} className="mobile-tap w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.06]">
-          <ChevronLeft size={18} className="text-white/40" />
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 bg-white flex-shrink-0">
+        <button onClick={() => { setShowList(true); setActiveConvId(null); }} className="mobile-tap w-8 h-8 flex items-center justify-center rounded-full bg-gray-100">
+          <ChevronLeft size={18} className="text-gray-500" />
         </button>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-white truncate">{activeConv?.title || 'AI 对话'}</p>
+          <p className="text-sm font-semibold text-[#171717] truncate">{activeConv?.title || 'AI 对话'}</p>
         </div>
       </div>
 
@@ -367,8 +368,8 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onBack }) => {
               const Icon = qa.icon;
               return (
                 <button key={qa.id} onClick={() => handleQuickAction(qa.prompt)}
-                  className="mobile-tap flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2 bg-white/[0.06] rounded-full text-xs font-medium text-white/50 border border-white/[0.06]">
-                  <Icon size={14} className="text-white/40" /> {qa.label}
+                  className="mobile-tap flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2 bg-gray-50 rounded-full text-xs font-medium text-gray-500 border border-gray-200">
+                  <Icon size={14} className="text-gray-500" /> {qa.label}
                 </button>
               );
             })}
@@ -383,8 +384,8 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onBack }) => {
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center mb-4 shadow-lg shadow-blue-500/25">
                 <Sparkles size={28} className="text-white" />
             </div>
-            <p className="text-sm font-medium text-white">电商文案助手</p>
-            <p className="text-xs text-white/30 mt-1 text-center px-8">产品标题、卖点提炼、TikTok脚本、产品描述</p>
+            <p className="text-sm font-medium text-[#171717]">电商文案助手</p>
+            <p className="text-xs text-gray-400 mt-1 text-center px-8">产品标题、卖点提炼、TikTok脚本、产品描述</p>
           </div>
         ) : (
           activeConv.messages.map((msg, idx) => (
@@ -392,25 +393,25 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onBack }) => {
               <div className={`max-w-[88%] rounded-2xl px-4 py-3 ${
                 msg.type === 'user'
                   ? 'bg-blue-500 text-white rounded-br-md'
-                  : 'bg-white/[0.04] border border-white/[0.06] text-white rounded-bl-md'
+                  : 'bg-gray-50 border border-gray-200 text-[#171717] rounded-bl-md'
               }`}>
                 {msg.type === 'ai' ? (
                   <div className="relative">
                     <MarkdownText content={msg.content} />
                     <button onClick={() => handleCopy(msg.content, idx)}
                       className={`mt-2 flex items-center gap-1 px-2 py-1 rounded-md text-[10px] transition-colors ${
-                        copiedIdx === idx ? 'text-green-400 bg-green-500/10' : 'text-white/30 hover:text-white/40'
+                        copiedIdx === idx ? 'text-green-400 bg-green-500/10' : 'text-gray-400 hover:text-gray-500'
                       }`}>
                       {copiedIdx === idx ? <><Check size={11} /> 已复制</> : <><Copy size={11} /> 复制</>}
                     </button>
                   </div>
                 ) : (
                   <>
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap text-[#171717]">{msg.content}</p>
                     {msg.images && msg.images.length > 0 && (
                       <div className="flex gap-2 mt-2 flex-wrap">
                         {msg.images.map((img, i) => (
-                          <img key={i} src={img} alt="" className="w-14 h-14 rounded-lg object-cover border border-white/20" />
+                          <img key={i} src={img} alt="" className="w-14 h-14 rounded-lg object-cover border border-gray-300" />
                         ))}
                       </div>
                     )}
@@ -422,10 +423,10 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onBack }) => {
         )}
         {isLoading && (
           <div className="flex justify-start animate-bubble-in">
-            <div className="bg-white/[0.04] border border-white/[0.06] rounded-2xl rounded-bl-md px-4 py-3">
+            <div className="bg-gray-50 border border-gray-200 rounded-2xl rounded-bl-md px-4 py-3">
               <div className="flex items-center gap-2">
-                <Loader2 size={14} className="text-white/30 animate-spin" />
-                <span className="text-sm text-white/30">思考中...</span>
+                <Loader2 size={14} className="text-gray-400 animate-spin" />
+                <span className="text-sm text-gray-400">思考中...</span>
               </div>
             </div>
           </div>
@@ -434,12 +435,12 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onBack }) => {
       </div>
 
       {/* Input */}
-      <div className="border-t border-white/[0.06] bg-[#0a0a0a] px-3 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
+      <div className="border-t border-gray-200 bg-white px-3 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
         {/* Uploaded files preview */}
         {uploadedFiles.length > 0 && (
           <div className="flex gap-2 mb-2 px-1">
             {uploadedFiles.map((f, i) => (
-              <div key={i} className="relative w-10 h-10 rounded-lg overflow-hidden border border-white/[0.06]">
+              <div key={i} className="relative w-10 h-10 rounded-lg overflow-hidden border border-gray-200">
                 <img src={f.preview} className="w-full h-full object-cover" />
                 <button onClick={() => setUploadedFiles(prev => prev.filter((_, j) => j !== i))} className="absolute top-0 right-0 w-4 h-4 bg-black/50 rounded-full flex items-center justify-center">
                   <X size={8} className="text-white" />
@@ -448,15 +449,15 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onBack }) => {
             ))}
           </div>
         )}
-        <div className="flex items-end gap-2 bg-white/[0.06] rounded-2xl px-3 py-2 min-h-[44px]">
+        <div className="flex items-end gap-2 bg-gray-100 rounded-2xl px-3 py-2 min-h-[44px]">
           {/* 上传按钮 - 输入框超过2行时隐藏 */}
           <button
             onClick={() => fileInputRef.current?.click()}
-            className={`mobile-tap flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/[0.04] transition-all duration-150 ${
+            className={`mobile-tap flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-50 transition-all duration-150 ${
               input.length > 60 ? 'opacity-0 w-0 px-0 overflow-hidden ml-[-8px]' : ''
             }`}
           >
-            <Paperclip size={17} className="text-white/30" />
+            <Paperclip size={17} className="text-gray-400" />
           </button>
           <textarea
             ref={textareaRef}
@@ -478,13 +479,13 @@ export const ChatPage: React.FC<ChatPageProps> = ({ onBack }) => {
             }}
             placeholder="输入产品名称或描述..."
             rows={1}
-            className={`flex-1 bg-transparent text-sm text-white placeholder-white/20 outline-none py-1 resize-none leading-relaxed ${
+            className={`flex-1 bg-transparent text-sm text-[#171717] placeholder-gray-400 outline-none py-1 resize-none leading-relaxed ${
               input.length > 60 ? 'ml-0' : ''
             }`}
           />
           <button onClick={sendMessage} disabled={(!input.trim() && uploadedFiles.length === 0) || isLoading}
             className={`mobile-tap flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
-              (input.trim() || uploadedFiles.length > 0) && !isLoading ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' : 'bg-white/[0.06] text-white/20'
+              (input.trim() || uploadedFiles.length > 0) && !isLoading ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/25' : 'bg-gray-100 text-gray-300'
             }`}>
             <Send size={15} />
           </button>

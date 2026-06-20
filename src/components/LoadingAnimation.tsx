@@ -1,5 +1,4 @@
 import React from 'react';
-import { Loader2 } from 'lucide-react';
 
 interface LoadingAnimationProps {
   title?: string;
@@ -8,58 +7,98 @@ interface LoadingAnimationProps {
   showProgressBar?: boolean;
   progressWidth?: string;
   thumbnails?: string[];
+  variant?: 'default' | 'minimal' | 'featured';
 }
 
 export const LoadingAnimation: React.FC<LoadingAnimationProps> = ({
-  title = 'AI 正在处理',
-  description = '请稍候...',
+  title = '处理中',
+  description,
   progress,
   showProgressBar = false,
   progressWidth = '60%',
   thumbnails,
+  variant = 'default',
 }) => {
+  if (variant === 'minimal') {
+    return (
+      <div className="flex flex-col items-center justify-center py-12">
+        <div className="w-8 h-8 border-2 border-[#E5E5E5] border-t-[#171717] rounded-full animate-spin mb-4" />
+        <span className="text-sm font-medium text-[#171717]">{title}</span>
+        {progress && progress !== description && (
+          <p className="text-xs text-[#A3A3A3] mt-2">{progress}</p>
+        )}
+      </div>
+    );
+  }
+
+  if (variant === 'featured') {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 px-8">
+        <div className="w-10 h-10 border-2 border-[#E5E5E5] border-t-[#171717] rounded-full animate-spin mb-6" />
+
+        <div className="flex flex-col items-center gap-2 mb-6 text-center">
+          <h3 className="text-base font-semibold text-[#171717]">{title}</h3>
+          {description && <p className="text-sm text-[#A3A3A3] max-w-xs">{description}</p>}
+        </div>
+
+        {thumbnails && thumbnails.length > 0 && (
+          <div className="flex items-center gap-2 mb-6">
+            {thumbnails.map((src, idx) => (
+              <div key={idx} className="w-12 h-12 rounded-xl overflow-hidden border border-[#E5E5E5]">
+                <img src={src} alt="" className="w-full h-full object-cover" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {showProgressBar && (
+          <div className="w-48 h-1 bg-[#F0F0F0] rounded-full overflow-hidden mb-4">
+            <div
+              className="h-full bg-[#171717] rounded-full transition-all duration-500"
+              style={{ width: progressWidth }}
+            />
+          </div>
+        )}
+
+        {progress && progress !== description && (
+          <p className="text-xs text-[#A3A3A3]">{progress}</p>
+        )}
+      </div>
+    );
+  }
+
+  // 默认样式
   return (
     <div className="flex flex-col items-center justify-center py-16">
-      <div className="relative mb-8">
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-blue-500/5 rounded-full blur-3xl animate-pulse" />
-        <div className="relative w-24 h-24 rounded-full border-4 border-[#E5E5E5] border-t-blue-500 border-r-blue-400 animate-spin" />
-      </div>
+      <div className="w-10 h-10 border-2 border-[#E5E5E5] border-t-[#171717] rounded-full animate-spin mb-6" />
 
       <div className="flex flex-col items-center gap-2 mb-6">
-        <h3 className="text-lg font-semibold text-[#171717]">{title}</h3>
-        <p className="text-sm text-[#A3A3A3]">{description}</p>
+        <h3 className="text-base font-semibold text-[#171717]">{title}</h3>
+        {description && <p className="text-sm text-[#A3A3A3]">{description}</p>}
       </div>
 
       {thumbnails && thumbnails.length > 0 && (
-        <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center gap-2 mb-4">
           {thumbnails.map((src, idx) => (
-            <div key={idx} className="relative">
-              <div className="w-14 h-14 rounded-2xl overflow-hidden border-2 border-blue-400/50 shadow-lg shadow-blue-500/10 animate-pulse">
-                <img src={src} alt="" className="w-full h-full object-cover" />
-              </div>
-              <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                <Loader2 size={10} className="text-white animate-spin" />
-              </div>
+            <div key={idx} className="w-12 h-12 rounded-xl overflow-hidden border border-[#E5E5E5]">
+              <img src={src} alt="" className="w-full h-full object-cover" />
             </div>
           ))}
         </div>
       )}
 
       {showProgressBar && (
-        <div className="w-48 h-2 bg-[#F5F5F5] rounded-full overflow-hidden mb-4">
-          <div className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full animate-pulse" style={{ width: progressWidth }} />
+        <div className="w-48 h-1 bg-[#F0F0F0] rounded-full overflow-hidden mb-4">
+          <div
+            className="h-full bg-[#171717] rounded-full transition-all duration-500"
+            style={{ width: progressWidth }}
+          />
         </div>
       )}
 
-      {progress && (
-        <p className="text-xs text-[#A3A3A3] mb-4">{progress}</p>
+      {progress && progress !== description && (
+        <p className="text-xs text-[#A3A3A3]">{progress}</p>
       )}
-
-      <div className="flex gap-1.5">
-        <div className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0ms' }} />
-        <div className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-        <div className="w-2 h-2 rounded-full bg-blue-300 animate-bounce" style={{ animationDelay: '300ms' }} />
-      </div>
     </div>
   );
 };

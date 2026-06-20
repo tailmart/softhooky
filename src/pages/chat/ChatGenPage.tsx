@@ -2,8 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   X, Loader2, Plus, Send, Sparkles, Coins,
   Clock, Trash2, CornerDownRight, Download,
-  Image as ImageIcon, RefreshCw,
-  Wand2, Monitor, Crop, ImagePlus, Zap, Crown
+  RefreshCw, Wand2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { generateImage, editImage } from '../../services/imageService';
@@ -13,8 +12,7 @@ import { getPricing } from '../../services/pricingService';
 import { CreditCheckModal } from '../../components/CreditCheckModal';
 import { ImagePreviewModal } from '../../components/ImagePreviewModal';
 import { imageLibraryService } from '../../services/imageLibraryService';
-import { getAvailableModels } from '../../services/modelService';
-import axios from 'axios';
+import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface ChatImage {
@@ -86,6 +84,7 @@ export const ChatGenPage: React.FC = () => {
   const [enableOptimization, setEnableOptimization] = useState(savedSettings.enableOptimization ?? false);
   const [isOptimized, setIsOptimized] = useState(false);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -107,7 +106,7 @@ export const ChatGenPage: React.FC = () => {
         setLoadingImages(false);
         return;
       }
-      const res = await axios.get('/api/chat/images', {
+      const res = await api.get('/api/chat/images', {
         headers: { Authorization: `Bearer ${token}` },
         timeout: 15000
       });
@@ -304,9 +303,9 @@ export const ChatGenPage: React.FC = () => {
       let result: any;
       try {
         if (hasImages && currentPrompt) {
-          result = await editImage({ prompt: currentPrompt, images: currentImages, model: selectedModel, aspectRatio: selectedAspectRatio, resolution });
+          result = await editImage({ prompt: currentPrompt, images: currentImages, model: selectedModel, aspectRatio: selectedAspectRatio, resolution, type: 'chatgen' });
         } else {
-          result = await generateImage({ prompt: currentPrompt, model: selectedModel, aspectRatio: selectedAspectRatio, resolution, n: currentCount });
+          result = await generateImage({ prompt: currentPrompt, model: selectedModel, aspectRatio: selectedAspectRatio, resolution, n: currentCount, type: 'chatgen' });
         }
 
         const newGenImages: ChatImage[] = (result.data || []).map((item: any) => ({
@@ -367,7 +366,7 @@ export const ChatGenPage: React.FC = () => {
     try {
       const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
       if (token) {
-        await axios.post('/api/images/delete-by-url',
+        await api.post('/api/images/delete-by-url',
           { url },
           { headers: { Authorization: `Bearer ${token}` } }
         );
@@ -393,7 +392,7 @@ export const ChatGenPage: React.FC = () => {
 
   const MODEL_LABELS: Record<string, string> = {
     nanobann2: 'NanoBanana2',
-    'gpt-image-2': 'GPT-Image2'
+    'gpt-image-2': 'GPT-Image2',
   };
 
   const examplePrompts = [
@@ -427,14 +426,6 @@ export const ChatGenPage: React.FC = () => {
       image: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=social+media+content+creation+first+person+perspective+lifestyle+product+shot+modern+aesthetic+dark&image_size=landscape_4_3',
       navId: 'social',
       color: 'from-amber-500 to-orange-600',
-    },
-    {
-      title: '视频生成',
-      subtitle: '图片变营销视频',
-      desc: '上传图片，AI生成短视频广告',
-      image: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=product+video+production+cinematic+motion+graphics+marketing+video+dark+background+blue+neon+light&image_size=landscape_4_3',
-      navId: 'gemini-video',
-      color: 'from-emerald-500 to-teal-600',
     },
     {
       title: 'TK带货图片',
@@ -500,8 +491,9 @@ export const ChatGenPage: React.FC = () => {
         {/* 左侧：图片展示区 */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-6">
           {loadingImages && (
-            <div className="flex items-center justify-center h-64">
+            <div className="flex flex-col items-center justify-center h-64 gap-3">
               <Loader2 size={32} className="text-blue-500 animate-spin" />
+              <span className="text-gray-500 text-sm">加载中...</span>
             </div>
           )}
 
@@ -511,15 +503,48 @@ export const ChatGenPage: React.FC = () => {
                 <Wand2 size={40} className="text-blue-500" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">开始创作</h2>
-              <p className="text-gray-500 mb-8">输入描述，AI 为你生成精美图片</p>
-              
+              <p className="text-gray-500 mb-8">选择功能，AI 为你生成精美内容</p>
+
+              {/* 核心功能案例展示 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 max-w-6xl w-full mb-8">
+                {showcaseFeatures.map((sf, i) => (
+                  <motion.button
+                    key={sf.navId}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.1 }}
+                    onClick={() => {
+                      if (sf.navId === 'chat-gen') {
+                        setPrompt('');
+                      } else {
+                        window.dispatchEvent(new CustomEvent('navigate-plugin', { detail: sf.navId }));
+                      }
+                    }}
+                    className="group relative overflow-hidden rounded-2xl text-left hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+                  >
+                    <div className="aspect-[4/3] relative">
+                      <img src={sf.image} alt={sf.title} className="w-full h-full object-cover" loading="lazy" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                    </div>
+                    <div className="absolute bottom-0 left-0 right-0 p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[10px] font-bold text-white/60 bg-white/15 px-2 py-0.5 rounded-full">{sf.subtitle}</span>
+                      </div>
+                      <h3 className="text-sm font-bold text-white">{sf.title}</h3>
+                      <p className="text-xs text-white/50 mt-1 line-clamp-2">{sf.desc}</p>
+                    </div>
+                  </motion.button>
+                ))}
+              </div>
+
+              {/* 示例描述 */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl w-full">
                 {examplePrompts.map((ep, i) => (
                   <motion.button
                     key={i}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.1 }}
+                    transition={{ delay: i * 0.1 + 0.5 }}
                     onClick={() => { setPrompt(ep); setIsOptimized(false); }}
                     className="p-4 bg-white rounded-xl border border-gray-200 hover:border-blue-300 hover:shadow-lg transition-all text-left"
                   >
@@ -527,6 +552,22 @@ export const ChatGenPage: React.FC = () => {
                   </motion.button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {loading && (
+            <div className={masonryClass}>
+              {Array.from({ length: Math.min(generateCount, 1) }).map((_, i) => (
+                <motion.div
+                  key={`loading-${i}`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="aspect-square rounded-xl bg-white border-2 border-blue-500 border-dashed animate-pulse flex flex-col items-center justify-center break-inside-avoid gap-2"
+                >
+                  <Loader2 size={24} className="text-blue-500 animate-spin" />
+                  <span className="text-xs text-blue-400">生成中...</span>
+                </motion.div>
+              ))}
             </div>
           )}
 
@@ -543,10 +584,22 @@ export const ChatGenPage: React.FC = () => {
                   onMouseLeave={() => setHoveredIndex(null)}
                   onClick={() => setPreviewImage(img.url)}
                 >
+                  {!loadedImages.has(img.url) && (
+                    <div className="absolute inset-0 bg-[#F5F5F5] animate-pulse flex items-center justify-center break-inside-avoid z-10">
+                      <Loader2 size={20} className="text-gray-300 animate-spin" />
+                    </div>
+                  )}
                   <img
                     src={img.url}
                     alt=""
-                    className="w-full h-full object-cover"
+                    className={`w-full h-full object-cover transition-opacity duration-500 ${loadedImages.has(img.url) ? 'opacity-100' : 'opacity-0'}`}
+                    onLoad={() => {
+                      setLoadedImages(prev => {
+                        const next = new Set(prev);
+                        next.add(img.url);
+                        return next;
+                      });
+                    }}
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = 'none';
                     }}
@@ -606,44 +659,25 @@ export const ChatGenPage: React.FC = () => {
             </div>
           )}
 
-          {loading && (
-            <div className={masonryClass}>
-              {Array.from({ length: generateCount }).map((_, i) => (
-                <motion.div
-                  key={`loading-${i}`}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="aspect-square rounded-xl bg-gray-200 animate-pulse flex items-center justify-center break-inside-avoid"
-                >
-                  <Loader2 size={24} className="text-gray-400 animate-spin" />
-                </motion.div>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* 右侧：控制面板 */}
-        <aside className="w-80 bg-white border-l border-gray-200 flex flex-col overflow-hidden">
-          {/* 标题 */}
-          <div className="p-4 border-b border-gray-200 flex-shrink-0">
-            <h2 className="font-semibold text-gray-900">创作设置</h2>
-          </div>
-
+        <aside className="w-[340px] bg-white border-l border-gray-200 flex flex-col overflow-hidden">
           {/* 可滚动的设置区域 */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto px-4 pt-4 pb-2 space-y-3">
             {/* 上传参考图 */}
-            <div className="p-4 border-b border-gray-200">
-              <label className="text-sm font-medium text-gray-700 mb-1 block">参考图片</label>
-              <p className="text-xs text-gray-500 mb-3">上传同一产品的多个细节图，AI 将综合分析后生成</p>
+            <div className="bg-gray-50 rounded-2xl p-3.5">
+              <label className="text-xs font-semibold text-gray-700 mb-2.5 block">参考图片</label>
+              <p className="text-[11px] text-gray-400 mb-3">上传多个细节图，AI 综合分析后生成</p>
               <div className="flex flex-wrap gap-2">
                 {uploadedImages.map((img, idx) => (
                   <div key={img.id} className="relative group">
-                    <div className="w-16 h-16 rounded-lg overflow-hidden border-2 border-gray-200">
+                    <div className="w-[60px] h-[60px] rounded-xl overflow-hidden ring-2 ring-white shadow-sm">
                       <img src={img.url} alt="" className="w-full h-full object-cover" />
                     </div>
                     <button
                       onClick={() => removeUploadedImage(idx)}
-                      className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute -top-1.5 -right-1.5 w-[18px] h-[18px] bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
                     >
                       <X size={10} className="text-white" />
                     </button>
@@ -652,9 +686,9 @@ export const ChatGenPage: React.FC = () => {
                 {uploadedImages.length < 4 && (
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="w-16 h-16 rounded-lg border-2 border-dashed border-gray-300 hover:border-blue-400 flex items-center justify-center transition-colors"
+                    className="w-[60px] h-[60px] rounded-xl border-2 border-dashed border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 flex items-center justify-center transition-all"
                   >
-                    <Plus size={20} className="text-gray-400" />
+                    <Plus size={18} className="text-gray-300" />
                   </button>
                 )}
               </div>
@@ -669,136 +703,155 @@ export const ChatGenPage: React.FC = () => {
             </div>
 
             {/* 模型选择 */}
-            <div className="p-4 border-b border-gray-200">
-              <div className="flex items-center gap-2 mb-3">
-                <Sparkles size={14} className="text-blue-500" />
-                <span className="text-xs font-medium text-gray-600">生成模型</span>
+            <div className="bg-gray-50 rounded-2xl p-3.5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-blue-500">✦</span>
+                  <span className="text-xs font-semibold text-gray-700">生成模型</span>
+                </div>
+                <span className="text-[10px] text-emerald-600 font-medium bg-emerald-50 px-2 py-0.5 rounded-full">新手推荐 Nano</span>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => setSelectedModel('nanobann2')}
-                  className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-all ${
-                    selectedModel === 'nanobann2'
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                  }`}
-                >
-                  <span className="text-xs font-semibold">NanoBanana2</span>
-                </button>
-                <button
-                  onClick={() => setSelectedModel('gpt-image-2')}
-                  className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-all ${
-                    selectedModel === 'gpt-image-2'
-                      ? 'border-amber-500 bg-amber-50 text-amber-700'
-                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                  }`}
-                >
-                  <span className="text-xs font-semibold">GPT-Image2</span>
-                </button>
+              <div className="flex gap-2">
+                {[
+                  { id: 'nanobann2', label: 'Nano', color: 'bg-gray-900 text-white shadow-lg shadow-gray-900/20' },
+                  { id: 'gpt-image-2', label: 'GPT', color: 'bg-amber-500 text-white shadow-lg shadow-amber-500/20' },
+                ].map(m => (
+                  <button
+                    key={m.id}
+                    onClick={() => setSelectedModel(m.id)}
+                    className={`flex-1 py-2.5 rounded-xl text-[11px] font-bold transition-all duration-200 ${
+                      selectedModel === m.id
+                        ? m.color
+                        : 'bg-white text-gray-500 hover:bg-gray-100 ring-1 ring-gray-100'
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-gray-400 mt-2.5">
+                {selectedModel === 'nanobann2' && '⚡ 速度快，性价比高，适合日常使用'}
+                {selectedModel === 'gpt-image-2' && '🎨 GPT-Image2，高质量创意生成'}
+              </p>
+            </div>
+
+            {/* 分辨率 */}
+            <div className="bg-gray-50 rounded-2xl p-3.5">
+              <div className="flex items-center gap-1.5 mb-3">
+                <span className="text-[10px] text-emerald-500">◆</span>
+                <span className="text-xs font-semibold text-gray-700">分辨率</span>
+              </div>
+              <div className="flex gap-2">
+                {[
+                  { value: '2K', desc: '标准' },
+                  { value: '4K', desc: '超清' },
+                ].map(({ value, desc }) => (
+                  <button
+                    key={value}
+                    onClick={() => setResolution(value)}
+                    className={`flex-1 py-3 rounded-xl text-center transition-all duration-200 ${
+                      resolution === value
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
+                        : 'bg-white text-gray-600 hover:bg-gray-100 ring-1 ring-gray-100'
+                    }`}
+                  >
+                    <div className="text-sm font-bold">{value}</div>
+                    <div className={`text-[10px] mt-0.5 ${resolution === value ? 'text-blue-100' : 'text-gray-400'}`}>{desc}</div>
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* 生图设置 */}
-            <div className="p-4 border-b border-gray-200 space-y-4">
-              {/* 分辨率 */}
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Monitor size={14} className="text-emerald-500" />
-                  <span className="text-xs font-medium text-gray-600">分辨率</span>
-                </div>
-                <div className="flex gap-2">
-                  {['2K', '4K'].map((res) => (
-                    <button
-                      key={res}
-                      onClick={() => setResolution(res)}
-                      className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
-                        resolution === res
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      {res}
-                    </button>
-                  ))}
-                </div>
+            {/* 图片比例 */}
+            <div className="bg-gray-50 rounded-2xl p-3.5">
+              <div className="flex items-center gap-1.5 mb-3">
+                <span className="text-[10px] text-amber-500">◇</span>
+                <span className="text-xs font-semibold text-gray-700">图片比例</span>
               </div>
-
-              {/* 图片比例 */}
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Crop size={14} className="text-amber-500" />
-                  <span className="text-xs font-medium text-gray-600">图片比例</span>
-                </div>
-                <div className="grid grid-cols-4 gap-2">
-                  {ASPECT_RATIOS.map(size => (
-                    <button 
-                      key={size.value} 
-                      onClick={() => setSelectedAspectRatio(size.value)}
-                      className={`flex flex-col items-center justify-center gap-1 py-2.5 rounded-lg transition-all ${
-                        selectedAspectRatio === size.value
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      <div className={`border-[1.5px] rounded-sm ${
-                        selectedAspectRatio === size.value ? 'border-white/80' : 'border-gray-400'
-                      } ${getRatioStyle(size.value)}`} />
-                      <span className="text-[10px] font-medium">{size.label}</span>
-                    </button>
-                  ))}
-                </div>
+              <div className="grid grid-cols-4 gap-2">
+                {ASPECT_RATIOS.map(size => (
+                  <button 
+                    key={size.value} 
+                    onClick={() => setSelectedAspectRatio(size.value)}
+                    className={`flex flex-col items-center justify-center gap-1.5 py-2.5 rounded-xl transition-all duration-200 ${
+                      selectedAspectRatio === size.value
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
+                        : 'bg-white text-gray-500 hover:bg-gray-100 ring-1 ring-gray-100'
+                    }`}
+                  >
+                    <div className={`border-[1.5px] rounded-sm ${
+                      selectedAspectRatio === size.value ? 'border-white/80' : 'border-gray-300'
+                    } ${getRatioStyle(size.value)}`} />
+                    <span className="text-[10px] font-semibold">{size.label}</span>
+                  </button>
+                ))}
               </div>
+            </div>
 
-              {/* 生成张数 */}
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <ImagePlus size={14} className="text-violet-500" />
-                  <span className="text-xs font-medium text-gray-600">生成张数</span>
+            {/* 生成张数 */}
+            <div className="bg-gray-50 rounded-2xl p-3.5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-violet-500">▣</span>
+                  <span className="text-xs font-semibold text-gray-700">生成张数</span>
                 </div>
-                <select
-                  value={generateCount}
-                  onChange={(e) => setGenerateCount(Number(e.target.value))}
-                  className="w-full py-2 px-3 rounded-lg text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200 outline-none cursor-pointer hover:border-gray-300 focus:border-blue-400 focus:bg-white transition-all"
-                >
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
-                    <option key={num} value={num}>{num} 张</option>
-                  ))}
-                </select>
+                <span className="text-[11px] font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
+                  {(generatePrice * generateCount).toFixed(1)} 积分
+                </span>
+              </div>
+              <div className="flex gap-2">
+                {[1, 2, 3, 4].map(num => (
+                  <button
+                    key={num}
+                    onClick={() => setGenerateCount(num)}
+                    className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 ${
+                      generateCount === num
+                        ? 'bg-violet-500 text-white shadow-lg shadow-violet-500/25'
+                        : 'bg-white text-gray-500 hover:bg-gray-100 ring-1 ring-gray-100'
+                    }`}
+                  >
+                    {num}
+                  </button>
+                ))}
               </div>
             </div>
 
             {/* AI 优化开关 */}
-            <div className="p-4 border-b border-gray-200">
+            <div className="bg-gray-50 rounded-2xl p-3.5">
               <div className="flex items-center justify-between">
-                <div>
-                  <label className="text-sm font-medium text-gray-700">AI 优化提示词</label>
-                  <p className="text-xs text-gray-500 mt-1">自动优化你的描述</p>
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-sm">
+                    <Sparkles size={14} className="text-white" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 block">AI 优化提示词</label>
+                    <p className="text-[11px] text-gray-400">自动优化你的描述</p>
+                  </div>
                 </div>
                 <button
                   onClick={() => setEnableOptimization(!enableOptimization)}
-                  className={`w-12 h-6 rounded-full transition-colors ${
-                    enableOptimization ? 'bg-blue-600' : 'bg-gray-300'
+                  className={`w-11 h-6 rounded-full transition-all duration-300 relative ${
+                    enableOptimization ? 'bg-blue-600 shadow-sm shadow-blue-600/30' : 'bg-gray-200'
                   }`}
                 >
-                  <div className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform ${
-                    enableOptimization ? 'translate-x-6' : 'translate-x-0.5'
+                  <div className={`w-[20px] h-[20px] bg-white rounded-full shadow-md absolute top-[2px] transition-all duration-300 ${
+                    enableOptimization ? 'left-[22px]' : 'left-[2px]'
                   }`} />
                 </button>
               </div>
             </div>
-
           </div>
 
           {/* 底部输入区域 */}
-          <div className="p-4 border-t border-gray-200 bg-white flex-shrink-0">
+          <div className="px-4 pb-4 pt-2 flex-shrink-0">
             {uploadedImages.length > 0 && (
-              <div className="flex gap-2 mb-3 overflow-x-auto pb-2">
+              <div className="flex gap-2 mb-2.5 overflow-x-auto pb-1">
                 {uploadedImages.map((img, idx) => (
                   <div key={img.id} className="relative flex-shrink-0 group">
-                    <img src={img.url} alt="" className="w-12 h-12 rounded-lg object-cover border border-gray-200" />
+                    <img src={img.url} alt="" className="w-11 h-11 rounded-xl object-cover ring-1 ring-gray-200" />
                     <button
                       onClick={() => removeUploadedImage(idx)}
-                      className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
                     >
                       <X size={8} className="text-white" />
                     </button>
@@ -807,31 +860,36 @@ export const ChatGenPage: React.FC = () => {
               </div>
             )}
 
-            <div className="flex gap-2">
+            <div className="bg-gray-50 rounded-2xl border border-gray-200 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-500/15 transition-all duration-200">
               <textarea
                 ref={textareaRef}
                 value={prompt}
                 onChange={(e) => { setPrompt(e.target.value); setIsOptimized(false); autoResize(); }}
                 onKeyDown={handleKeyDown}
                 placeholder="描述你想要生成的图片..."
-                className="flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="w-full resize-none rounded-2xl bg-transparent px-4 py-3 text-sm focus:outline-none placeholder:text-gray-400"
                 rows={2}
               />
+            </div>
+            <div className="flex items-center justify-between mt-2.5">
+              <span className="text-[11px] text-gray-400">Enter 发送 · Shift+Enter 换行</span>
               <button
                 onClick={handleGenerate}
                 disabled={loading || optimizing || (!prompt.trim() && uploadedImages.length === 0)}
-                className="px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                className="h-9 px-4 rounded-xl bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-1.5 text-sm font-medium shadow-sm shadow-blue-600/20 hover:shadow-md hover:shadow-blue-600/30 active:scale-[0.97]"
               >
                 {loading || optimizing ? (
-                  <Loader2 size={18} className="animate-spin" />
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span className="text-xs">{optimizing ? '优化中...' : '生成中...'}</span>
+                  </>
                 ) : (
-                  <Send size={18} />
+                  <>
+                    <Send size={14} />
+                    <span className="text-xs">生成</span>
+                  </>
                 )}
               </button>
-            </div>
-            <div className="flex items-center justify-between mt-2">
-              <span className="text-xs text-gray-500">Enter 发送 · Shift+Enter 换行</span>
-              <span className="text-xs text-gray-500">{selectedAspectRatio} · {resolution}</span>
             </div>
           </div>
         </aside>

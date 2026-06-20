@@ -8,7 +8,12 @@ axios.interceptors.response.use(
       if (error.config?.url === '/api/auth/sub-login') {
         return Promise.reject(error);
       }
+      const currentPath = window.location.pathname;
       logout();
+      if (currentPath.startsWith('/video')) {
+        window.dispatchEvent(new Event('auth-state-changed'));
+        return Promise.reject(error);
+      }
       const user = getCurrentUser();
       const redirectUrl = user?.isSubUser ? '/sub-login?disabled=1' : '/auth?disabled=1';
       window.location.href = redirectUrl;
@@ -33,6 +38,15 @@ axios.interceptors.response.use(
       }
       // 如果已经在登录页或子账号登录页，不弹窗也不跳转
       if (currentPath === '/auth' || currentPath === '/sub-login') {
+        return Promise.reject(error);
+      }
+      // /video 页面不跳转，由页面内部处理登录态
+      if (currentPath.startsWith('/video')) {
+        sessionStorage.removeItem('authToken');
+        sessionStorage.removeItem('user');
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('user');
+        window.dispatchEvent(new Event('auth-state-changed'));
         return Promise.reject(error);
       }
       // 清除本地无效 token

@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Sparkles, X, Loader2, Image as ImageIcon, Download, Eye, Plus, FileText, Check, Shirt } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Sparkles, Loader2, Download, Eye, FileText, Check, Shirt } from 'lucide-react';
 import { fileToDataUrl } from '../../services/r2Service';
 import { editImage } from '../../services/imageService';
 import { imageLibraryService } from '../../services/imageLibraryService';
@@ -7,11 +7,13 @@ import { analyzeMultipleImages } from '../../services/aiChatService';
 import { requireAuth } from '../../utils/authCheck';
 import { ImagePreviewModal } from '../../components/ImagePreviewModal';
 import { Toast } from '../../components/Toast';
+import { EcommerceImageUpload, EcommerceSettings } from '../../components/ecommerce';
+import { LoadingAnimation } from '../../components/LoadingAnimation';
+import { LANGUAGES, getSavedLanguage, saveLanguage } from '../../constants/languages';
 
 // --- Constants ---
 const MODEL_IMAGE_EDIT = 'gpt-image-2';
 const RESOLUTION_4K = '4K';
-const MAX_IMAGE_SIZE_MB = 20;
 const BACK_ANALYSIS_PROMPT = '分析这张产品背面图的所有可见细节，补充到前面的分析中。只描述实际可见的细节。返回补充分析。';
 
 const ANALYSIS_PROMPT = `You are analyzing product photos (front and back views). Carefully examine ALL visible details and return a detailed product analysis in Chinese.
@@ -123,7 +125,10 @@ const PHASE_LABELS: Record<GenerationPhase, string> = {
 
 // --- Component ---
 export const Product9GridPage: React.FC = () => {
-  const [productImages, setProductImages] = useState<{ file: File; preview: string; label: string }[]>([]);
+  const [productImages, setProductImages] = useState<{ file: File; preview: string }[]>([]);
+  const [language, setLanguage] = useState(getSavedLanguage());
+  const [selectedModel, setSelectedModel] = useState('');
+  const [quality, setQuality] = useState('2K');
   const [enabledViews, setEnabledViews] = useState<Record<string, boolean>>({
     standard: true,
     detail: false,
@@ -138,38 +143,14 @@ export const Product9GridPage: React.FC = () => {
   const [analysis, setAnalysis] = useState('');
   const [phase, setPhase] = useState<GenerationPhase>('idle');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const activeViewCount = Object.values(enabledViews).filter(Boolean).length;
 
-  const handleProductSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const inputFiles = e.target.files;
-    if (!inputFiles) return;
-    const files: File[] = [];
-    for (let i = 0; i < inputFiles.length; i++) {
-      const f = inputFiles[i];
-      if (f.type.startsWith('image/') && f.size <= MAX_IMAGE_SIZE_MB * 1024 * 1024) files.push(f);
-    }
-    if (files.length === 0) return;
-    const newItems = files.map((file, idx) => {
-      const reader = new FileReader();
-      return new Promise<{ file: File; preview: string; label: string }>(resolve => {
-        reader.onload = () => {
-          resolve({ file, preview: reader.result as string, label: idx === 0 ? '正面' : '背面' });
-        };
-        reader.readAsDataURL(file);
-      });
-    });
-    Promise.all(newItems).then(items => {
-      const labeled = items.slice(0, 2).map((item, i) => ({ ...item, label: i === 0 ? '正面' : '背面' }));
-      setProductImages(labeled);
-      setResults({ standard: null, detail: null });
-      setAnalysis('');
-    });
-    if (fileRef.current) fileRef.current.value = '';
-  };
-
-  const removeImage = (idx: number) => setProductImages(prev => prev.filter((_, i) => i !== idx));
+  // 上传新图片时重置结果
+  useEffect(() => {
+    setResults({ standard: null, detail: null });
+    setAnalysis('');
+  }, [productImages]);
 
   const toggleView = (key: string) => {
     setEnabledViews(prev => ({ ...prev, [key]: !prev[key] }));
@@ -263,17 +244,18 @@ export const Product9GridPage: React.FC = () => {
           prompt: getPrompt(key, fullAnalysis),
           images: imageUrls,
           aspectRatio: config.aspectRatio,
-          resolution: RESOLUTION_4K,
-          model: MODEL_IMAGE_EDIT,
+          resolution: quality,
+          model: selectedModel,
+          type: 'edited',
         });
         if (response.data?.[0]?.url) {
           setResults(prev => ({ ...prev, [key]: response.data[0].url }));
           imageLibraryService.saveToLibrary({
             image_url: response.data[0].url,
             prompt: getPrompt(key, fullAnalysis),
-            model: MODEL_IMAGE_EDIT,
+            model: selectedModel || MODEL_IMAGE_EDIT,
             aspect_ratio: config.aspectRatio,
-            resolution: RESOLUTION_4K,
+            resolution: quality || RESOLUTION_4K,
             type: 'edited',
           });
         }
@@ -303,56 +285,25 @@ export const Product9GridPage: React.FC = () => {
         {/* Left sidebar */}
         <div className="w-[380px] border-r border-[#E5E5E5] overflow-y-auto p-5 space-y-4 flex-shrink-0 bg-[#FAFAFA]">
           {/* Image upload */}
-          <div className="bg-white rounded-2xl p-5 border border-[#E5E5E5] shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-6 h-6 rounded-lg bg-blue-50 flex items-center justify-center">
-                <ImageIcon size={13} className="text-blue-500" />
-              </div>
-              <span className="text-sm font-semibold text-[#171717]">产品图片 <span className="text-[11px] text-[#A3A3A3] font-normal">（最多2张）</span></span>
-            </div>
-            {productImages.length > 0 && (
-              <div className="grid grid-cols-2 gap-2.5 mb-3">
-                {productImages.map((item, i) => (
-                  <div
-                    key={i}
-                    className="relative aspect-square rounded-xl overflow-hidden bg-[#F5F5F5] group ring-1 ring-black/5"
-                  >
-                    <img src={item.preview} alt={`产品${item.label}图`} className="w-full h-full object-contain p-2" />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-                    <div className="absolute top-1.5 left-1.5 px-2 py-0.5 bg-black/60 text-white text-[10px] rounded-md backdrop-blur-sm">{item.label}</div>
-                    <button
-                      onClick={() => removeImage(i)}
-                      className="absolute top-1.5 right-1.5 w-5 h-5 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-black/70 transition-all"
-                      aria-label={`删除${item.label}图`}
-                    >
-                      <X size={10} className="text-white" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            {productImages.length < 2 && (
-              <div
-                onClick={() => fileRef.current?.click()}
-                className="border-2 border-dashed border-[#D1D5DB] rounded-xl flex flex-col items-center justify-center gap-2 py-5 cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition-all group"
-                role="button"
-                tabIndex={0}
-                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') fileRef.current?.click(); }}
-                aria-label={productImages.length === 0 ? '上传产品图' : '上传背面图（可选）'}
-              >
-                <div className="w-10 h-10 rounded-xl bg-[#F5F5F5] group-hover:bg-blue-100 flex items-center justify-center transition-colors">
-                  <Plus size={18} className="text-[#A3A3A3] group-hover:text-blue-500 transition-colors" />
-                </div>
-                <div className="text-center">
-                  <p className="text-xs font-medium text-[#737373] group-hover:text-blue-600 transition-colors">
-                    {productImages.length === 0 ? '上传产品图' : '上传背面图（可选）'}
-                  </p>
-                  <p className="text-[10px] text-[#B0B0B0] mt-0.5">支持 JPG/PNG，单张不超过 {MAX_IMAGE_SIZE_MB}MB</p>
-                </div>
-              </div>
-            )}
-            <input ref={fileRef} type="file" accept="image/*" multiple onChange={handleProductSelect} className="hidden" />
-          </div>
+          <EcommerceImageUpload
+            images={productImages}
+            onImagesChange={setProductImages}
+            maxImages={2}
+            title="产品图片"
+            subtitle="最多2张，正面+背面"
+            icon="image"
+          />
+
+          {/* Settings: model, language, quality */}
+          <EcommerceSettings
+            language={language}
+            onLanguageChange={(lang) => { setLanguage(lang); saveLanguage(lang); }}
+            languages={LANGUAGES}
+            selectedModel={selectedModel}
+            onModelChange={setSelectedModel}
+            quality={quality}
+            onQualityChange={setQuality}
+          />
 
           {/* View type selection */}
           <div className="bg-white rounded-2xl p-5 border border-[#E5E5E5] shadow-sm hover:shadow-md transition-shadow space-y-3">
@@ -465,24 +416,12 @@ export const Product9GridPage: React.FC = () => {
 
           {/* Full-page loading state (analysis phase or initial generation) */}
           {isGenerating && !hasAnyResult && (
-            <div className="flex flex-col items-center justify-center h-full gap-6">
-              <div className="relative">
-                {/* Glow effect */}
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-full blur-3xl animate-pulse" />
-                <div className="relative w-20 h-20">
-                  <div className="absolute inset-0 border-[3px] border-[#F0F0F0] rounded-full" />
-                  <div className="absolute inset-0 border-[3px] border-transparent border-t-[#171717] border-r-[#404040] rounded-full animate-spin" />
-                </div>
-              </div>
-              <div className="text-center">
-                <p className="text-base font-medium text-[#171717] mb-1">{PHASE_LABELS[phase] || '处理中'}</p>
-                <p className="text-sm text-[#9CA3AF]">{progress}</p>
-              </div>
-              <div className="flex gap-2">
-                <span className="w-2 h-2 bg-[#171717] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-2 h-2 bg-[#404040] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-2 h-2 bg-[#737373] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
+            <div className="flex flex-col items-center justify-center h-full">
+              <LoadingAnimation
+                title={PHASE_LABELS[phase] || '处理中'}
+                description={progress}
+                variant="featured"
+              />
             </div>
           )}
 
@@ -573,7 +512,7 @@ export const Product9GridPage: React.FC = () => {
                       </div>
                     ) : (
                       /* Skeleton placeholder during generation */
-                      <div className="rounded-2xl border-2 border-dashed border-[#D1D5DB] bg-gradient-to-b from-[#FAFAFA] to-[#F5F5F5] flex flex-col items-center justify-center gap-3 py-20">
+                      <div className="rounded-2xl border-2 border-dashed border-[#D1D5DB] bg-gradient-to-b from-[#FAFAFA] to-[#F5F5F5] flex flex-col items-center justify-center gap-3 py-20 mb-6">
                         <div className="relative">
                           <div className="w-12 h-12 rounded-full border-[3px] border-[#E5E5E5] border-t-[#171717] animate-spin" />
                         </div>

@@ -20,25 +20,23 @@ const ICON_MAP: Record<string, React.ElementType> = {
   banner: Layout,
   'amazon-image-gen': ShoppingCart,
   detail2: FileImage,
-  poster: Wand2,
   handheld: Hand,
   productFusion: Layers,
   productTryon: User,
   'product-9grid': Layout,
   storyboard: Film,
-  'gemini-video': Video,
-  'veo31': Film,
   'tk-video': Clapperboard,
   'three-view': Layout,
   workflow: Boxes,
   'image-edit-region': Wand2,
   'image-translate': Languages,
-  'ecommerce-poster': Layout,
+  'video-gen': Video,
 };
 
 const CATEGORIES = [
   { key: '素材工作台', label: '创作', icon: Sparkles, color: 'text-blue-500' },
   { key: '店铺上架素材', label: '电商', icon: ShoppingBag, color: 'text-emerald-500' },
+  { key: '视频生成', label: '视频', icon: Video, color: 'text-violet-500' },
 ];
 
 interface LeftSidebarProps {
@@ -151,12 +149,13 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
       'productFusion': '素材工作台',
       'productRefine': '素材工作台',
       'product-9grid': '素材工作台',
+      'video-gen': '视频生成',
     };
     getAvailableNavItems().then(items => {
-      const filtered = items.filter(n => n.enabled !== false).filter(n => !['styleCopy', 'tryon', 'carousel', 'amazon-carousel', 'workflow', 'deepseek-chat'].includes(n.nav_id)).map(n => ({
+      const filtered = items.filter(n => n.enabled !== false).filter(n => !['styleCopy', 'tryon', 'carousel', 'amazon-carousel', 'workflow', 'deepseek-chat'].includes(n.nav_id)).filter(n => n.label !== '营销海报设计' && n.label !== '电商海报设计').map(n => ({
         id: n.nav_id,
         icon: ICON_MAP[n.nav_id] || ImageIcon,
-        label: ({ xiaohongshu: '小红书种草图文', social: '社媒POV出图', 'chat-gen': '创意生图', workflow: '工作流生图', productFusion: '场景融合', productTryon: '产品穿搭', productRefine: '产品精修', 'product-9grid': '产品展示图', detailClone: '智能设计克隆', 'amazon-image-gen': '亚马逊生图', 'image-edit-region': '区域编辑', 'image-translate': '图片转译', 'ecommerce-poster': '电商海报设计' })[n.nav_id] || n.label,
+        label: ({ xiaohongshu: '小红书种草图文', social: '社媒POV出图', 'chat-gen': '创意生图', workflow: '工作流生图', productFusion: '场景融合', productTryon: '产品穿搭', productRefine: '产品精修', 'product-9grid': '产品展示图', detailClone: '智能设计克隆', 'amazon-image-gen': '亚马逊生图', 'image-edit-region': '区域编辑', 'image-translate': '图片转译' })[n.nav_id] || n.label,
         category: NAV_CATEGORY_OVERRIDE[n.nav_id] || CATEGORY_MAP[n.category] || n.category
       }));
       // 确保亚马逊生图始终存在（后端可能未同步）
@@ -177,12 +176,13 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
           id: 'image-translate', icon: Languages, label: '图片转译', category: '店铺上架素材'
         });
       }
-      // 确保电商海报设计始终存在（后端可能未同步）
-      if (!filtered.some(n => n.id === 'ecommerce-poster')) {
+      // 确保视频生成始终存在
+      if (!filtered.some(n => n.id === 'video-gen')) {
         filtered.push({
-          id: 'ecommerce-poster', icon: Layout, label: '电商海报设计', category: '店铺上架素材'
+          id: 'video-gen', icon: Video, label: '视频生成', category: '视频生成'
         });
       }
+
       setNavItems(filtered);
     });
   }, []);
@@ -217,6 +217,14 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
   const getInitial = (email: string) => email?.charAt(0).toUpperCase() || '?';
   const isLoggedIn = !!user?.email;
+
+  const handleNavClick = (id: string) => {
+    if (id === 'video-gen') {
+      window.open('/video', '_blank');
+    } else {
+      onSelectNav?.(id);
+    }
+  };
 
   const visibleItems = navItems.length > 0 ? navItems : [];
   const itemsByCategory = CATEGORIES.map(cat => ({
@@ -290,7 +298,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                       return (
                         <div key={item.id} className="flex justify-center">
                           <button
-                            onClick={() => onSelectNav?.(item.id)}
+                            onClick={() => handleNavClick(item.id)}
                             onMouseEnter={(e) => setHoveredNav({ label: item.label, top: e.currentTarget.getBoundingClientRect().top + e.currentTarget.offsetHeight / 2 })}
                             onMouseLeave={() => setHoveredNav(null)}
                             className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-200 relative ${
@@ -311,7 +319,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                     return (
                       <button
                         key={item.id}
-                        onClick={() => onSelectNav?.(item.id)}
+                        onClick={() => handleNavClick(item.id)}
                         className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl transition-all duration-200 group relative ${
                           isActive
                             ? 'text-[#1a1a1a] bg-blue-50/80 shadow-sm shadow-blue-100/50'

@@ -1,63 +1,48 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  X, Loader2, Plus, Sparkles, Globe, Download,
-  Languages, Wand2, Monitor, Crop, ImagePlus, RefreshCw,
-  ChevronDown, Check, AlertCircle, PenLine
+  X, Languages, Wand2, Download, Sparkles,
+  RefreshCw, Check, AlertCircle, PenLine
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { editImage } from '../../services/imageService';
 import { analyzeMultipleImages } from '../../services/aiChatService';
-import { fileToDataUrl } from '../../services/cosService';
-import { getAvailableModels } from '../../services/modelService';
 import { LANGUAGES, getSavedLanguage, saveLanguage } from '../../constants/languages';
 import { getPricing } from '../../services/pricingService';
 import { getCurrentUser } from '../../services/authService';
 import { imageLibraryService } from '../../services/imageLibraryService';
 import { CreditCheckModal } from '../../components/CreditCheckModal';
 import { LoadingAnimation } from '../../components/LoadingAnimation';
+import { EcommerceImageUpload, EcommerceSettings, EcommerceResults } from '../../components/ecommerce';
+import type { AspectRatio } from '../../components/ecommerce';
 
-const ASPECT_RATIOS = [
-  { label: '智能', value: '智能', icon: 'A' },
-  { label: '1:1', value: '1:1', icon: '1:1' },
-  { label: '3:4', value: '3:4', icon: '3:4' },
-  { label: '4:3', value: '4:3', icon: '4:3' },
-  { label: '9:16', value: '9:16', icon: '9:16' },
-  { label: '16:9', value: '16:9', icon: '16:9' },
-  { label: '21:9', value: '21:9', icon: '21:9' },
+const ASPECT_RATIOS: AspectRatio[] = [
+  { label: '智能', value: '智能' },
+  { label: '1:1', value: '1:1' },
+  { label: '3:4', value: '3:4' },
+  { label: '4:3', value: '4:3' },
+  { label: '9:16', value: '9:16' },
+  { label: '16:9', value: '16:9' },
+  { label: '21:9', value: '21:9' },
 ];
-
-const getRatioStyle = (value: string) => {
-  const map: Record<string, string> = {
-    '智能': 'w-4 h-4',
-    '1:1': 'w-3.5 h-3.5',
-    '3:4': 'w-3 h-4',
-    '9:16': 'w-2.5 h-5',
-    '4:3': 'w-4 h-3',
-    '16:9': 'w-5 h-2.5',
-    '21:9': 'w-6 h-2',
-  };
-  return map[value] || 'w-4 h-4';
-};
 
 interface TextBlock {
   id: string;
-  imageId: string;
+  imageIndex: number;
   originalText: string;
   translatedText: string;
   style: string;
   position: string;
 }
 
-interface UploadedImage {
+interface ImageItem {
   file: File;
   preview: string;
-  id: string;
 }
 
 interface ResultImage {
   url: string;
   label: string;
-  sourceImageId: string;
+  sourceImageIndex: number;
 }
 
 const ANALYSIS_PROMPT = (targetLang: string) => `你是一位专业的平面设计师和多语言翻译专家。请仔细分析这张海报/图片，完成以下任务：
@@ -107,7 +92,7 @@ ${blockDescriptions}
 };
 
 export const ImageTranslatePage: React.FC = () => {
-  const [images, setImages] = useState<UploadedImage[]>([]);
+  const [images, setImages] = useState<ImageItem[]>([]);
   const [targetLanguage, setTargetLanguage] = useState(getSavedLanguage());
   const [selectedModel, setSelectedModel] = useState('nanobann2');
   const [resolution, setResolution] = useState('2K');
@@ -123,17 +108,8 @@ export const ImageTranslatePage: React.FC = () => {
   const [currentAnalyzingIndex, setCurrentAnalyzingIndex] = useState(-1);
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [models, setModels] = useState<{ value: string; label: string }[]>([]);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    getAvailableModels().then(m => {
-      const sorted = m.filter(x => x.enabled).sort((a, b) => a.sort_order - b.sort_order);
-      setModels(sorted.map(x => ({ value: x.model_id, label: x.label })));
-    });
-  }, []);
 
   useEffect(() => {
     getPricing().then(p => {
@@ -149,36 +125,10 @@ export const ImageTranslatePage: React.FC = () => {
     saveLanguage(targetLanguage);
   }, [targetLanguage]);
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-    const filesArray = Array.from(files) as File[];
-    const MAX_FILE_SIZE = 20 * 1024 * 1024;
-    const oversized = filesArray.find(f => f.size > MAX_FILE_SIZE);
-    if (oversized) {
-      alert(`图片"${oversized.name}"超过 20MB，请压缩后重新上传`);
-      e.target.value = '';
-      return;
-    }
-    const filesToAdd = filesArray.slice(0, 10 - images.length);
-    const newImages: UploadedImage[] = [];
-    for (const file of filesToAdd) {
-      const fileId = `${file.name}-${file.size}-${file.lastModified}-${Date.now()}`;
-      try {
-        const preview = await fileToDataUrl(file, 1600);
-        newImages.push({ file, preview, id: fileId });
-      } catch (err) {
-        console.error('图片处理失败:', err);
-      }
-    }
-    setImages(prev => [...prev, ...newImages]);
+  const handleImagesChange = (newImages: ImageItem[]) => {
+    setImages(newImages);
     setTextBlocks([]);
     setError(null);
-  };
-
-  const removeImage = (id: string) => {
-    setImages(prev => prev.filter(img => img.id !== id));
-    setTextBlocks([]);
   };
 
   const handleAnalyze = async () => {
@@ -238,7 +188,7 @@ export const ImageTranslatePage: React.FC = () => {
             if (block.originalText) {
               allBlocks.push({
                 id: `block-${i}-${idx}`,
-                imageId: images[i].id,
+                imageIndex: i,
                 originalText: block.originalText || '',
                 translatedText: block.translatedText || '',
                 style: block.style || '',
@@ -295,20 +245,20 @@ export const ImageTranslatePage: React.FC = () => {
       for (let i = 0; i < images.length; i++) {
         setProgress(`正在生成第 ${i + 1}/${images.length} 张翻译图片...`);
 
-        // For multi-image: generate for each image separately with its relevant blocks
         const result = await editImage({
           prompt,
           images: [images[i].preview],
           model: selectedModel,
           resolution,
           aspectRatio: selectedAspectRatio,
+          type: 'edited',
         });
 
         if (result.data && result.data.length > 0) {
           const newResults: ResultImage[] = result.data.map((item: any, idx: number) => ({
             url: item.url,
             label: `翻译图 ${i + 1}${result.data.length > 1 ? `-${idx + 1}` : ''}`,
-            sourceImageId: images[i].id,
+            sourceImageIndex: i,
           }));
           setResults(prev => [...prev, ...newResults]);
 
@@ -352,6 +302,7 @@ export const ImageTranslatePage: React.FC = () => {
     }
   };
 
+  const thumbnailPreviews = images.map(img => img.preview);
 
   return (
     <div className="min-h-0 flex-1 flex flex-col bg-gray-50">
@@ -393,12 +344,6 @@ export const ImageTranslatePage: React.FC = () => {
               <p className="text-gray-500 mb-8 text-center max-w-md">
                 上传包含文案的海报图片，AI 自动识别文字区域并翻译为目标语言，保持原有字体风格
               </p>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium"
-              >
-                上传海报图片
-              </button>
             </div>
           )}
 
@@ -411,7 +356,7 @@ export const ImageTranslatePage: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {images.map((img, idx) => (
                   <motion.div
-                    key={img.id}
+                    key={idx}
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: idx * 0.05 }}
@@ -420,7 +365,7 @@ export const ImageTranslatePage: React.FC = () => {
                     <img src={img.preview} alt="" className="w-full object-contain max-h-[50vh]" />
                     <div className="absolute top-3 right-3 flex gap-2">
                       <button
-                        onClick={() => removeImage(img.id)}
+                        onClick={() => handleImagesChange(images.filter((_, i) => i !== idx))}
                         className="w-8 h-8 bg-red-500/80 backdrop-blur-sm rounded-lg flex items-center justify-center hover:bg-red-600 transition-colors"
                       >
                         <X size={14} className="text-white" />
@@ -436,8 +381,7 @@ export const ImageTranslatePage: React.FC = () => {
           {/* Analyzing state */}
           {analyzing && (
             <div className="flex flex-col items-center justify-center min-h-[40vh]">
-              <Loader2 size={40} className="text-blue-500 animate-spin mb-4" />
-              <p className="text-sm font-medium text-gray-700">{progress}</p>
+              <LoadingAnimation variant="featured" title="正在分析图片" description={progress} progress={progress} />
             </div>
           )}
 
@@ -457,10 +401,10 @@ export const ImageTranslatePage: React.FC = () => {
 
               {/* Grouped by image */}
               {images.map((img, imgIdx) => {
-                const imgBlocks = textBlocks.filter(b => b.imageId === img.id);
+                const imgBlocks = textBlocks.filter(b => b.imageIndex === imgIdx);
                 if (imgBlocks.length === 0) return null;
                 return (
-                  <div key={img.id} className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                  <div key={imgIdx} className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
                     {/* Image header */}
                     <div
                       className="flex items-center gap-4 p-4 bg-gray-50 border-b border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors"
@@ -549,33 +493,11 @@ export const ImageTranslatePage: React.FC = () => {
           {results.length > 0 && (
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-gray-700 mb-2">翻译结果 ({results.length})</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {results.map((result, idx) => (
-                  <motion.div
-                    key={result.url}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: idx * 0.05 }}
-                    className="relative group rounded-xl overflow-hidden bg-white border border-gray-200 shadow-sm cursor-pointer"
-                    onClick={() => setPreviewImage(result.url)}
-                  >
-                    <img src={result.url} alt="" className="w-full object-contain max-h-[50vh]" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                      <div className="absolute bottom-0 left-0 right-0 p-4 flex items-center justify-between">
-                        <span className="text-sm text-white font-medium">{result.label}</span>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleDownload(result.url); }}
-                            className="w-8 h-8 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center hover:bg-white/40 transition-colors"
-                          >
-                            <Download size={14} className="text-white" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
+              <EcommerceResults
+                results={results.map(r => ({ url: r.url, label: r.label }))}
+                onPreview={setPreviewImage}
+                onDownload={handleDownload}
+              />
               <button
                 onClick={() => { setResults([]); setTextBlocks([]); }}
                 className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors text-sm font-medium"
@@ -588,8 +510,7 @@ export const ImageTranslatePage: React.FC = () => {
           {/* Generating state */}
           {generating && (
             <div className="flex flex-col items-center justify-center py-12">
-              <LoadingAnimation />
-              <p className="text-sm text-gray-500 mt-4">{progress}</p>
+              <LoadingAnimation variant="featured" title="正在生成翻译图片" description={progress} progress={progress} thumbnails={thumbnailPreviews} />
             </div>
           )}
         </div>
@@ -597,141 +518,38 @@ export const ImageTranslatePage: React.FC = () => {
         {/* Right: Control Panel */}
         <aside className="w-96 bg-white border-l border-gray-200 flex flex-col overflow-hidden flex-shrink-0">
           {/* Scrollable settings */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {/* Upload section */}
-            <div className="p-4 border-b border-gray-200">
-              <div className="flex items-center gap-2 mb-3">
-                <ImagePlus size={14} className="text-blue-500" />
-                <span className="text-xs font-medium text-gray-600">上传海报图片</span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {images.map((img) => (
-                  <div key={img.id} className="relative group">
-                    <div className="w-16 h-16 rounded-lg overflow-hidden border-2 border-gray-200">
-                      <img src={img.preview} alt="" className="w-full h-full object-cover" />
-                    </div>
-                    <button
-                      onClick={() => removeImage(img.id)}
-                      className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X size={10} className="text-white" />
-                    </button>
-                  </div>
-                ))}
-                {images.length < 10 && (
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-16 h-16 rounded-lg border-2 border-dashed border-gray-300 hover:border-blue-400 flex items-center justify-center transition-colors"
-                  >
-                    <Plus size={20} className="text-gray-400" />
-                  </button>
-                )}
-              </div>
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleUpload}
-                accept="image/*"
-                multiple
-                className="hidden"
-              />
-            </div>
+            <EcommerceImageUpload
+              images={images}
+              onImagesChange={handleImagesChange}
+              maxImages={10}
+              title="上传海报图片"
+              subtitle="支持批量上传，最多10张"
+              icon="image"
+            />
 
-            {/* Target Language */}
-            <div className="p-4 border-b border-gray-200">
-              <div className="flex items-center gap-2 mb-3">
-                <Globe size={14} className="text-blue-500" />
-                <span className="text-xs font-medium text-gray-600">目标语言</span>
-              </div>
-              <div className="relative">
-                <select
-                  value={targetLanguage}
-                  onChange={(e) => setTargetLanguage(e.target.value)}
-                  className="w-full py-2.5 px-3 rounded-lg text-sm font-medium bg-gray-50 text-gray-700 border border-gray-200 outline-none cursor-pointer hover:border-gray-300 focus:border-blue-400 focus:bg-white transition-all appearance-none"
-                >
-                  {LANGUAGES.map(lang => (
-                    <option key={lang.value} value={lang.value}>{lang.label}</option>
-                  ))}
-                </select>
-                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              </div>
-            </div>
-
-            {/* Model Selection */}
-            <div className="p-4 border-b border-gray-200">
-              <div className="flex items-center gap-2 mb-3">
-                <Sparkles size={14} className="text-purple-500" />
-                <span className="text-xs font-medium text-gray-600">生成模型</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {models.map(m => (
-                  <button
-                    key={m.value}
-                    onClick={() => setSelectedModel(m.value)}
-                    className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-all ${
-                      selectedModel === m.value
-                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                    }`}
-                  >
-                    <span className="text-xs font-semibold">{m.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Resolution */}
-            <div className="p-4 border-b border-gray-200">
-              <div className="flex items-center gap-2 mb-3">
-                <Monitor size={14} className="text-blue-500" />
-                <span className="text-xs font-medium text-gray-600">分辨率</span>
-              </div>
-              <div className="flex gap-2">
-                {['2K', '4K'].map((res) => (
-                  <button
-                    key={res}
-                    onClick={() => setResolution(res)}
-                    className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
-                      resolution === res
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    {res}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Aspect Ratio */}
-            <div className="p-4 border-b border-gray-200">
-              <div className="flex items-center gap-2 mb-3">
-                <Crop size={14} className="text-amber-500" />
-                <span className="text-xs font-medium text-gray-600">图片比例</span>
-              </div>
-              <div className="grid grid-cols-4 gap-2">
-                {ASPECT_RATIOS.map(size => (
-                  <button
-                    key={size.value}
-                    onClick={() => setSelectedAspectRatio(size.value)}
-                    className={`flex flex-col items-center justify-center gap-1 py-2.5 rounded-lg transition-all ${
-                      selectedAspectRatio === size.value
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    <div className={`border-[1.5px] rounded-sm ${
-                      selectedAspectRatio === size.value ? 'border-white/80' : 'border-gray-400'
-                    } ${getRatioStyle(size.value)}`} />
-                    <span className="text-[10px] font-medium">{size.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+            {/* Language, Model, Resolution, Aspect Ratio */}
+            <EcommerceSettings
+              language={targetLanguage}
+              onLanguageChange={setTargetLanguage}
+              languages={LANGUAGES}
+              selectedModel={selectedModel}
+              onModelChange={setSelectedModel}
+              quality={resolution}
+              onQualityChange={setResolution}
+              aspectRatios={ASPECT_RATIOS}
+              singleRatio={selectedAspectRatio}
+              onSingleRatioChange={setSelectedAspectRatio}
+              languageLabel="目标语言"
+              modelLabel="生成模型"
+              qualityLabel="分辨率"
+              ratioLabel="图片比例"
+            />
 
             {/* Error display */}
             {error && (
-              <div className="p-4 border-b border-gray-200">
+              <div className="bg-white rounded-2xl p-4 border border-[#E5E5E5] shadow-sm">
                 <div className="flex items-start gap-2 bg-red-50 rounded-lg p-3">
                   <AlertCircle size={14} className="text-red-500 flex-shrink-0 mt-0.5" />
                   <p className="text-xs text-red-600">{error}</p>
@@ -741,7 +559,7 @@ export const ImageTranslatePage: React.FC = () => {
 
             {/* Progress */}
             {progress && !analyzing && !generating && (
-              <div className="p-4 border-b border-gray-200">
+              <div className="bg-white rounded-2xl p-4 border border-[#E5E5E5] shadow-sm">
                 <div className="flex items-center gap-2 bg-blue-50 rounded-lg p-3">
                   <Check size={14} className="text-blue-500 flex-shrink-0" />
                   <p className="text-xs text-blue-600">{progress}</p>
@@ -760,7 +578,7 @@ export const ImageTranslatePage: React.FC = () => {
             >
               {analyzing ? (
                 <>
-                  <Loader2 size={16} className="animate-spin" />
+                  <Wand2 size={16} className="animate-pulse" />
                   分析中...
                 </>
               ) : (
@@ -779,7 +597,7 @@ export const ImageTranslatePage: React.FC = () => {
             >
               {generating ? (
                 <>
-                  <Loader2 size={16} className="animate-spin" />
+                  <Sparkles size={16} className="animate-pulse" />
                   生成中...
                 </>
               ) : (

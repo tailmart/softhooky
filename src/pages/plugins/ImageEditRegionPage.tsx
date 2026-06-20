@@ -8,7 +8,7 @@ import { editImage } from '../../services/imageService';
 import { requireAuth } from '../../utils/authCheck';
 import { imageLibraryService } from '../../services/imageLibraryService';
 import { ImagePreviewModal } from '../../components/ImagePreviewModal';
-import { LANGUAGES, getSavedLanguage, saveLanguage } from '../../constants/languages';
+
 
 interface StrokePoint {
   x: number;
@@ -49,7 +49,7 @@ export const ImageEditRegionPage: React.FC = () => {
   const [progress, setProgress] = useState('');
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const [language, setLanguage] = useState(getSavedLanguage());
+
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -507,6 +507,7 @@ export const ImageEditRegionPage: React.FC = () => {
           model: 'nanobann2',
           aspectRatio: getStandardRatio(imageSize.width, imageSize.height),
           resolution: '2K',
+          type: 'edited',
         });
 
         const url = response.data?.[0]?.url || response.image_url || response.url || '';
@@ -539,6 +540,7 @@ export const ImageEditRegionPage: React.FC = () => {
           model: 'nanobann2',
           aspectRatio: getStandardRatio(imageSize.width, imageSize.height),
           resolution: '2K',
+          type: 'edited',
         });
 
         const url = response.data?.[0]?.url || response.image_url || response.url || '';
@@ -824,17 +826,6 @@ export const ImageEditRegionPage: React.FC = () => {
                   </div>
                 </div>
               )}
-
-              {/* 语言选择 */}
-              <div className="px-4 pb-2">
-                <div className="bg-white rounded-2xl border border-[#E5E5E5] shadow-sm p-4">
-                  <label className="text-xs font-medium text-[#525252] mb-1.5 block">语言</label>
-                  <select value={language} onChange={(e) => { setLanguage(e.target.value); saveLanguage(e.target.value); }}
-                    className="w-full bg-[#F5F5F5] px-3 py-2.5 rounded-xl text-sm text-[#171717] border-0 focus:outline-none focus:ring-2 focus:ring-[#6366F1]/20 appearance-none cursor-pointer">
-                    {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-                  </select>
-                </div>
-              </div>
 
               {/* 生成按钮 */}
               <div className="px-4 pb-4">

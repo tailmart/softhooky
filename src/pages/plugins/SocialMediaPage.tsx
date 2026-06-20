@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Sparkles, X, Loader2, Plus, Share2, Images, Globe, Wand2, Download, ChevronDown } from 'lucide-react';
+import { Sparkles, X, Loader2, Plus, Share2, Images, Globe, Wand2, Download, ChevronDown, Copy } from 'lucide-react';
 import { fileToDataUrl } from '../../services/r2Service';
 import { editImage } from '../../services/imageService';
 import { imageLibraryService } from '../../services/imageLibraryService';
@@ -10,8 +10,10 @@ import { ImagePreviewModal } from '../../components/ImagePreviewModal';
 import { ReEditModal } from '../../components/ReEditModal';
 import { ModelSpeedNote } from '../../components/ModelSpeedNote';
 import { LoadingAnimation } from '../../components/LoadingAnimation';
+import { ProductImageUpload, ProductInfoForm, GenerationSettings } from '../../components/social';
+import type { Language, AspectRatio } from '../../components/social';
 
-const LANGUAGES = [
+const LANGUAGES: Language[] = [
   { value: 'zh', label: '简体中文' },
   { value: 'en', label: '英语' },
   { value: 'ja', label: '日语' },
@@ -22,7 +24,7 @@ const LANGUAGES = [
   { value: 'vi', label: '越南语' },
 ];
 
-const ASPECT_RATIOS = [
+const ASPECT_RATIOS: AspectRatio[] = [
   { value: '1:1', label: '1:1', platform: 'Ins' },
   { value: '9:16', label: '9:16', platform: 'TikTok' },
   { value: '4:5', label: '4:5', platform: 'FB' },
@@ -90,40 +92,11 @@ export const SocialMediaPage: React.FC = () => {
   const [results, setResults] = useState<GenResult[]>([]);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [reEditImage, setReEditImage] = useState<string | null>(null);
-  const productNameRef = useRef<HTMLTextAreaElement>(null);
-  const autoResize = (el: HTMLTextAreaElement) => {
-    el.style.height = 'auto';
-    el.style.height = el.scrollHeight + 'px';
-  };
-  useEffect(() => {
-    if (productNameRef.current) autoResize(productNameRef.current);
-  }, [productName]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showCopyTip, setShowCopyTip] = useState('');
 
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('image/'));
-    const MAX_FILE_SIZE = 20 * 1024 * 1024;
-    const oversized = files.find(f => f.size > MAX_FILE_SIZE);
-    if (oversized) {
-      alert(`图片"${oversized.name}"超过 20MB，请压缩后重新上传`);
-      e.target.value = '';
-      return;
-    }
-    const newItems = files.map(f => ({ file: f, preview: '' }));
-    Promise.all(newItems.map(item => new Promise<void>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => { item.preview = reader.result as string; resolve(); };
-      reader.onerror = reject;
-      reader.readAsDataURL(item.file);
-    }))).then(() => {
-      setProductImages(prev => [...prev, ...newItems].slice(0, 10));
-    }).catch(err => {
-      console.error('图片处理失败:', err);
-      alert('部分图片处理失败，请尝试使用更小的图片');
-    });
-  };
-
-  const removeImage = (idx: number) => setProductImages(prev => prev.filter((_, i) => i !== idx));
+  // 封面关键词
+  const [coverKeywordsCN, setCoverKeywordsCN] = useState('');
+  const [coverKeywordsEN, setCoverKeywordsEN] = useState('');
 
   const toggleRatio = (value: string) => {
     setSelectedRatios(prev =>
@@ -164,7 +137,34 @@ export const SocialMediaPage: React.FC = () => {
         analysisContext = `\n## AI深度分析产品信息\n产品名称：${d.title || productName}\n品牌：${d.brand || ''}\n品类：${d.category || ''}\n规格：${d.specs || ''}\n卖点：${d.sellingPoints || ''}\n目标人群：${d.targetAudience || ''}`;
       }
 
-      // Step 2: Social media plan
+      // Step 2: Generate cover keywords
+      setProgress('AI正在生成封面关键词...');
+      const coverPrompt = `基于以下产品信息，生成社交媒体封面关键词：
+${analysisContext}
+目标语言：${langLabel}
+
+请返回JSON格式：
+{
+  "coverKeywordsCN": "中文封面关键词，吸引眼球的描述",
+  "coverKeywordsEN": "English cover keywords, viral social media cover"
+}
+
+要求：
+- 关键词要简洁有力，适合放在图片上作为封面文字
+- 突出产品核心卖点
+- 符合社交媒体风格`;
+      const coverRaw = await analyzeMultipleImages(b64s, coverPrompt, {
+        model: 'gemini-3.5-flash',
+        maxTokens: 1000,
+      });
+      const coverMatch = coverRaw.match(/\{[\s\S]*\}/);
+      if (coverMatch) {
+        const coverParsed = JSON.parse(coverMatch[0]);
+        if (coverParsed.coverKeywordsCN) setCoverKeywordsCN(coverParsed.coverKeywordsCN);
+        if (coverParsed.coverKeywordsEN) setCoverKeywordsEN(coverParsed.coverKeywordsEN);
+      }
+
+      // Step 3: Social media plan
       setProgress('AI正在规划社媒宣传方案...');
       const userContent = `${SOCIAL_ANALYSIS_PROMPT}
 
@@ -228,7 +228,7 @@ IMPORTANT:
 - 8K ultra realistic, no watermarks`;
 
         try {
-          const resp = await editImage({ prompt, images: urls, aspectRatio: card.ratio, resolution: quality, model: selectedModel });
+          const resp = await editImage({ prompt, images: urls, aspectRatio: card.ratio, resolution: quality, model: selectedModel, type: 'edited' });
           const url = resp.data?.[0]?.url || resp.image_url || resp.url || '';
           if (url) {
             const item: GenResult = { url, title: card.title, ratio: card.ratio, idx: idx + 1 };
@@ -250,9 +250,15 @@ IMPORTANT:
     try { const r = await fetch(url); const b = await r.blob(); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = `social-${Date.now()}.png`; a.click(); URL.revokeObjectURL(u); } catch { window.open(url, '_blank'); }
   };
 
+  const handleCopy = (text: string, label: string) => {
+    navigator.clipboard.writeText(text).then(() => { setShowCopyTip(label); setTimeout(() => setShowCopyTip(''), 2000); });
+  };
+
   const handleNewAnalysis = () => {
     setAnalysisResult([]);
     setResults([]);
+    setCoverKeywordsCN('');
+    setCoverKeywordsEN('');
   };
 
   return (
@@ -269,126 +275,36 @@ IMPORTANT:
 
       <div className="flex-1 flex overflow-hidden">
         <div className="w-[380px] border-r border-gray-200 overflow-y-auto p-5 space-y-4 flex-shrink-0 bg-gray-50">
-          {/* Product Images */}
-          <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
-            <div className="flex items-center gap-3 mb-4">
-              <Images size={16} className="text-blue-500" />
-              <div><h3 className="text-sm font-semibold text-[#171717]">产品图片</h3><p className="text-xs text-gray-400">AI会通过提供参考图自行选择设计</p></div>
-              <span className="ml-auto text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-xl">{productImages.length}/10</span>
-            </div>
-            {productImages.length > 0 && (
-              <div className="grid grid-cols-5 gap-2 mb-3">
-                {productImages.map((item, idx) => (
-                  <div key={idx} className="relative group aspect-square rounded-2xl overflow-hidden bg-gray-100">
-                    <img src={item.preview} alt="" className="w-full h-full object-cover" />
-                    <button onClick={() => removeImage(idx)} className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100"><X size={14} className="text-white" /></button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <input type="file" ref={fileInputRef} onChange={handleUpload} multiple accept="image/*" className="hidden" />
-            <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-[#E5E5E5] bg-[#FAFAFA] p-3 flex flex-col items-center justify-center gap-1 hover:border-gray-400 hover:bg-gray-50 transition-all cursor-pointer bg-[#FAFAFA]">
-              <Plus size={18} className="text-gray-400" /><span className="text-xs text-gray-400">上传产品图</span>
-            </div>
-          </div>
+          {/* 产品图片 */}
+          <ProductImageUpload
+            images={productImages}
+            onImagesChange={setProductImages}
+          />
 
-          {/* Product Name */}
-          <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <Sparkles size={14} className="text-blue-500" />
-              <span className="text-sm font-semibold text-[#171717]">产品标题</span>
-            </div>
-            <textarea value={productName} onChange={e => { setProductName(e.target.value); autoResize(e.target); }} placeholder="例如：无线降噪蓝牙耳机"
-              className="w-full bg-[#F5F5F5] px-3 py-2.5 rounded-2xl text-sm text-[#171717] border-0 focus:outline-none focus:ring-2 focus:ring-gray-200 placeholder:text-gray-400 resize-none overflow-hidden"
-              rows={1} ref={productNameRef} />
-          </div>
+          {/* 产品信息 */}
+          <ProductInfoForm
+            productName={productName}
+            onProductNameChange={setProductName}
+            productDesc={productDesc}
+            onProductDescChange={setProductDesc}
+          />
 
-          {/* Product Description */}
-          <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <Sparkles size={14} className="text-blue-500" />
-              <span className="text-sm font-semibold text-[#171717]">产品描述（可选）</span>
-            </div>
-            <textarea value={productDesc} onChange={e => { setProductDesc(e.target.value); e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }} placeholder="产品卖点、功能、使用场景..."
-              className="w-full bg-[#F5F5F5] rounded-2xl p-3 text-sm border-0 focus:outline-none focus:ring-2 focus:ring-gray-200 resize-none text-[#171717] placeholder:text-gray-400 overflow-hidden" rows={1}
-              ref={el => { if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }} />
-          </div>
-
-          {/* Language */}
-          <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <Globe size={14} className="text-blue-500" />
-              <span className="text-sm font-semibold text-[#171717]">社媒文案语言</span>
-            </div>
-            <select value={language} onChange={e => setLanguage(e.target.value)}
-              className="w-full bg-[#F5F5F5] px-3 py-2.5 rounded-2xl text-sm text-[#171717] border-0 focus:outline-none focus:ring-2 focus:ring-gray-200 appearance-none cursor-pointer">
-              {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-            </select>
-          </div>
-
-          {/* Count */}
-          <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <Images size={14} className="text-blue-500" />
-              <span className="text-sm font-semibold text-[#171717]">生成张数</span>
-            </div>
-            <div className="grid grid-cols-4 gap-2">
-              {[{ v: 0, l: 'AI自动' }, { v: 3, l: '3张' }, { v: 5, l: '5张' }].map(n => (
-                <button key={n.v} onClick={() => setImageCount(n.v)}
-                  className={`py-2 rounded-xl text-xs font-medium transition-all ${imageCount === n.v ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>{n.l}</button>
-              ))}
-            </div>
-          </div>
-
-          {/* Aspect Ratio */}
-          <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <Images size={14} className="text-blue-500" />
-              <span className="text-sm font-semibold text-[#171717]">图片比例（可选参考）</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {ASPECT_RATIOS.map(r => {
-                const selected = selectedRatios.includes(r.value);
-                return (
-                <button key={r.value} onClick={() => toggleRatio(r.value)}
-                  className={`py-2 rounded-xl text-xs font-medium transition-all ${selected ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
-                  {r.label}
-                  <span className={`block text-[9px] ${selected ? 'text-white/70' : 'text-gray-400'}`}>{r.platform}</span>
-                </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Model */}
-          <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <Wand2 size={14} className="text-blue-500" />
-              <span className="text-sm font-semibold text-[#171717]">模型</span>
-            </div>
-            <div className="relative">
-              <select value={selectedModel} onChange={e => setSelectedModel(e.target.value)}
-                className="w-full bg-gray-100 px-3 py-2.5 pr-8 rounded-xl text-sm text-[#171717] border-0 focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer">
-                {models.length > 0 ? models.map(m => <option key={m.value} value={m.value}>{m.label}</option>) : <option value="nanobann2">Nanobann2</option>}
-              </select>
-              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            </div>
-            <ModelSpeedNote />
-          </div>
-
-          {/* Resolution */}
-          <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <Wand2 size={14} className="text-blue-500" />
-              <span className="text-sm font-semibold text-[#171717]">分辨率</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {['2K', '4K'].map(q => (
-                <button key={q} onClick={() => setQuality(q)}
-                  className={`py-2 rounded-xl text-xs font-medium transition-all ${quality === q ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>{q}</button>
-              ))}
-            </div>
-          </div>
+          {/* 生成设置 */}
+          <GenerationSettings
+            language={language}
+            onLanguageChange={setLanguage}
+            languages={LANGUAGES}
+            selectedModel={selectedModel}
+            onModelChange={setSelectedModel}
+            quality={quality}
+            onQualityChange={setQuality}
+            aspectRatios={ASPECT_RATIOS}
+            selectedRatios={selectedRatios}
+            onRatioToggle={toggleRatio}
+            imageCount={imageCount}
+            onImageCountChange={setImageCount}
+            showImageCount={true}
+          />
 
           {/* Analyze Button */}
           {!analysisResult.length && (
@@ -445,6 +361,35 @@ IMPORTANT:
                 </div>
               )}
               <div className="flex-1 overflow-y-auto p-6 space-y-6">
+
+              {/* 封面关键词 */}
+              {(coverKeywordsCN || coverKeywordsEN) && (
+                <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-[#171717]">封面关键词</h3>
+                    {showCopyTip === 'cover' && <span className="text-xs text-green-600">已复制</span>}
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-medium text-gray-400 mb-1.5 block">中文</label>
+                      <div className="flex gap-2">
+                        <textarea value={coverKeywordsCN} onChange={e => setCoverKeywordsCN(e.target.value)}
+                          className="flex-1 bg-gray-50 rounded-xl px-3 py-2 text-sm border-0 focus:outline-none focus:ring-2 focus:ring-gray-200 text-[#171717] placeholder:text-gray-400 min-h-[60px] resize-none" />
+                        <button onClick={() => handleCopy(coverKeywordsCN, 'cover')} className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-[#171717] flex-shrink-0"><Copy size={14} /></button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-400 mb-1.5 block">英文</label>
+                      <div className="flex gap-2">
+                        <textarea value={coverKeywordsEN} onChange={e => setCoverKeywordsEN(e.target.value)}
+                          className="flex-1 bg-gray-50 rounded-xl px-3 py-2 text-sm border-0 focus:outline-none focus:ring-2 focus:ring-gray-200 text-[#171717] placeholder:text-gray-400 min-h-[60px] resize-none" />
+                        <button onClick={() => handleCopy(coverKeywordsEN, 'cover')} className="w-8 h-8 flex items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-[#171717] flex-shrink-0"><Copy size={14} /></button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Analysis Cards */}
               {analysisResult.length > 0 && (
                 <div>

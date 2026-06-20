@@ -332,7 +332,7 @@ ${scenesDesc}
       for (let i = 0; i < total; i++) {
         setProgress(`生成中 (${i + 1}/${total})...`);
         try {
-          const resp = await editImage({ prompt: genTasks[i].prompt, images: b64s, aspectRatio: '16:9', resolution: quality, model: selectedModel });
+          const resp = await editImage({ prompt: genTasks[i].prompt, images: b64s, aspectRatio: '16:9', resolution: quality, model: selectedModel, type: 'edited' });
           const url = resp.data?.[0]?.url || resp.image_url || resp.url || '';
           if (url) {
             setResults(prev => [url, ...prev]);

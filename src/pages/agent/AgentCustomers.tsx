@@ -39,33 +39,47 @@ export default function AgentCustomers() {
   if (loading) return <div className="flex items-center justify-center h-64"><Loader2 size={24} className="animate-spin text-indigo-500" /></div>
 
   return (
-    <div className="space-y-5">
-      <h1 className="text-xl font-bold text-gray-900">我的客户</h1>
-
-      <div className="relative">
-        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input type="text" placeholder="搜索客户邮箱..." value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-          className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300" />
+    <div className="space-y-8">
+      {/* 页面标题 */}
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">我的客户</h1>
+        <p className="text-sm text-gray-500 mt-1">管理您的邀请客户</p>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+      {/* 搜索框 */}
+      <div className="relative">
+        <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input type="text" placeholder="搜索客户邮箱..." value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-300 shadow-sm" />
+      </div>
+
+      {/* 客户列表 */}
+      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
         {filtered.length === 0 ? (
-          <div className="p-12 text-center">
-            <Users size={36} className="mx-auto mb-3 text-gray-300" />
-            <p className="text-gray-400 text-sm">暂无客户</p>
+          <div className="p-16 text-center">
+            <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Users size={32} className="text-gray-300" />
+            </div>
+            <p className="text-gray-500 font-medium">暂无客户</p>
+            <p className="text-gray-400 text-sm mt-1">分享您的邀请码邀请客户注册</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
             {filtered.map(c => (
-              <div key={c.id} className="px-5 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{c.email}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{new Date(c.created_at).toLocaleString('zh-CN')} 注册</p>
+              <div key={c.id} className="px-6 py-5 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl flex items-center justify-center">
+                    <span className="text-sm font-bold text-indigo-600">{c.email?.[0]?.toUpperCase() || 'U'}</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{c.email}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{new Date(c.created_at).toLocaleDateString('zh-CN')} 注册</p>
+                  </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-semibold text-emerald-600">¥{Number(c.total_consumption || 0).toFixed(2)}</p>
-                  <p className="text-xs text-gray-400">消费</p>
+                  <p className="text-base font-semibold text-emerald-600">¥{Number(c.total_consumption || 0).toFixed(2)}</p>
+                  <p className="text-xs text-gray-400">累计消费</p>
                 </div>
               </div>
             ))}

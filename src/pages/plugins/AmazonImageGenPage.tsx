@@ -1,15 +1,14 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Sparkles, X, Loader2, Plus, ShoppingCart, Images, Globe, Download, Layout, Wand2, ChevronDown, Columns3 } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Sparkles, Loader2, ShoppingCart, Download, Layout, Wand2, Columns3 } from 'lucide-react';
 import { fileToDataUrl } from '../../services/r2Service';
 import { editImage } from '../../services/imageService';
 import { analyzeMultipleImages } from '../../services/aiChatService';
 import { imageLibraryService } from '../../services/imageLibraryService';
 import { requireAuth } from '../../utils/authCheck';
-import { getAvailableModels } from '../../services/modelService';
 import { createConcurrencyLimit } from '../../utils/concurrency';
 import { ImagePreviewModal } from '../../components/ImagePreviewModal';
 import { ReEditModal } from '../../components/ReEditModal';
-import { ModelSpeedNote } from '../../components/ModelSpeedNote';
+import { EcommerceImageUpload, EcommerceSettings, EcommerceResults } from '../../components/ecommerce';
 import { LoadingAnimation } from '../../components/LoadingAnimation';
 import { Toast } from '../../components/Toast';
 import { LANGUAGES, getSavedLanguage, saveLanguage } from '../../constants/languages';
@@ -542,14 +541,6 @@ function extractJson<T = any>(text: string): T | null {
 }
 
 export const AmazonImageGenPage: React.FC = () => {
-  const [models, setModels] = useState<{ value: string; label: string }[]>([]);
-  useEffect(() => {
-    getAvailableModels().then(m => {
-      const sorted = m.filter(x => x.enabled).sort((a, b) => a.sort_order - b.sort_order);
-      setModels(sorted.map(x => ({ value: x.model_id, label: x.label })));
-      if (sorted.length > 0) setSelectedModel('gpt-image-2');
-    });
-  }, []);
   const [productImages, setProductImages] = useState<{ file: File; preview: string }[]>([]);
   const [productTitle, setProductTitle] = useState('');
   const [customDescription, setCustomDescription] = useState('');
@@ -598,7 +589,6 @@ export const AmazonImageGenPage: React.FC = () => {
   const [reEditImage, setReEditImage] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [merging, setMerging] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   // 存储分析结果供生成阶段使用
   const analysisRef = useRef<{
     filteredB64s: string[];
@@ -610,33 +600,6 @@ export const AmazonImageGenPage: React.FC = () => {
     analysisContext: string;
     urls: string[];
   } | null>(null);
-
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fileList = e.target.files;
-    if (!fileList) return;
-    const files = Array.from(fileList as FileList).filter((f: File) => f.type.startsWith('image/'));
-    const MAX_FILE_SIZE = 20 * 1024 * 1024;
-    const oversized = files.find(f => f.size > MAX_FILE_SIZE);
-    if (oversized) {
-      setToast({ message: `图片"${oversized.name}"超过 20MB，请压缩后重新上传`, type: 'error' });
-      e.target.value = '';
-      return;
-    }
-    const newItems = files.map(f => ({ file: f, preview: '' }));
-    Promise.all(newItems.map(item => new Promise<void>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => { item.preview = reader.result as string; resolve(); };
-      reader.onerror = reject;
-      reader.readAsDataURL(item.file);
-    }))).then(() => {
-      setProductImages(prev => [...prev, ...newItems].slice(0, 10));
-    }).catch(err => {
-      console.error('图片处理失败:', err);
-      setToast({ message: '部分图片处理失败，请尝试使用更小的图片', type: 'error' });
-    });
-  };
-
-  const removeImage = (idx: number) => setProductImages(prev => prev.filter((_, i) => i !== idx));
 
   const handleAnalyze = async () => {
     if (!requireAuth()) return;
@@ -777,7 +740,7 @@ export const AmazonImageGenPage: React.FC = () => {
             try {
               const refIndices = card.refImageIndices?.filter(idx => idx >= 0 && idx < urls.length) || []
               const images = refIndices.length > 0 ? refIndices.map(idx => urls[idx]) : urls
-              const resp = await editImage({ prompt: genPrompt, images, aspectRatio: currentRatio, resolution: quality, model: selectedModel });
+              const resp = await editImage({ prompt: genPrompt, images, aspectRatio: currentRatio, resolution: quality, model: selectedModel, type: 'edited' });
               if (resp.data?.[0]?.url) {
                 setResults(prev => [{ url: resp.data[0].url, title: `[${MODE_LABEL_MAP[currentMode]}] ${card.title}` }, ...prev]);
                 imageLibraryService.saveToLibrary({ image_url: resp.data[0].url, prompt: genPrompt, model: String(selectedModel || 'nanobann2'), aspect_ratio: String(currentRatio), resolution: String(quality || '2K'), type: 'edited' });
@@ -969,32 +932,13 @@ ${modeReqs.join('\n')}
 
       <div className="flex-1 flex overflow-hidden">
         <div className="w-[380px] border-r border-gray-200 overflow-y-auto p-5 space-y-4 flex-shrink-0 bg-gray-50">
-          <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
-            <div className="flex items-center gap-3 mb-4">
-              <Images size={16} className="text-blue-500" />
-              <div><h3 className="text-sm font-semibold text-[#171717]">产品图片</h3><p className="text-xs text-gray-400">所有图片作为参考传入</p></div>
-              <span className="ml-auto text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-xl">{productImages.length}/10</span>
-            </div>
-            {productImages.length > 0 && (
-              <div className="grid grid-cols-5 gap-2 mb-3">{productImages.map((item, idx) => (
-                <div key={idx} className="relative group aspect-square rounded-2xl overflow-hidden bg-gray-100">
-                  <img src={item.preview} alt="" className="w-full h-full object-cover" />
-                  <button onClick={() => removeImage(idx)} className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100"><X size={14} className="text-white" /></button>
-                </div>
-              ))}</div>
-            )}
-            <input type="file" ref={fileInputRef} onChange={handleUpload} multiple accept="image/*" className="hidden" />
-            <div onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-[#D1D5DB] bg-[#FAFAFA] p-3 flex flex-col items-center justify-center gap-1.5 hover:border-blue-400 hover:bg-blue-50/50 transition-all cursor-pointer rounded-xl group"
-              role="button" tabIndex={0}
-              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click(); }}>
-              <div className="w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-blue-100 flex items-center justify-center transition-colors">
-                <Plus size={16} className="text-gray-400 group-hover:text-blue-500 transition-colors" />
-              </div>
-              <span className="text-xs text-gray-400 group-hover:text-blue-600 transition-colors">上传产品图</span>
-              <span className="text-[10px] text-[#BDBDBD]">支持 JPG/PNG，单张不超过 20MB</span>
-            </div>
-          </div>
+          <EcommerceImageUpload
+            images={productImages}
+            onImagesChange={setProductImages}
+            maxImages={10}
+            title="产品图片"
+            subtitle="所有图片作为参考传入"
+          />
 
           {/* 模式选择 */}
           <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
@@ -1038,17 +982,7 @@ ${modeReqs.join('\n')}
               ref={el => { if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }} />
           </div>
 
-          <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <Globe size={14} className="text-blue-500" />
-              <span className="text-sm font-semibold text-[#171717]">目标语言</span>
-            </div>
-            <select value={language} onChange={e => { setLanguage(e.target.value); saveLanguage(e.target.value); }}
-              className="w-full bg-[#F5F5F5] px-3 py-2.5 rounded-2xl text-sm text-[#171717] border-0 focus:outline-none focus:ring-2 focus:ring-gray-200 appearance-none cursor-pointer">
-              {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-            </select>
-          </div>
-
+          {/* 比例（保留自定义：多选模式显示各模式默认比例） */}
           <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
             <div className="flex items-center gap-2 mb-3">
               <Layout size={14} className="text-blue-500" />
@@ -1073,33 +1007,16 @@ ${modeReqs.join('\n')}
             )}
           </div>
 
-          <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <Images size={14} className="text-blue-500" />
-              <span className="text-sm font-semibold text-[#171717]">模型</span>
-            </div>
-            <div className="relative">
-              <select value={selectedModel} onChange={e => setSelectedModel(e.target.value)}
-                className="w-full bg-gray-100 px-3 py-2.5 pr-8 rounded-xl text-sm text-[#171717] border-0 focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer">
-                {models.length > 0 ? models.map(m => <option key={m.value} value={m.value}>{m.label}</option>) : <option value="nanobann2">Nanobann2</option>}
-              </select>
-              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            </div>
-            <ModelSpeedNote />
-          </div>
-
-          <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <Wand2 size={14} className="text-blue-500" />
-              <span className="text-sm font-semibold text-[#171717]">分辨率</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {['2K', '4K'].map(q => (
-                <button key={q} onClick={() => setQuality(q)}
-                  className={`py-2 rounded-xl text-xs font-medium transition-all ${quality === q ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>{q}</button>
-              ))}
-            </div>
-          </div>
+          <EcommerceSettings
+            language={language}
+            onLanguageChange={(lang) => { setLanguage(lang); saveLanguage(lang); }}
+            languages={LANGUAGES}
+            selectedModel={selectedModel}
+            onModelChange={setSelectedModel}
+            quality={quality}
+            onQualityChange={setQuality}
+            languageLabel="目标语言"
+          />
 
           {!analyzing && !isGenerating && !analysisComplete && (
             <button onClick={handleAnalyze} disabled={productImages.length === 0}
@@ -1162,93 +1079,75 @@ ${modeReqs.join('\n')}
             <div className="p-6">
               {analyzing && results.length === 0 && (
                 <LoadingAnimation
+                  variant="featured"
                   title="AI 正在分析"
                   description={progress || '分析产品并规划方案...'}
                   progress={progress || undefined}
                 />
               )}
-              {isGenerating && !analyzing && (
-                <div className="mb-4">
-                  <LoadingAnimation
-                    title="正在生成"
-                    description={progress || '正在生成...'}
-                    progress={progress || undefined}
-                    showProgressBar
-                  />
-                </div>
+              {isGenerating && !analyzing && results.length === 0 && (
+                <LoadingAnimation
+                  variant="featured"
+                  title="正在生成"
+                  description={progress || '正在生成...'}
+                  progress={progress || undefined}
+                  showProgressBar
+                />
               )}
-              {results.length > 0 && (
+              {(results.length > 0 || (isGenerating && !analyzing)) && (
                 <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-sm font-semibold text-[#171717]">
-                      已生成 ({results.length})
-                      {isGenerating && <span className="text-xs text-[#A3A3A3] font-normal ml-2">生成中...</span>}
-                    </h2>
-                    <div className="flex items-center gap-2">
-                      {isGenerating && (
-                        <div className="flex items-center gap-2 text-xs text-[#A3A3A3] bg-[#F5F5F5] rounded-xl px-3 py-1.5">
-                          <Loader2 size={12} className="animate-spin text-violet-500" />
-                          {progress}
-                        </div>
-                      )}
-                      {selectedModes.includes('aplus') && results.length >= 2 && (
-                        <button
-                          onClick={handleMergeImages}
-                          disabled={merging}
-                          className="flex items-center gap-1.5 text-sm text-white px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm disabled:opacity-50"
-                        >
-                          {merging ? (
-                            <><Loader2 size={14} className="animate-spin" /> 合并中...</>
-                          ) : (
-                            <><Columns3 size={14} /> 合并长截图</>
-                          )}
-                        </button>
-                      )}
-                      <button
-                        onClick={handleDownloadAll}
-                        className="flex items-center gap-1.5 text-sm text-white px-4 py-2 bg-gradient-to-r from-[#171717] to-[#333333] rounded-xl hover:from-[#27272A] hover:to-[#404040] transition-all shadow-sm"
-                      >
-                        <Download size={14} /> 下载全部
-                      </button>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
-                    {results.map((item, idx) => (
-                      <div key={idx} className="group relative bg-gray-50 rounded-2xl overflow-hidden border border-gray-200 hover:shadow-lg transition-shadow">
-                        <div className="aspect-square cursor-pointer relative" onClick={() => setPreviewImage(item.url)}>
-                          <img src={item.url} alt="" className="w-full h-full object-cover" />
-                          {/* Hover overlay */}
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setPreviewImage(item.url); }}
-                              className="w-9 h-9 bg-white/90 backdrop-blur-sm rounded-xl flex items-center justify-center shadow-md hover:bg-white transition-colors"
-                              title="预览"
-                            >
-                              <Images size={16} className="text-[#171717]" />
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setReEditImage(item.url); }}
-                              className="w-9 h-9 bg-white/90 backdrop-blur-sm rounded-xl flex items-center justify-center shadow-md hover:bg-white transition-colors"
-                              title="重新编辑"
-                            >
-                              <Wand2 size={14} className="text-[#171717]" />
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleDownload(item.url); }}
-                              className="w-9 h-9 bg-white/90 backdrop-blur-sm rounded-xl flex items-center justify-center shadow-md hover:bg-white transition-colors"
-                              title="下载"
-                            >
-                              <Download size={14} className="text-[#171717]" />
-                            </button>
+                  {results.length > 0 && (
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-sm font-semibold text-[#171717]">
+                        已生成 ({results.length})
+                        {isGenerating && <span className="text-xs text-[#A3A3A3] font-normal ml-2">生成中...</span>}
+                      </h2>
+                      <div className="flex items-center gap-2">
+                        {isGenerating && (
+                          <div className="flex items-center gap-2 text-xs text-[#A3A3A3] bg-[#F5F5F5] rounded-xl px-3 py-1.5">
+                            <Loader2 size={12} className="animate-spin text-violet-500" />
+                            {progress}
                           </div>
-                        </div>
-                        <div className="p-3 flex items-center justify-between">
-                          <span className="text-xs font-medium text-gray-600 truncate">{item.title}</span>
-                          <button onClick={() => handleDownload(item.url)} className="w-7 h-7 flex items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-[#171717]"><Download size={14} /></button>
+                        )}
+                        {selectedModes.includes('aplus') && results.length >= 2 && (
+                          <button
+                            onClick={handleMergeImages}
+                            disabled={merging}
+                            className="flex items-center gap-1.5 text-sm text-white px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-sm disabled:opacity-50"
+                          >
+                            {merging ? (
+                              <><Loader2 size={14} className="animate-spin" /> 合并中...</>
+                            ) : (
+                              <><Columns3 size={14} /> 合并长截图</>
+                            )}
+                          </button>
+                        )}
+                        <button
+                          onClick={handleDownloadAll}
+                          className="flex items-center gap-1.5 text-sm text-white px-4 py-2 bg-gradient-to-r from-[#171717] to-[#333333] rounded-xl hover:from-[#27272A] hover:to-[#404040] transition-all shadow-sm"
+                        >
+                          <Download size={14} /> 下载全部
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {results.length > 0 ? (
+                    <EcommerceResults
+                      results={results.map(item => ({ url: item.url, label: item.title }))}
+                      onPreview={setPreviewImage}
+                      onReEdit={setReEditImage}
+                      onDownload={handleDownload}
+                    />
+                  ) : (
+                    isGenerating && !analyzing && (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="flex items-center gap-2 text-xs text-[#A3A3A3]">
+                          <Loader2 size={12} className="animate-spin text-violet-500" />
+                          {progress || '等待生成结果...'}
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    )
+                  )}
                 </div>
               )}
             </div>

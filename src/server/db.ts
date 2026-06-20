@@ -1084,18 +1084,18 @@ export const generatedImagesDb = {
     let queryParams: any[];
 
     if (filter === 'sub') {
-      whereClause = 'gi.parent_user_id = ? AND gi.parent_user_id IS NOT NULL AND (gi.expires_at IS NULL OR gi.expires_at > NOW())';
+      whereClause = 'gi.parent_user_id = ? AND gi.parent_user_id IS NOT NULL AND (gi.expires_at IS NULL OR gi.expires_at > NOW()) AND gi.type != \'video\'';
       queryParams = [parentUserId];
     } else if (filter === 'all') {
-      // 查看所有自己的图片（包括主账号和子账号的）
-      whereClause = 'gi.user_id = ? AND (gi.expires_at IS NULL OR gi.expires_at > NOW())';
+      // 查看所有自己的图片（包括主账号和子账号的），排除video类型
+      whereClause = 'gi.user_id = ? AND (gi.expires_at IS NULL OR gi.expires_at > NOW()) AND gi.type != \'video\'';
       queryParams = [userId];
     } else if (isSubUser) {
-      // 子账号查看自己的图片
-      whereClause = 'gi.user_id = ? AND (gi.expires_at IS NULL OR gi.expires_at > NOW())';
+      // 子账号查看自己的图片，排除video类型
+      whereClause = 'gi.user_id = ? AND (gi.expires_at IS NULL OR gi.expires_at > NOW()) AND gi.type != \'video\'';
       queryParams = [userId];
     } else {
-      whereClause = 'gi.user_id = ? AND gi.parent_user_id IS NULL AND (gi.expires_at IS NULL OR gi.expires_at > NOW())';
+      whereClause = 'gi.user_id = ? AND gi.parent_user_id IS NULL AND (gi.expires_at IS NULL OR gi.expires_at > NOW()) AND gi.type != \'video\'';
       queryParams = [filter === 'mine' ? userId : parentUserId];
     }
 
@@ -1183,6 +1183,126 @@ export const generatedImagesDb = {
       console.warn(`⚠️ No rows updated for tempUrl: ${tempUrl.substring(0, 50)}...`);
     }
     return affectedRows;
+  },
+
+  // Video Studio 专用：获取用户的视频/脚本图/社媒图媒体库
+  async getVideoMedia(userId: number, parentUserId: number, page: number = 1, pageSize: number = 20, mediaType?: string) {
+    const offset = (page - 1) * pageSize;
+    const isSubUser = userId !== parentUserId;
+
+    let whereClause = 'gi.user_id = ? AND (gi.expires_at IS NULL OR gi.expires_at > NOW())';
+    let queryParams: any[] = [userId];
+
+    // 如果指定了媒体类型筛选
+    if (mediaType && mediaType !== 'all') {
+      whereClause += ' AND gi.type = ?';
+      queryParams.push(mediaType);
+    } else {
+      // 默认显示 video studio 相关的所有类型
+      whereClause += ' AND gi.type IN (\'video\', \'video-script\', \'video-social\')';
+    }
+
+    const [rows] = await pool.execute(
+      `SELECT gi.*, su.name as sub_user_name FROM generated_images gi
+       LEFT JOIN sub_users su ON gi.user_id = su.id AND gi.parent_user_id IS NOT NULL
+       WHERE ${whereClause}
+       ORDER BY gi.created_at DESC LIMIT ? OFFSET ?`,
+      [...queryParams, pageSize, offset]
+    );
+
+    const mediaRows = rows as any[];
+
+    const [countResult] = await pool.execute(
+      `SELECT COUNT(*) as total FROM generated_images gi WHERE ${whereClause}`,
+      queryParams
+    );
+
+    return {
+      items: mediaRows,
+      total: (countResult as any[])[0]?.total || 0,
+      page,
+      pageSize,
+      totalPages: Math.ceil(((countResult as any[])[0]?.total || 0) / pageSize)
+    };
+  },
+
+  // 删除视频媒体（含COS文件删除）
+  async deleteVideoMedia(id: number, userId: number, parentUserId?: number) {
+    // 先获取记录
+    const userCondition = parentUserId && parentUserId !== userId
+      ? '(user_id = ? OR parent_user_id = ?)'
+      : 'user_id = ?';
+    const queryParams = parentUserId && parentUserId !== userId
+      ? [id, userId, parentUserId]
+      : [id, userId];
+
+    const [rows] = await pool.execute(
+      `SELECT image_url FROM generated_images WHERE id = ? AND ${userCondition}`,
+      queryParams
+    );
+
+    const record = (rows as any[])[0];
+    if (!record) return null;
+
+    await pool.execute(
+      `DELETE FROM generated_images WHERE id = ? AND ${userCondition}`,
+      queryParams
+    );
+
+    return record.image_url;
+  },
+
+  // 批量删除视频媒体
+  async batchDeleteVideoMedia(ids: number[], userId: number, parentUserId?: number) {
+    const userCondition = parentUserId && parentUserId !== userId
+      ? '(user_id = ? OR parent_user_id = ?)'
+      : 'user_id = ?';
+    const placeholders = ids.map(() => '?').join(',');
+    const queryParams = parentUserId && parentUserId !== userId
+      ? [...ids, userId, parentUserId]
+      : [...ids, userId];
+
+    const [rows] = await pool.execute(
+      `SELECT id, image_url FROM generated_images WHERE id IN (${placeholders}) AND ${userCondition}`,
+      queryParams
+    );
+
+    await pool.execute(
+      `DELETE FROM generated_images WHERE id IN (${placeholders}) AND ${userCondition}`,
+      queryParams
+    );
+
+    return rows as any[];
+  },
+
+  // 清理过期视频媒体
+  async cleanupExpiredVideoMedia(userId: number, parentUserId?: number) {
+    const userCondition = parentUserId && parentUserId !== userId
+      ? '(user_id = ? OR parent_user_id = ?)'
+      : 'user_id = ?';
+    const queryParams = parentUserId && parentUserId !== userId
+      ? [userId, parentUserId]
+      : [userId];
+
+    const [rows] = await pool.execute(
+      `SELECT id, image_url FROM generated_images 
+       WHERE ${userCondition} 
+       AND type IN ('video', 'video-script', 'video-social')
+       AND (expires_at <= NOW() OR (expires_at IS NULL AND created_at < DATE_SUB(NOW(), INTERVAL 3 DAY)))`,
+      queryParams
+    );
+
+    const expired = rows as any[];
+    if (expired.length > 0) {
+      const ids = expired.map(r => r.id);
+      const placeholders = ids.map(() => '?').join(',');
+      await pool.execute(
+        `DELETE FROM generated_images WHERE id IN (${placeholders})`,
+        ids
+      );
+    }
+
+    return expired;
   }
 };
 
@@ -1301,10 +1421,10 @@ export const inviteCodeDb = {
     });
   },
 
-  async markAsUsed(code: string) {
+  async incrementUseCount(code: string) {
     return withRetry(async () => {
       await pool.execute(
-        'UPDATE invite_codes SET used_at = NOW() WHERE code = ?',
+        'UPDATE invite_codes SET used_count = used_count + 1, used_at = NOW() WHERE code = ?',
         [code]
       );
     });
@@ -1313,7 +1433,7 @@ export const inviteCodeDb = {
   async getByParentUserId(parentUserId: number) {
     return withRetry(async () => {
       const [rows] = await pool.execute(
-        'SELECT code, expires_at, used_at FROM invite_codes WHERE parent_user_id = ? ORDER BY created_at DESC LIMIT 10',
+        'SELECT code, expires_at, used_at, used_count FROM invite_codes WHERE parent_user_id = ? ORDER BY created_at DESC LIMIT 10',
         [parentUserId]
       );
       return rows;

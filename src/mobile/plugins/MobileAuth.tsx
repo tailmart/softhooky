@@ -177,43 +177,43 @@ export const MobileAuth: React.FC<MobileAuthProps> = ({ open, onClose, onSuccess
     <div className="fixed inset-0 z-[100] flex items-end" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60" />
       <div
-        className="relative w-full bg-[#141414] rounded-t-3xl pb-[calc(24px+env(safe-area-inset-bottom,0px))] animate-mobile-slide-up"
+        className="relative w-full bg-white rounded-t-3xl pb-[calc(24px+env(safe-area-inset-bottom,0px))] animate-mobile-slide-up"
         onClick={e => e.stopPropagation()}
         style={{ maxHeight: '90vh' }}
       >
         {/* Handle */}
         <div className="flex justify-center pt-2 pb-1">
-          <div className="w-10 h-1 rounded-full bg-white/20" />
+          <div className="w-10 h-1 rounded-full bg-gray-300" />
         </div>
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-2">
-          <h2 className="text-lg font-bold text-white">
+          <h2 className="text-lg font-bold text-[#171717]">
             {mode === 'login' ? '登录' : '注册'}
           </h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.06]">
-            <X size={16} className="text-white/40" />
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100">
+            <X size={16} className="text-gray-500" />
           </button>
         </div>
 
         {/* Form */}
         <div className="px-5 pt-3 space-y-4 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 80px)' }}>
           <div>
-            <label className="text-xs font-medium text-white/40 mb-1.5 block">邮箱</label>
-            <div className="flex items-center gap-3 px-4 py-3 bg-white/[0.06] rounded-xl">
-              <Mail size={16} className="text-white/30" />
+            <label className="text-xs font-medium text-gray-500 mb-1.5 block">邮箱</label>
+            <div className="flex items-center gap-3 px-4 py-3 bg-gray-100 rounded-xl">
+              <Mail size={16} className="text-gray-400" />
               <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="请输入邮箱"
-                className="flex-1 bg-transparent text-sm text-white placeholder-white/20 outline-none" autoFocus />
+                className="flex-1 bg-transparent text-sm text-[#171717] placeholder-gray-300 outline-none" autoFocus />
             </div>
           </div>
 
           <div>
-            <label className="text-xs font-medium text-white/40 mb-1.5 block">密码</label>
-            <div className="flex items-center gap-3 px-4 py-3 bg-white/[0.06] rounded-xl">
-              <Lock size={16} className="text-white/30" />
+            <label className="text-xs font-medium text-gray-500 mb-1.5 block">密码</label>
+            <div className="flex items-center gap-3 px-4 py-3 bg-gray-100 rounded-xl">
+              <Lock size={16} className="text-gray-400" />
               <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="请输入密码"
-                className="flex-1 bg-transparent text-sm text-white placeholder-white/20 outline-none" />
-              <button onClick={() => setShowPassword(!showPassword)} className="text-white/30">
+                className="flex-1 bg-transparent text-sm text-[#171717] placeholder-gray-300 outline-none" />
+              <button onClick={() => setShowPassword(!showPassword)} className="text-gray-400">
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
@@ -221,11 +221,11 @@ export const MobileAuth: React.FC<MobileAuthProps> = ({ open, onClose, onSuccess
 
           {mode === 'register' && (
             <div>
-              <label className="text-xs font-medium text-white/40 mb-1.5 block">确认密码</label>
-              <div className="flex items-center gap-3 px-4 py-3 bg-white/[0.06] rounded-xl">
-                <Lock size={16} className="text-white/30" />
+              <label className="text-xs font-medium text-gray-500 mb-1.5 block">确认密码</label>
+              <div className="flex items-center gap-3 px-4 py-3 bg-gray-100 rounded-xl">
+                <Lock size={16} className="text-gray-400" />
                 <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="再次输入密码"
-                  className="flex-1 bg-transparent text-sm text-white placeholder-white/20 outline-none" />
+                  className="flex-1 bg-transparent text-sm text-[#171717] placeholder-gray-300 outline-none" />
               </div>
             </div>
           )}
@@ -233,15 +233,15 @@ export const MobileAuth: React.FC<MobileAuthProps> = ({ open, onClose, onSuccess
           {mode === 'login' && (
             <label className="flex items-center gap-2.5">
               <button onClick={() => setRememberMe(!rememberMe)}
-                className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${rememberMe ? 'bg-blue-500 border-blue-500' : 'border-white/20'}`}>
+                className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${rememberMe ? 'bg-blue-500 border-blue-500' : 'border-gray-300'}`}>
                 {rememberMe && <Check size={12} className="text-white" />}
               </button>
-              <span className="text-xs text-white/40">记住我</span>
+              <span className="text-xs text-gray-500">记住我</span>
             </label>
           )}
 
           {/* Captcha */}
-          <div className="bg-white/[0.06] rounded-2xl p-3">
+          <div className="bg-gray-100 rounded-2xl p-3">
             {captchaToken ? (
               <div className="flex items-center justify-center gap-2 py-3 text-sm font-medium text-green-500">
                 <ShieldCheck size={18} /> 验证通过
@@ -268,10 +268,10 @@ export const MobileAuth: React.FC<MobileAuthProps> = ({ open, onClose, onSuccess
               {/* 分割线 */}
               <div className="relative py-1">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-white/[0.06]" />
+                  <div className="w-full border-t border-gray-200" />
                 </div>
                 <div className="relative flex justify-center">
-                  <span className="bg-[#141414] px-4 text-[11px] text-white/20">其他登录方式</span>
+                  <span className="bg-white px-4 text-[11px] text-gray-300">其他登录方式</span>
                 </div>
               </div>
 
@@ -293,7 +293,7 @@ export const MobileAuth: React.FC<MobileAuthProps> = ({ open, onClose, onSuccess
                         </svg>
                       )}
                     </div>
-                    <span className="text-[10px] text-white/40 font-medium">微信</span>
+                    <span className="text-[10px] text-gray-500 font-medium">微信</span>
                   </button>
                 )}
                 {config.oauth_platforms?.includes('qq') && (
@@ -312,7 +312,7 @@ export const MobileAuth: React.FC<MobileAuthProps> = ({ open, onClose, onSuccess
                         </svg>
                       )}
                     </div>
-                    <span className="text-[10px] text-white/40 font-medium">QQ</span>
+                    <span className="text-[10px] text-gray-500 font-medium">QQ</span>
                   </button>
                 )}
                 {config.oauth_platforms?.includes('github') && (
@@ -331,7 +331,7 @@ export const MobileAuth: React.FC<MobileAuthProps> = ({ open, onClose, onSuccess
                         </svg>
                       )}
                     </div>
-                    <span className="text-[10px] text-white/40 font-medium">GitHub</span>
+                    <span className="text-[10px] text-gray-500 font-medium">GitHub</span>
                   </button>
                 )}
                 {config.oauth_platforms?.includes('dingtalk') && (
@@ -350,7 +350,7 @@ export const MobileAuth: React.FC<MobileAuthProps> = ({ open, onClose, onSuccess
                         </svg>
                       )}
                     </div>
-                    <span className="text-[10px] text-white/40 font-medium">钉钉</span>
+                    <span className="text-[10px] text-gray-500 font-medium">钉钉</span>
                   </button>
                 )}
               </div>
@@ -361,13 +361,13 @@ export const MobileAuth: React.FC<MobileAuthProps> = ({ open, onClose, onSuccess
           <div className="flex items-center justify-center gap-1 py-2">
             {mode === 'login' ? (
               <>
-                <span className="text-xs text-white/30">还没有账号？</span>
-                <button onClick={() => { setMode('register'); setError(''); setCaptchaToken(''); setCaptchaKey(k => k + 1); }} className="text-xs font-semibold text-white">去注册</button>
+                <span className="text-xs text-gray-400">还没有账号？</span>
+                <button onClick={() => { setMode('register'); setError(''); setCaptchaToken(''); setCaptchaKey(k => k + 1); }} className="text-xs font-semibold text-[#171717]">去注册</button>
               </>
             ) : (
               <>
-                <span className="text-xs text-white/30">已有账号？</span>
-                <button onClick={() => { setMode('login'); setError(''); setCaptchaToken(''); setCaptchaKey(k => k + 1); }} className="text-xs font-semibold text-white">去登录</button>
+                <span className="text-xs text-gray-400">已有账号？</span>
+                <button onClick={() => { setMode('login'); setError(''); setCaptchaToken(''); setCaptchaKey(k => k + 1); }} className="text-xs font-semibold text-[#171717]">去登录</button>
               </>
             )}
           </div>

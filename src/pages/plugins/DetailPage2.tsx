@@ -1,16 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Sparkles, X, Loader2, Plus, FileImage, Copy, Check, ChevronDown, Download, Wand2 } from 'lucide-react';
+import { Sparkles, Loader2, FileImage, Copy, Check, Download } from 'lucide-react';
 import { fileToDataUrl } from '../../services/r2Service';
 import { editImage } from '../../services/imageService';
 import { analyzeMultipleImages } from '../../services/aiChatService';
 import { uploadFileToCos } from '../../services/cosService';
 import { imageLibraryService } from '../../services/imageLibraryService';
 import { requireAuth } from '../../utils/authCheck';
-import { getAvailableModels } from '../../services/modelService';
 import { createConcurrencyLimit } from '../../utils/concurrency';
 import { ImagePreviewModal } from '../../components/ImagePreviewModal';
 import { ReEditModal } from '../../components/ReEditModal';
-import { ModelSpeedNote } from '../../components/ModelSpeedNote';
+import { EcommerceImageUpload, EcommerceSettings, EcommerceResults } from '../../components/ecommerce';
 import { LoadingAnimation } from '../../components/LoadingAnimation';
 import { LANGUAGES, getSavedLanguage, saveLanguage } from '../../constants/languages';
 
@@ -46,8 +45,6 @@ interface GenImage {
   title: string;
   idx: number;
 }
-
-const QUALITIES = ['2K', '4K'];
 
 const SMART_SECTIONS = [
   { title: '品牌首图+卖点概览', prompt: '电商详情页首图，浅色/白色背景，画面顶部一个小圆角标签（如产品品类），下方大号粗体主标题（6-12个字核心卖点），再下方小号副标题，中间产品多角度/多色展示图，底部一排功能图标网格（6个小圆形图标+文字标签，如"大风速""静音""长续航"等），排版干净专业，竖版9:16' },
@@ -226,64 +223,8 @@ const SMART_PROMPT = `你是一位资深电商视觉设计师，具备8年以上
 - 产品原图上已有的文字/标志保持原样不变
 - 提示词中的画面描述必须用 {language} 书写`;
 
-const Dropdown: React.FC<{
-  value: string;
-  options: Array<{ value: string; label: string }>;
-  onChange: (value: string) => void;
-  label: string;
-}> = ({ value, options, onChange, label }) => {
-  const [open, setOpen] = useState(false);
-  const selected = options.find(o => o.value === value);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  return (
-    <div ref={ref} className="relative">
-      <label className="text-xs font-medium text-[#A3A3A3] mb-1.5 block">{label}</label>
-      <div
-        onClick={() => setOpen(!open)}
-        className="w-full bg-[#F5F5F5] px-3 py-2.5 rounded-xl text-sm flex items-center justify-between cursor-pointer hover:bg-[#EEEEEE] transition-colors border-0 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-      >
-        <span className={selected ? 'text-[#171717] font-medium' : 'text-[#BDBDBD]'}>{selected?.label || '请选择'}</span>
-        <ChevronDown size={16} className={`text-[#A3A3A3] transition-transform ${open ? 'rotate-180' : ''}`} />
-      </div>
-      {open && (
-        <div className="absolute z-10 top-full mt-1 w-full bg-white rounded-xl shadow-lg border border-[#E5E5E5] py-1 max-h-48 overflow-y-auto">
-          {options.map(opt => (
-            <div
-              key={opt.value}
-              onClick={() => { onChange(opt.value); setOpen(false); }}
-              className={`px-4 py-2.5 text-sm cursor-pointer hover:bg-[#F5F5F5] flex items-center justify-between ${value === opt.value ? 'text-[#171717] font-semibold bg-[#F5F5F5]' : 'text-[#737373]'}`}
-            >
-              {opt.label}
-              {value === opt.value && <Check size={14} className="text-blue-500" />}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
 export const DetailPage2: React.FC = () => {
-  const [models, setModels] = useState<{ value: string; label: string }[]>([]);
-  useEffect(() => {
-    getAvailableModels().then(m => {
-      const sorted = m.filter(x => x.enabled).sort((a, b) => a.sort_order - b.sort_order);
-      setModels(sorted.map(x => ({ value: x.model_id, label: x.label })));
-      if (sorted.length > 0) {
-        setSelectedModel('gpt-image-2');
-      }
-    });
-  }, []);
-  const [productImages, setProductImages] = useState<string[]>([]);
+  const [productImages, setProductImages] = useState<{ file: File; preview: string }[]>([]);
   const [productName, setProductName] = useState('');
   const [productDesc, setProductDesc] = useState('');
   const [selectedModel, setSelectedModel] = useState('gpt-image-2');
@@ -299,7 +240,6 @@ export const DetailPage2: React.FC = () => {
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [reEditImage, setReEditImage] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLTextAreaElement>(null);
   const descRef = useRef<HTMLTextAreaElement>(null);
 
@@ -315,31 +255,8 @@ export const DetailPage2: React.FC = () => {
     if (descRef.current) autoResize(descRef.current);
   }, [productDesc]);
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const inputFiles = e.target.files;
-    if (!inputFiles || inputFiles.length === 0) return;
-    const files = Array.from(inputFiles) as File[];
-    const MAX_FILE_SIZE = 20 * 1024 * 1024;
-    const oversized = files.find(f => f.size > MAX_FILE_SIZE);
-    if (oversized) {
-      alert(`图片"${oversized.name}"超过 20MB，请压缩后重新上传`);
-      e.target.value = '';
-      return;
-    }
-    const remaining = 10 - productImages.length;
-    const filesToAdd = files.slice(0, remaining);
-    try {
-      const b64s = await Promise.all(filesToAdd.map(f => fileToDataUrl(f, 1200)));
-      setProductImages(prev => [...prev, ...b64s].slice(0, 10));
-    } catch (err) {
-      console.error('图片处理失败:', err);
-      alert('部分图片处理失败，请尝试使用更小的图片');
-    }
-    e.target.value = '';
-  };
-
-  const removeImage = (index: number) => {
-    setProductImages(prev => prev.filter((_, i) => i !== index));
+  const getImageUrls = async (): Promise<string[]> => {
+    return Promise.all(productImages.map(item => fileToDataUrl(item.file, 1200)));
   };
 
   const handleAnalyze = async () => {
@@ -353,13 +270,15 @@ export const DetailPage2: React.FC = () => {
     setProgress('AI正在进行第一轮深度产品分析...');
 
     try {
+      const imageUrls = await getImageUrls();
+
       // Step 0: Identify each image
       setProgress('AI正在识别每张图片展示的产品部位...');
       const identifyPrompt = `分析所有上传的图片，对每张图片用一句话（10字以内）说明这张图展示的是产品的哪个部分或角度。
 返回JSON数组，顺序与图片顺序一致。
 示例：["产品正面","产品背面","接口特写","侧面按键","包装正面"]
 仅输出JSON数组，不要其他文字。`;
-      const identifyRaw = await analyzeMultipleImages(productImages, identifyPrompt, { model: 'gemini-3.5-flash', maxTokens: 1000 });
+      const identifyRaw = await analyzeMultipleImages(imageUrls, identifyPrompt, { model: 'gemini-3.5-flash', maxTokens: 1000 });
       let imageLabels: string[] = [];
       try {
         const parsed = JSON.parse(identifyRaw.match(/\[[\s\S]*\]/)?.[0] || '[]');
@@ -373,7 +292,7 @@ export const DetailPage2: React.FC = () => {
       const deepPromptWithLang = PRODUCT_DEEP_ANALYSIS_PROMPT.replace(/\{language\}/g, langLabel);
       const deepAnalysisUserContent = `${deepPromptWithLang}\n\n=====\n\n用户提供的产品名：${productName || '（未提供）'}\n用户提供的描述：${productDesc || '（未提供）'}\n目标语言：${langLabel}\n\n请全面分析以上产品图片，输出深度分析JSON。`;
 
-      const deepRaw = await analyzeMultipleImages(productImages, deepAnalysisUserContent, {
+      const deepRaw = await analyzeMultipleImages(imageUrls, deepAnalysisUserContent, {
         model: 'gemini-3.5-flash',
         maxTokens: 10000,
       });
@@ -402,7 +321,7 @@ export const DetailPage2: React.FC = () => {
         .replace('{language}', langLabel)
         + `\n\n## 上传图片清单\n${imageDesc}\n\n重要：每张详情页配图必须指定使用哪张参考图。在输出中为每个对象添加 "refImageIndices" 字段，表示该配图需要参考哪些上传的图片（数组中的数字对应上文图1、图2...的索引，从0开始）。例如某张配图需要参考第1张和第3张图，则写 "refImageIndices": [0, 2]。`;
 
-      const raw2 = await analyzeMultipleImages(productImages, smartPrompt, {
+      const raw2 = await analyzeMultipleImages(imageUrls, smartPrompt, {
         model: 'gemini-3.5-flash',
         maxTokens: 12000,
       });
@@ -434,6 +353,7 @@ export const DetailPage2: React.FC = () => {
       : SMART_SECTIONS;
     if (sections.length === 0) { setGenerating(false); return; }
 
+    const imageUrls = await getImageUrls();
     const total = sections.length;
     setProgress(`生成中 (0/${total})...`);
     let doneCount = 0;
@@ -447,8 +367,8 @@ export const DetailPage2: React.FC = () => {
         : '';
       const finalPrompt = `${section.prompt}\n\n产品名：${productName || '该产品'}${productDesc ? `，描述：${productDesc}` : ''}${analysisContext}\n\n## 设计规范（必须遵守）\n- 统一使用浅色/白色背景，深色文字，保持干净专业的视觉风格\n- 文字永远在画面上方1/3区域，产品图在下方2/3区域\n- 主标题用大号粗体无衬线字体（6-12个字），副标题用小号字体（10-20个字）\n- 关键数据用超大号数字+醒目颜色高亮（如"5000mAh"、"100档"、"146g"）\n- 产品图必须清晰锐利，材质质感可见，占画面下方60-70%\n- 使用专业排版组件：功能图标网格（小圆形图标+文字标签）、对比卡片（并排小卡片）、标注线（细线+小圆点+功能标签）、2x2网格（特写/场景）、参数表格\n- 人物必须照片级真实，优先欧美模特：皮肤有真实纹理和毛孔、允许自然小瑕疵、禁止磨皮塑料感。光线用自然环境光（窗边散射光/阴天柔光），禁止黄金时刻暖光/逆光光晕/过曝高光。涉及人物时附加"photorealistic, shot on Sony A7R IV, 85mm f/1.8 lens, natural window light, soft shadows, no lens flare, no golden hour, real skin texture, pores visible, editorial photography"\n\n## 差异化要求\n- 本屏内容必须与其他屏完全不同，严禁重复相同的场景、构图、角度或卖点\n- 如果其他屏已使用过某个场景/构图，本屏必须换到不同的场景/角度\n\n## 技术要求\n- AI自动分析所有上传的参考图，从中识别产品的真实外观特征并保持一致\n- 产品的造型、颜色、材质等视觉特征必须与参考图一致\n- 产品原图上已有的文字/标志/标签保持原样不变`;
       try {
-        const refIndices = section.refImageIndices?.filter(idx => idx >= 0 && idx < productImages.length) || []
-        const images = refIndices.length > 0 ? refIndices.map(idx => productImages[idx]) : productImages
+        const refIndices = section.refImageIndices?.filter(i => i >= 0 && i < imageUrls.length) || []
+        const images = refIndices.length > 0 ? refIndices.map(i => imageUrls[i]) : imageUrls
         console.log(`[详情页] 开始生成第${idx + 1}张: ${section.title}, model=${selectedModel}, images=${images.length}`);
         const resp = await editImage({
           prompt: finalPrompt,
@@ -456,6 +376,7 @@ export const DetailPage2: React.FC = () => {
           aspectRatio: '9:16',
           resolution: quality,
           model: selectedModel,
+          type: 'edited',
         });
         console.log(`[详情页] 第${idx + 1}张生成成功:`, JSON.stringify(resp).substring(0, 200));
         const url = resp.data?.[0]?.url || resp.image_url || resp.url || '';
@@ -595,6 +516,9 @@ export const DetailPage2: React.FC = () => {
     try { const r = await fetch(url); const b = await r.blob(); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = `detail-${Date.now()}.png`; a.click(); URL.revokeObjectURL(u); } catch { window.open(url, '_blank'); }
   };
 
+  const mergedImages = generatedImages.filter(img => img.title === '纵向合并长截图');
+  const regularImages = generatedImages.filter(img => img.title !== '纵向合并长截图');
+
   return (
     <div className="flex-1 flex flex-col bg-white min-w-0">
       <div className="flex items-center gap-3 px-6 h-14 border-b border-[#E5E5E5] flex-shrink-0 bg-[#F7F7F7]">
@@ -608,33 +532,14 @@ export const DetailPage2: React.FC = () => {
         {/* Left: Settings */}
         <div className="w-[380px] border-r border-[#E5E5E5] overflow-y-auto p-5 space-y-4 flex-shrink-0 bg-[#FAFAFA]">
           {/* Product Images */}
-          <div className="bg-white rounded-2xl p-4 border border-[#E5E5E5] shadow-sm">
-            <div className="flex items-center gap-3 mb-4">
-              <FileImage size={16} className="text-blue-500" />
-              <div>
-                <h3 className="text-sm font-semibold text-[#171717]">产品图片</h3>
-                <p className="text-xs text-[#A3A3A3]">AI会通过提供参考图自行选择设计</p>
-              </div>
-              <span className="ml-auto text-xs text-[#A3A3A3] bg-[#F5F5F5] px-2 py-1 rounded-xl">{productImages.length}/10</span>
-            </div>
-            {productImages.length > 0 && (
-              <div className="grid grid-cols-5 gap-2 mb-3">
-                {productImages.map((img, index) => (
-                  <div key={index} className="relative group aspect-square rounded-2xl overflow-hidden bg-[#F5F5F5]">
-                    <img src={img} alt="" className="w-full h-full object-cover" />
-                    <button onClick={() => removeImage(index)} className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100">
-                      <X size={14} className="text-white" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <input type="file" ref={fileInputRef} onChange={handleUpload} accept="image/*" multiple className="hidden" />
-            <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-[#E5E5E5] bg-[#FAFAFA] p-3 flex flex-col items-center justify-center gap-1 hover:border-[#171717]/30 hover:bg-[#F5F5F5] transition-all cursor-pointer bg-[#FAFAFA]">
-              <Plus size={18} className="text-[#A3A3A3]" />
-              <span className="text-xs text-[#A3A3A3]">上传产品图</span>
-            </div>
-          </div>
+          <EcommerceImageUpload
+            images={productImages}
+            onImagesChange={setProductImages}
+            maxImages={10}
+            title="产品图片"
+            subtitle="AI会通过提供参考图自行选择设计"
+            icon="image"
+          />
 
           {/* Product Name */}
           <div className="bg-white rounded-2xl p-4 border border-[#E5E5E5] shadow-sm">
@@ -657,27 +562,16 @@ export const DetailPage2: React.FC = () => {
           </div>
 
           {/* Settings */}
-          <div className="bg-white rounded-2xl p-4 border border-[#E5E5E5] shadow-sm">
-            <h3 className="text-sm font-semibold text-[#171717] mb-4">生图设置</h3>
-            <div className="space-y-4">
-              <Dropdown label="模型" value={selectedModel} options={models.length > 0 ? models : [{ value: 'nanobann2', label: 'Nanobann2' }]} onChange={setSelectedModel} />
-              <ModelSpeedNote />
-              <Dropdown label="目标语言" value={language} options={LANGUAGES} onChange={(v: string) => { setLanguage(v); saveLanguage(v); }} />
-              <div>
-                <label className="text-xs font-medium text-[#A3A3A3] mb-1.5 block">清晰度</label>
-                <div className="flex gap-1.5">
-                  {QUALITIES.map(q => (
-                    <button key={q} onClick={() => setQuality(q)}
-                      className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all ${quality === q ? 'bg-blue-500 text-white' : 'bg-[#F5F5F5] text-[#737373] hover:bg-[#EEEEEE]'}`}>{q}</button>
-                  ))}
-                </div>
-              </div>
-              <div className="flex items-center justify-between bg-[#F5F5F5] rounded-xl px-4 py-2.5">
-                <span className="text-xs text-[#A3A3A3]">比例</span>
-                <span className="text-xs font-medium text-[#171717]">9:16（固定竖版）</span>
-              </div>
-            </div>
-          </div>
+          <EcommerceSettings
+            language={language}
+            onLanguageChange={(v) => { setLanguage(v); saveLanguage(v); }}
+            languages={LANGUAGES}
+            selectedModel={selectedModel}
+            onModelChange={setSelectedModel}
+            quality={quality}
+            onQualityChange={setQuality}
+            languageLabel="目标语言"
+          />
 
           {/* Analyze Button */}
           {!result && (
@@ -704,10 +598,10 @@ export const DetailPage2: React.FC = () => {
           )}
 
           {/* Merge Button */}
-          {generatedImages.filter(img => img.title !== '纵向合并长截图').length >= 2 && !generating && !analyzing && (
+          {regularImages.length >= 2 && !generating && !analyzing && (
             <button onClick={handleMerge} disabled={isMerging}
               className="w-full bg-white text-[#171717] py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-[#F5F5F5] transition-all border border-[#E5E5E5] shadow-sm">
-              {isMerging ? <><Loader2 size={18} className="animate-spin" /> 合并中...</> : <><Copy size={18} /> 合并详情页 ({generatedImages.filter(img => img.title !== '纵向合并长截图').length}张 → 1张)</>}
+              {isMerging ? <><Loader2 size={18} className="animate-spin" /> 合并中...</> : <><Copy size={18} /> 合并详情页 ({regularImages.length}张 → 1张)</>}
             </button>
           )}
 
@@ -723,7 +617,7 @@ export const DetailPage2: React.FC = () => {
         <div className="flex-1 flex flex-col min-w-0 bg-[#FAFAFA]">
           {analyzing && !result ? (
             <div className="flex-1 flex items-center justify-center">
-              <LoadingAnimation title="AI分析中" description="AI正在深度学习分析产品，规划详情页配图方案..." progress={progress} />
+              <LoadingAnimation variant="featured" title="AI分析中" description="AI正在深度学习分析产品，规划详情页配图方案..." progress={progress} />
             </div>
           ) : !result && generatedImages.length === 0 ? (
             <div className="flex-1 flex items-center justify-center">
@@ -751,7 +645,7 @@ export const DetailPage2: React.FC = () => {
                     <Loader2 size={16} className="animate-spin text-[#171717]" />
                     <span className="text-sm font-medium text-[#171717]">{progress}</span>
                     {generating && result && (
-                      <span className="text-xs text-gray-400 ml-auto">{generatedImages.filter(img => img.title !== '纵向合并长截图').length} / {result.prompts.length} 张</span>
+                      <span className="text-xs text-gray-400 ml-auto">{regularImages.length} / {result.prompts.length} 张</span>
                     )}
                   </div>
                 </div>
@@ -852,46 +746,35 @@ export const DetailPage2: React.FC = () => {
                   </div>
                 )}
 
-                {/* Generated Images Grid */}
+                {/* Generated Images */}
                 {generatedImages.length > 0 && (
                   <div>
                     <h2 className="text-sm font-semibold text-[#171717] mb-4">
-                      已生成图片 ({generatedImages.length}/{result?.prompts.length})
+                      已生成图片 ({regularImages.length}/{result?.prompts.length})
                     </h2>
-                    <div className="grid grid-cols-3 xl:grid-cols-4 gap-4">
-                      {generatedImages.map((img, idx) => {
-                        const isMerged = img.title === '纵向合并长截图';
-                        return (
-                        <div key={idx} className={`group relative bg-[#FAFAFA] rounded-2xl overflow-hidden border ${isMerged ? 'border-[#171717] col-span-2 row-span-2' : 'border-[#E5E5E5]'}`}>
-                          {isMerged && (
-                            <div className="absolute top-2 left-2 z-10 px-2 py-0.5 bg-[#171717] text-white text-[10px] rounded-xl font-medium">合并长图</div>
-                          )}
-                          <div className={isMerged ? 'max-h-[600px] cursor-pointer overflow-hidden' : 'aspect-[9/16] cursor-pointer'} onClick={() => setPreviewImage(img.url)}>
-                            <img src={img.url} alt="" className="w-full h-full object-contain" />
-                          </div>
-                          <div className="p-2.5 flex items-center justify-between">
-                            <span className="text-[10px] font-medium text-[#525252] truncate">{img.title}</span>
-                            <div className="flex gap-1">
-                              <button onClick={() => setReEditImage(img.url)} className="w-6 h-6 flex items-center justify-center rounded-xl text-[#A3A3A3] hover:bg-[#F5F5F5] hover:text-[#171717] transition-colors flex-shrink-0" title="微调">
-                                <Wand2 size={12} />
-                              </button>
-                              <button onClick={() => handleDownload(img.url)} className="w-6 h-6 flex items-center justify-center rounded-xl text-[#A3A3A3] hover:bg-[#F5F5F5] hover:text-[#171717] transition-colors flex-shrink-0 ml-1">
-                                <Download size={12} />
-                              </button>
-
-                            </div>
-                          </div>
-                          {result && (() => {
-                            const matched = result.prompts.find(p => p.id === img.idx);
-                            return matched ? (
-                              <div className="px-2.5 pb-2.5">
-                                <p className="text-[9px] text-[#A3A3A3] leading-relaxed line-clamp-2">{matched.prompt}</p>
-                              </div>
-                            ) : null;
-                          })()}
+                    {/* Merged long screenshot */}
+                    {mergedImages.map((img, idx) => (
+                      <div key={`merged-${idx}`} className="mb-4 group relative bg-[#FAFAFA] rounded-2xl overflow-hidden border border-[#171717]">
+                        <div className="absolute top-2 left-2 z-10 px-2 py-0.5 bg-[#171717] text-white text-[10px] rounded-xl font-medium">合并长图</div>
+                        <div className="max-h-[600px] cursor-pointer overflow-hidden" onClick={() => setPreviewImage(img.url)}>
+                          <img src={img.url} alt="" className="w-full h-full object-contain" />
                         </div>
-                      );})}
-                    </div>
+                        <div className="p-2.5 flex items-center justify-between">
+                          <span className="text-[10px] font-medium text-[#525252]">{img.title}</span>
+                          <button onClick={() => handleDownload(img.url)} className="w-6 h-6 flex items-center justify-center rounded-xl text-[#A3A3A3] hover:bg-[#F5F5F5] hover:text-[#171717] transition-colors">
+                            <Download size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    {/* Regular generated images */}
+                    <EcommerceResults
+                      results={regularImages.map(img => ({ url: img.url, label: img.title, idx: img.idx }))}
+                      onPreview={setPreviewImage}
+                      onReEdit={setReEditImage}
+                      onDownload={handleDownload}
+                      aspectRatio="9/16"
+                    />
                   </div>
                 )}
               </div>

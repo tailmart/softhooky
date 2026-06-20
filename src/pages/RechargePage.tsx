@@ -34,8 +34,6 @@ export const RechargeModal: React.FC<RechargeModalProps> = ({ isOpen, onClose })
   // 每个功能消耗积分（从后台获取）
   const gptImage2Price = pricing.gpt_image2_generation || 0.3;
   const nanobann2Price = pricing.nanobann2_generation || 0.3;
-  const veo31Price = pricing.veo31_video || 1;
-  const veo31FastPrice = pricing.veo31_video_fast || 2;
 
   useEffect(() => {
     const loadPricing = async () => {
@@ -179,8 +177,6 @@ export const RechargeModal: React.FC<RechargeModalProps> = ({ isOpen, onClose })
   const calcGenerations = (creditAmount: number) => ({
     gptImage2: Math.floor(creditAmount / gptImage2Price),
     nanobann2: Math.floor(creditAmount / nanobann2Price),
-    veo31: Math.floor(creditAmount / veo31Price),
-    veo31Fast: Math.floor(creditAmount / veo31FastPrice),
   });
 
   const currentGens = calcGenerations(Number(credits) || 0);
@@ -251,8 +247,6 @@ export const RechargeModal: React.FC<RechargeModalProps> = ({ isOpen, onClose })
             {[
               { icon: Zap, label: 'GPT-Image2 生图', price: gptImage2Price, color: 'text-blue-500', bg: 'bg-blue-50' },
               { icon: Sparkles, label: 'Nanobanan2 生图', price: nanobann2Price, color: 'text-purple-500', bg: 'bg-purple-50' },
-              { icon: Video, label: 'Veo3.1 视频 (1080p)', price: veo31Price, color: 'text-emerald-500', bg: 'bg-emerald-50' },
-              { icon: Film, label: 'Veo3.1 Fast (1080p)', price: veo31FastPrice, color: 'text-rose-500', bg: 'bg-rose-50' },
             ].map((item) => (
               <div key={item.label} className={`${item.bg} rounded-xl px-4 py-3 border border-white/50`}>
                 <div className="flex items-center gap-2">
@@ -326,18 +320,6 @@ export const RechargeModal: React.FC<RechargeModalProps> = ({ isOpen, onClose })
                             <Sparkles size={11} className="text-purple-400" /> Nanobanan2
                           </span>
                           <span className="font-semibold text-gray-700">{gens.nanobann2} 张</span>
-                        </div>
-                        <div className="flex items-center justify-between text-[11px]">
-                          <span className="text-gray-400 flex items-center gap-1">
-                            <Video size={11} className="text-emerald-400" /> Veo3.1 视频
-                          </span>
-                          <span className="font-semibold text-gray-700">{gens.veo31} 个</span>
-                        </div>
-                        <div className="flex items-center justify-between text-[11px]">
-                          <span className="text-gray-400 flex items-center gap-1">
-                            <Film size={11} className="text-rose-400" /> Veo3.1 Fast
-                          </span>
-                          <span className="font-semibold text-gray-700">{gens.veo31Fast} 个</span>
                         </div>
                       </div>
                     </div>
@@ -436,10 +418,6 @@ export const RechargeModal: React.FC<RechargeModalProps> = ({ isOpen, onClose })
                     <span className="text-gray-200">|</span>
                     <span className="text-xs text-gray-400">
                       Nanobanan2 <span className="font-bold text-purple-500">{planGens.nanobann2}</span> 张
-                    </span>
-                    <span className="text-gray-200">|</span>
-                    <span className="text-xs text-gray-400">
-                      Veo3.1 <span className="font-bold text-emerald-500">{planGens.veo31}</span> 个
                     </span>
                   </div>
                 </div>

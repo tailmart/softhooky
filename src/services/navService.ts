@@ -24,8 +24,7 @@ const FALLBACK_NAV_ITEMS: NavItem[] = [
   { nav_id: 'tryon', label: '产品试穿', category: '店铺上架素材', enabled: true, sort_order: 4 },
   { nav_id: 'handheld', label: '手持产品', category: '店铺上架素材', enabled: true, sort_order: 5 },
   { nav_id: 'banner', label: 'Banner设计', category: '店铺上架素材', enabled: true, sort_order: 5 },
-  { nav_id: 'poster', label: '智能海报设计', category: '店铺上架素材', enabled: true, sort_order: 6 },
-  { nav_id: 'ecommerce-poster', label: '电商海报设计', category: '店铺上架素材', enabled: true, sort_order: 7 },
+
   // 社媒图文引流
   { nav_id: 'xiaohongshu', label: '小红书种草图文', category: '社媒图文引流', enabled: true, sort_order: 0 },
   { nav_id: 'social', label: '社媒POV出图', category: '社媒图文引流', enabled: true, sort_order: 1 },

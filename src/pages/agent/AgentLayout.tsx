@@ -40,14 +40,14 @@ export default function AgentLayout({ onLogout }: { onLogout?: () => void }) {
     return (
       <Link
         to={to}
-        className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all ${
+        className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all group ${
           isActive
-            ? 'bg-indigo-50 text-indigo-700 font-semibold'
-            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+            ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-md shadow-indigo-500/25'
+            : 'text-gray-600 hover:bg-indigo-50 hover:text-indigo-700'
         }`}
       >
-        <Icon size={18} />
-        <span className="text-sm">{label}</span>
+        <Icon size={18} className={isActive ? 'text-white' : 'text-gray-400 group-hover:text-indigo-500'} />
+        <span className="text-sm font-medium">{label}</span>
       </Link>
     )
   }
@@ -97,22 +97,22 @@ export default function AgentLayout({ onLogout }: { onLogout?: () => void }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-indigo-50/30 flex">
       {/* 侧边栏 */}
-      <aside className="fixed left-0 top-0 w-56 h-screen bg-white border-r border-gray-200 flex flex-col z-50">
-        <div className="p-5 border-b border-gray-100">
+      <aside className="fixed left-0 top-0 w-64 h-screen bg-white border-r border-gray-200/80 flex flex-col z-50 shadow-lg shadow-gray-200/50">
+        <div className="p-6 border-b border-gray-100">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-sm">
-              <Shield size={18} className="text-white" />
+            <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
+              <Shield size={20} className="text-white" />
             </div>
             <div>
-              <h1 className="text-sm font-bold text-gray-900">代理中心</h1>
-              <p className="text-[10px] text-gray-400">Agent Dashboard</p>
+              <h1 className="text-base font-bold text-gray-900">代理中心</h1>
+              <p className="text-[11px] text-gray-400 mt-0.5">Agent Dashboard</p>
             </div>
           </div>
         </div>
 
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
           <NavLink to="/agent" icon={LayoutDashboard} label="概览" />
           <NavLink to="/agent/pricing" icon={DollarSign} label="定价管理" />
           <NavLink to="/agent/invite-codes" icon={Shield} label="邀请码" />
@@ -121,25 +121,25 @@ export default function AgentLayout({ onLogout }: { onLogout?: () => void }) {
           <NavLink to="/agent/withdraw" icon={Wallet} label="提现" />
         </nav>
 
-        <div className="p-3 border-t border-gray-100 space-y-1">
+        <div className="p-4 border-t border-gray-100 space-y-1.5">
           <button onClick={goToApp}
-            className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-xl transition-all">
+            className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all font-medium">
             <ArrowLeft size={16} />
             返回主应用
           </button>
           {onLogout && (
             <button onClick={onLogout}
-              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all">
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all font-medium">
               <LogOut size={16} />
-              退出
+              退出登录
             </button>
           )}
         </div>
       </aside>
 
       {/* 主内容 */}
-      <main className="ml-56 flex-1">
-        <div className="max-w-5xl mx-auto p-6">
+      <main className="ml-64 flex-1 min-h-screen">
+        <div className="max-w-6xl mx-auto p-8">
           <Outlet />
         </div>
       </main>
