@@ -15,3 +15,4 @@ deploy/updates/*.yml
 screenshot-*.png
 *.traineddata
 
+dist_installers

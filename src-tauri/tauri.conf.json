@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Softhooky - 智能设计平台",
         "width": 1400,
         "height": 900,
@@ -45,7 +46,8 @@
       "nsis": {
         "displayLanguageSelector": false,
         "installerIcon": "icons/icon.ico",
-        "languages": ["SimpChinese", "English"]
+        "languages": ["SimpChinese", "English"],
+        "webviewInstallMode": "bootstrapper"
       }
     },
     "macOS": {
@@ -58,11 +60,28 @@
     }
   },
   "plugins": {
-    "updater": {
-      "endpoints": [
-        "https://github.com/tailmart/softhooky/releases/latest/download/latest.json"
-      ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEU0NTdDQjY0NDVCQzEzQzUKUldURkU3eEZaTXRYNUxYdGtMa3dTeGYrbk1VRFA2cG9SNUNrNHlOUFdlSWRkRmhYMGFXL05XaHkK"
-    }
+  "updater": {
+    "endpoints": [
+      "https://github.com/tailmart/softhooky/releases/latest/download/latest.json"
+    ],
+    "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEU0NTdDQjY0NDVCQzEzQzUKUldURkU3eEZaTXRYNUxYdGtMa3dTeGYrbk1VRFA2cG9SNUNrNHlOUFdlSWRkRmhYMGFXL05XaHkK"
+  },
+  "shell": {
+    "open": true,
+    "scope": [
+      {
+        "name": "mailto",
+        "cmd": "open",
+        "args": true,
+        "validation": "^mailto:\\w+@\\w+"
+      },
+      {
+        "name": "browser",
+        "cmd": "open",
+        "args": true,
+        "validation": "^https://softhooky\\.com.*"
+      }
+    ]
+  }
   }
 }

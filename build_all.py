@@ -2,40 +2,51 @@
 """
 一键打包脚本 - Mac本地 + Windows云端(GitHub Actions)
 打包完成后安装包输出到 ./dist_installers/ 目录
-"""
 
+用法:
+  python3 build_all.py          - 打包双端 (Mac本地 + Windows云端)
+  python3 build_all.py mac      - 只打包 Mac
+  python3 build_all.py windows  - 只打包 Windows
+"""
 import os
 import sys
 import json
 import time
+import glob
+import shutil
 import subprocess
 import urllib.request
 import urllib.error
 import zipfile
 import io
-import glob
-import shutil
+import tarfile
 
 # ========== 配置 ==========
 GITHUB_REPO = "tailmart/softhooky"
-GITHUB_TOKEN = ""  # 填你的GitHub Personal Access Token，不填则用gh CLI认证
+GITHUB_TOKEN = ""
 WORKFLOW_FILE = "build-tauri.yml"
 BRANCH = "main"
 OUTPUT_DIR = "./dist_installers"
-CHECK_INTERVAL = 30  # 检查间隔（秒）
-MAX_WAIT = 1800      # 最大等待时间（秒）
+CHECK_INTERVAL = 30
+MAX_WAIT = 1800
+
+ROOT = os.path.dirname(os.path.abspath(__file__))
+TOKEN_FILE = os.path.expanduser(os.environ.get("GITHUB_TOKEN_FILE", "/tmp/gh_token.txt"))
+
+# @tauri-apps/cli 版本 (在官网查询最新: https://www.npmjs.com/package/@tauri-apps/cli)
+TAURI_CLI_VERSION = "2.11.2"
 
 
 def log(msg, icon=""):
     icons = {"ok": "✅", "fail": "❌", "info": "📦", "wait": "⏳", "start": "🚀"}
-    print(f"\n{icons.get(icon, '▶')} {msg}")
+    print(f"\n{icons.get(icon, '▸')} {msg}")
 
 
 def run_cmd(cmd, cwd=None, check=True):
     """执行命令并实时输出"""
     print(f"  $ {cmd}")
     result = subprocess.run(
-        cmd, shell=True, cwd=cwd,
+        cmd, shell=True, cwd=cwd or ROOT,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
     )
     if result.stdout:
@@ -47,236 +58,303 @@ def run_cmd(cmd, cwd=None, check=True):
     return result
 
 
-def github_api(url):
-    """调用GitHub API"""
-    headers = {"Accept": "application/vnd.github+json"}
-    if GITHUB_TOKEN:
-        headers["Authorization"] = f"Bearer {GITHUB_TOKEN}"
-    req = urllib.request.Request(url, headers=headers)
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        if e.code == 401:
-            print("  GitHub API认证失败，请设置GITHUB_TOKEN")
-        return None
+def get_token():
+    """获取 GitHub token: 优先 env, 其次 token 文件"""
+    token = os.environ.get("GITHUB_TOKEN", "")
+    if not token and os.path.exists(TOKEN_FILE):
+        token = open(TOKEN_FILE).read().strip()
+    return token
+
+
+def install_tauri_cli():
+    """从 npm registry 直接下载 @tauri-apps/cli + 平台二进制"""
+    arch = os.uname().machine
+    target = "darwin-arm64" if arch == "arm64" else "darwin-x64"
+    nm_dir = os.path.join(ROOT, "node_modules")
+    ta_dir = os.path.join(nm_dir, "@tauri-apps")
+    bin_dir = os.path.join(nm_dir, ".bin")
+
+    # 检查是否已安装
+    if os.path.exists(os.path.join(bin_dir, "tauri")):
+        ver = subprocess.run(
+            ["node", os.path.join(ta_dir, "cli", "tauri.js"), "--version"],
+            capture_output=True, text=True, cwd=ROOT
+        ).stdout.strip()
+        if ver:
+            log(f"@tauri-apps/cli 已就绪: {ver}", "ok")
+            return True
+
+    log("安装 @tauri-apps/cli...", "info")
+
+    for subdir in [os.path.join(ta_dir, "cli"), os.path.join(ta_dir, f"cli-{target}")]:
+        os.makedirs(subdir, exist_ok=True)
+
+    def download_and_extract(pkg_name, dest_dir):
+        url = f"https://registry.npmjs.org/@tauri-apps/{pkg_name}/-/{pkg_name}-{TAURI_CLI_VERSION}.tgz"
+        tgt_path = f"/tmp/tauri-{pkg_name.replace('/', '-')}.tgz"
+        urllib.request.urlretrieve(url, tgt_path)
+        tmpdir = os.path.join("/tmp", f"tauri-{pkg_name.replace('/', '-')}-extract")
+        if os.path.exists(tmpdir):
+            shutil.rmtree(tmpdir)
+        with tarfile.open(tgt_path) as tf:
+            # Python 3.12+ has filter='data', older doesn't
+            kwargs = {"filter": "data"} if sys.version_info >= (3, 12) else {}
+            tf.extractall(tmpdir, **kwargs)
+        pkg_dir = os.path.join(tmpdir, "package")
+        for f in os.listdir(pkg_dir):
+            s = os.path.join(pkg_dir, f)
+            d = os.path.join(dest_dir, f)
+            if os.path.exists(d):
+                os.remove(d)
+            shutil.move(s, d)
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+    download_and_extract("cli", os.path.join(ta_dir, "cli"))
+    download_and_extract(f"cli-{target}", os.path.join(ta_dir, f"cli-{target}"))
+
+    # 创建 symlink
+    os.makedirs(bin_dir, exist_ok=True)
+    symlink_target = os.path.join("..", "@tauri-apps", "cli", "tauri.js")
+    symlink_path = os.path.join(bin_dir, "tauri")
+    if os.path.exists(symlink_path):
+        os.remove(symlink_path)
+    os.symlink(symlink_target, symlink_path)
+
+    log(f"@tauri-apps/cli 已安装 ({target})", "ok")
+    return True
+
+
+def build_frontend():
+    """构建前端 + Server"""
+    log("清理旧构建产物...", "info")
+    run_cmd("node scripts/clean.mjs")
+    log("构建前端 (Vite)...", "info")
+    run_cmd("npx vite build")
+    log("编译 Server (esbuild)...", "info")
+    run_cmd("node build-server.js")
 
 
 def build_mac():
     """Mac本地打包"""
-    log("开始Mac本地打包", "start")
+    log("开始 Mac 本地打包", "start")
 
-    # 1. 安装依赖
-    log("安装npm依赖", "info")
-    run_cmd("npm install --ignore-scripts")
-    # 确保 @tauri-apps/cli 已安装（某些环境下 npm 可能漏装 optional dep）
-    if not os.path.exists(os.path.join(os.getcwd(), 'node_modules', '.bin', 'tauri')):
-        import shutil
-        import urllib.request
-        import tarfile
-        log("安装 @tauri-apps/cli 二进制...", "info")
-        # 检测架构
-        arch = os.uname().machine  # arm64 或 x86_64
-        target = 'darwin-arm64' if arch == 'arm64' else 'darwin-x64'
-        cli_dir = os.path.join(os.getcwd(), 'node_modules', '@tauri-apps')
-        os.makedirs(os.path.join(cli_dir, 'cli'), exist_ok=True)
-        os.makedirs(os.path.join(cli_dir, f'cli-{target}'), exist_ok=True)
-        # 下载主包
-        url = 'https://registry.npmjs.org/@tauri-apps/cli/-/cli-2.11.2.tgz'
-        urllib.request.urlretrieve(url, '/tmp/tauri-cli.tgz')
-        with tarfile.open('/tmp/tauri-cli.tgz') as tf:
-            tf.extractall(os.path.join(cli_dir, 'cli'), filter='data')
-            # strip prefix
-            for f in os.listdir(os.path.join(cli_dir, 'cli', 'package')):
-                shutil.move(os.path.join(cli_dir, 'cli', 'package', f), os.path.join(cli_dir, 'cli', f))
-            shutil.rmtree(os.path.join(cli_dir, 'cli', 'package'), ignore_errors=True)
-        # 下载平台二进制
-        url2 = f'https://registry.npmjs.org/@tauri-apps/cli-{target}/-/cli-{target}-2.11.2.tgz'
-        urllib.request.urlretrieve(url2, '/tmp/tauri-native.tgz')
-        with tarfile.open('/tmp/tauri-native.tgz') as tf:
-            tf.extractall(os.path.join(cli_dir, f'cli-{target}'), filter='data')
-            for f in os.listdir(os.path.join(cli_dir, f'cli-{target}', 'package')):
-                shutil.move(os.path.join(cli_dir, f'cli-{target}', 'package', f), os.path.join(cli_dir, f'cli-{target}', f))
-            shutil.rmtree(os.path.join(cli_dir, f'cli-{target}', 'package'), ignore_errors=True)
-        # 创建 symlink
-        bin_dir = os.path.join(os.getcwd(), 'node_modules', '.bin')
-        os.makedirs(bin_dir, exist_ok=True)
-        symlink_src = os.path.join('..', '@tauri-apps', 'cli', 'tauri.js')
-        symlink_dst = os.path.join(bin_dir, 'tauri')
-        if not os.path.exists(symlink_dst):
-            os.symlink(symlink_src, symlink_dst)
-        log(f"@tauri-apps/cli 已安装 (target: {target})", "ok")
+    # 1. 构建前端
+    build_frontend()
 
-    # 2. 生成图标（如果需要）
+    # 2. 确保 Tauri CLI 可用
+    install_tauri_cli()
+
+    # 3. 生成图标（如果需要）
     log("检查/生成应用图标", "info")
-    run_cmd("npm run tauri:icons", check=False)
+    run_cmd("node src-tauri/generate-icons.mjs", check=False)
 
-    # 3. 构建Mac安装包
-    log("构建Mac DMG（Universal: Intel + Apple Silicon）", "info")
-    run_cmd("npx tauri build -- --target universal-apple-darwin")
+    # 4. 构建 Mac Universal DMG
+    log("构建 Mac DMG (Universal: Intel + Apple Silicon)", "info")
+    run_cmd("npx tauri build --target universal-apple-darwin", check=False)
+    # 如果 Tauri DMG 打包失败（常见 hdiutil 资源忙），尝试手动转换
+    dmg_path = "src-tauri/target/universal-apple-darwin/release/bundle/dmg"
+    temp_dmg = glob.glob(f"{dmg_path}/rw.*.dmg")
+    if temp_dmg and not glob.glob(f"{dmg_path}/Softhooky_*.dmg"):
+        log("Tauri DMG 打包遇 hdiutil 问题，尝试手动转换...", "info")
+        # 先卸载残留
+        subprocess.run(["hdiutil", "detach", "-force", "/dev/disk4"], capture_output=True)
+        # 手动转换
+        run_cmd(f'hdiutil convert "{temp_dmg[0]}" -format UDZO -imagekey zlib-level=9 -o "{dmg_path}/Softhooky_{version}.dmg"', check=False)
 
-    # 4. 查找并复制安装包
-    log("查找Mac安装包", "info")
-    patterns = [
-        "src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg",
-        "src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app",
-    ]
-    found = []
-    for pat in patterns:
-        found.extend(glob.glob(pat))
-
+    # 5. 查找安装包
+    log("查找 Mac 安装包", "info")
+    found = glob.glob("src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg")
     if not found:
-        # 尝试其他target
         for t in ["aarch64-apple-darwin", "x86_64-apple-darwin"]:
-            for pat in [
-                f"src-tauri/target/{t}/release/bundle/dmg/*.dmg",
-                f"src-tauri/target/{t}/release/bundle/macos/*.app",
-            ]:
-                found.extend(glob.glob(pat))
-
+            found.extend(glob.glob(f"src-tauri/target/{t}/release/bundle/dmg/*.dmg"))
     if not found:
-        log("未找到Mac安装包，请检查构建日志", "fail")
+        log("未找到 Mac 安装包，请检查构建日志", "fail")
         return []
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     copied = []
     for f in found:
         dest = os.path.join(OUTPUT_DIR, os.path.basename(f))
-        run_cmd(f'cp "{f}" "{dest}"', check=False)
+        shutil.copy2(f, dest)
         size_mb = os.path.getsize(dest) / 1024 / 1024
-        log(f"Mac安装包: {dest} ({size_mb:.1f} MB)", "ok")
+        log(f"Mac 安装包: {os.path.basename(dest)} ({size_mb:.1f} MB)", "ok")
         copied.append(dest)
-
     return copied
 
 
-def build_windows():
-    """通过GitHub Actions打包Windows"""
-    log("开始Windows云端打包 (GitHub Actions)", "start")
+def github_api(url, token=None):
+    """调用 GitHub API"""
+    if not token:
+        token = get_token()
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": "softhooky-builder"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode() if e.fp else ""
+        if e.code == 401:
+            log(f"GitHub API 认证失败 (401): 请在 {TOKEN_FILE} 中设置有效的 token", "fail")
+        else:
+            print(f"  API error {e.code}: {body[:200]}")
+        return None
 
-    # 1. 触发workflow
-    log("触发GitHub Actions构建...", "info")
 
-    # 尝试用gh CLI触发
-    gh_cmd = 'gh'
-    # 检查 gh 是否在 PATH 中，如果没有则尝试常见安装路径
-    import shutil
-    if not shutil.which('gh'):
-        alt_paths = [
-            os.path.expanduser('~/.local/bin/gh'),
-            '/usr/local/bin/gh',
-            '/opt/homebrew/bin/gh',
-        ]
-        for p in alt_paths:
-            if os.path.exists(p):
-                gh_cmd = p
-                break
-    result = run_cmd(
-        f'{gh_cmd} workflow run "{WORKFLOW_FILE}" --ref {BRANCH}',
-        check=False
+def git_push_and_trigger():
+    """推送代码到 GitHub 并触发 workflow"""
+    token = get_token()
+    if not token:
+        log("未找到 GitHub token，无法触发 Windows 构建", "fail")
+        return None
+
+    # 1. 确保代码已经 push
+    log("检查 Git 状态...", "info")
+    status = subprocess.run(
+        ["git", "status", "--porcelain"],
+        capture_output=True, text=True, cwd=ROOT
+    )
+    if status.stdout.strip():
+        log("有未提交的更改，正在提交并推送...", "info")
+        run_cmd("git add -A")
+        run_cmd('git commit -m "chore: build update"', check=False)
+    # 尝试推送，如果因 workflow scope 失败则提示用户
+    log("推送到 GitHub...", "info")
+    result = subprocess.run(
+        ["git", "push", "--force", "origin", BRANCH],
+        capture_output=True, text=True, cwd=ROOT
     )
     if result.returncode != 0:
-        # gh CLI不可用，尝试API触发
-        log("尝试通过API触发...", "info")
-        url = f"https://api.github.com/repos/{GITHUB_REPO}/actions/workflows/{WORKFLOW_FILE}/dispatches"
-        data = json.dumps({"ref": BRANCH}).encode()
-        headers = {
-            "Accept": "application/vnd.github+json",
-            "Content-Type": "application/json",
-        }
-        if GITHUB_TOKEN:
-            headers["Authorization"] = f"Bearer {GITHUB_TOKEN}"
-        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-        try:
-            urllib.request.urlopen(req, timeout=10)
-            log("API触发成功", "ok")
-        except Exception as e:
-            log(f"触发workflow失败: {e}", "fail")
-            print("请手动到 GitHub Actions 页面触发构建")
-            return []
+        err_msg = result.stderr + result.stdout
+        if "workflow" in err_msg and "scope" in err_msg:
+            log("推送失败: PAT 缺少 workflow 权限", "fail")
+            log("请手动执行以下命令推送代码，触发 Windows 构建:", "info")
+            print(f"    1. cd {ROOT}")
+            print("    2. git push --force origin main")
+            print(f"    3. 到 https://github.com/{GITHUB_REPO}/actions 手动触发")
+            log("或为当前 PAT 添加 workflow 权限后重试", "info")
+        else:
+            log(f"推送失败: {err_msg[:200]}", "fail")
+        return None
 
-    # 2. 等待并监控构建
-    log("等待构建开始...", "wait")
+    # 2. 触发 workflow
+    log("触发 GitHub Actions 构建...", "info")
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/actions/workflows/{WORKFLOW_FILE}/dispatches"
+    data = json.dumps({"ref": BRANCH}).encode()
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+    try:
+        resp = urllib.request.urlopen(req, timeout=15)
+        log(f"Windows 构建已触发 (HTTP {resp.status})", "ok")
+    except urllib.error.HTTPError as e:
+        body = e.read().decode() if e.fp else ""
+        log(f"触发失败: {e.code} {body[:200]}", "fail")
+        print("可手动到 GitHub Actions 页面触发构建")
+        return None
+    return token
+
+
+def build_windows():
+    """通过 GitHub Actions 打包 Windows"""
+    log("开始 Windows 云端打包 (GitHub Actions)", "start")
+
+    token = git_push_and_trigger()
+    if not token:
+        return []
+
+    # 3. 查找 workflow run
+    log("等待构建启动...", "wait")
     time.sleep(5)
-
     run_id = None
-    for _ in range(60):  # 最多等5分钟找run
-        runs = github_api(f"https://api.github.com/repos/{GITHUB_REPO}/actions/runs?per_page=5&status=in_progress")
+    for _ in range(60):
+        runs = github_api(
+            f"https://api.github.com/repos/{GITHUB_REPO}/actions/runs?per_page=5&event=workflow_dispatch",
+            token
+        )
         if runs and runs.get("workflow_runs"):
             for r in runs["workflow_runs"]:
-                if r["workflow_file"] == WORKFLOW_FILE:
+                if r["workflow_file"] == WORKFLOW_FILE and r["status"] != "completed":
                     run_id = r["id"]
                     break
         if run_id:
             break
-        # 也检查completed的runs
-        runs2 = github_api(f"https://api.github.com/repos/{GITHUB_REPO}/actions/runs?per_page=5&status=completed&branch={BRANCH}")
-        if runs2 and runs2.get("workflow_runs"):
-            for r in runs2["workflow_runs"]:
-                if r["workflow_file"] == WORKFLOW_FILE:
-                    run_id = r["id"]
-                    break
-        if run_id:
-            break
-        print("  等待中...", end="\r")
         time.sleep(5)
 
     if not run_id:
-        log("找不到workflow run", "fail")
+        log("找不到 workflow run，尝试找刚完成的...", "wait")
+        runs = github_api(
+            f"https://api.github.com/repos/{GITHUB_REPO}/actions/runs?per_page=3",
+            token
+        )
+        if runs and runs.get("workflow_runs"):
+            run_id = runs["workflow_runs"][0]["id"]
+    if not run_id:
+        log("找不到 workflow run", "fail")
         return []
 
-    log(f"找到构建 # {run_id}", "ok")
+    log(f"找到构建 #{run_id}", "ok")
 
-    # 3. 等待Windows job完成
+    # 4. 等待完成
     start_time = time.time()
     while time.time() - start_time < MAX_WAIT:
         elapsed = int(time.time() - start_time)
-        jobs = github_api(f"https://api.github.com/repos/{GITHUB_REPO}/actions/runs/{run_id}/jobs")
-        if not jobs:
+        run_data = github_api(
+            f"https://api.github.com/repos/{GITHUB_REPO}/actions/runs/{run_id}",
+            token
+        )
+        if not run_data:
             time.sleep(CHECK_INTERVAL)
             continue
 
-        win_job = None
-        for job in jobs.get("jobs", []):
-            if "windows" in job["name"].lower():
-                win_job = job
-                break
+        status = run_data["status"]
+        conclusion = run_data.get("conclusion")
 
-        if not win_job:
-            print(f"  等待Windows job启动... ({elapsed}s)", end="\r")
-            time.sleep(CHECK_INTERVAL)
-            continue
+        # 获取当前步骤
+        jobs_data = github_api(
+            f"https://api.github.com/repos/{GITHUB_REPO}/actions/runs/{run_id}/jobs",
+            token
+        )
+        current_step = ""
+        if jobs_data:
+            for job in jobs_data.get("jobs", []):
+                if job["status"] == "in_progress":
+                    for step in job.get("steps", []):
+                        if step["status"] == "in_progress":
+                            current_step = step["name"]
+                            break
 
-        status = win_job["status"]
-        conclusion = win_job.get("conclusion")
+        print(f"\r  [{elapsed}s] Status: {status} | {current_step[:50]}  ", end="", flush=True)
 
         if status == "completed":
+            print()
             if conclusion == "success":
-                log(f"Windows构建成功! (耗时 {elapsed}s)", "ok")
+                log(f"Windows 构建成功 (耗时 {elapsed}s)", "ok")
                 break
             else:
-                log(f"Windows构建失败: {conclusion}", "fail")
-                # 打印失败步骤
-                for step in win_job.get("steps", []):
-                    if step.get("conclusion") == "failure":
-                        print(f"  失败步骤: {step['name']}")
+                log(f"Windows 构建失败: {conclusion}", "fail")
+                if jobs_data:
+                    for job in jobs_data.get("jobs", []):
+                        for step in job.get("steps", []):
+                            if step.get("conclusion") == "failure":
+                                print(f"  失败步骤: {step['name']}")
                 return []
 
-        # 打印当前步骤
-        current_step = ""
-        for step in win_job.get("steps", []):
-            if step["status"] == "in_progress":
-                current_step = step["name"]
-                break
-        print(f"  Windows构建中... {current_step} ({elapsed}s)", end="\r")
         time.sleep(CHECK_INTERVAL)
     else:
-        log(f"构建超时（超过{MAX_WAIT}s）", "fail")
+        log(f"构建超时 ({MAX_WAIT}s)", "fail")
         return []
 
-    # 4. 下载Windows安装包
-    log("下载Windows安装包...", "info")
-    artifacts = github_api(f"https://api.github.com/repos/{GITHUB_REPO}/actions/runs/{run_id}/artifacts")
+    # 5. 下载安装包
+    log("下载 Windows 安装包...", "info")
+    artifacts = github_api(
+        f"https://api.github.com/repos/{GITHUB_REPO}/actions/runs/{run_id}/artifacts",
+        token
+    )
     if not artifacts or not artifacts.get("artifacts"):
         log("找不到构建产物", "fail")
         return []
@@ -292,27 +370,26 @@ def build_windows():
         download_url = artifact["archive_download_url"]
         log(f"下载 {name} ({artifact['size_in_bytes']/1024/1024:.1f} MB)...", "info")
 
-        headers = {"Accept": "application/vnd.github+json"}
-        if GITHUB_TOKEN:
-            headers["Authorization"] = f"Bearer {GITHUB_TOKEN}"
-        req = urllib.request.Request(download_url, headers=headers)
+        dl_headers = {"Accept": "application/vnd.github+json", "User-Agent": "softhooky"}
+        if token:
+            dl_headers["Authorization"] = f"Bearer {token}"
+
         try:
-            with urllib.request.urlopen(req, timeout=120) as resp:
+            dl_req = urllib.request.Request(download_url, headers=dl_headers)
+            with urllib.request.urlopen(dl_req, timeout=180) as resp:
                 zip_data = resp.read()
 
-            # 解压zip
             with zipfile.ZipFile(io.BytesIO(zip_data)) as zf:
                 for file_name in zf.namelist():
-                    # 跳过PE签名文件
-                    if file_name.endswith(".sig") or file_name.endswith(".nsiszip"):
+                    if file_name.endswith((".sig", ".nsiszip")):
                         continue
                     if file_name.endswith((".exe", ".msi", ".nsis")):
                         extracted = zf.read(file_name)
-                        dest = os.path.join(OUTPUT_DIR, file_name)
+                        dest = os.path.join(OUTPUT_DIR, os.path.basename(file_name))
                         with open(dest, "wb") as f:
                             f.write(extracted)
                         size_mb = len(extracted) / 1024 / 1024
-                        log(f"Windows安装包: {dest} ({size_mb:.1f} MB)", "ok")
+                        log(f"Windows 安装包: {os.path.basename(dest)} ({size_mb:.1f} MB)", "ok")
                         copied.append(dest)
         except Exception as e:
             log(f"下载失败: {e}", "fail")
@@ -330,6 +407,7 @@ def main():
     if len(sys.argv) > 1:
         mode = sys.argv[1].lower()
 
+    os.chdir(ROOT)
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     results = []
 
@@ -349,7 +427,7 @@ def main():
             size_mb = os.path.getsize(f) / 1024 / 1024
             print(f"  📦 {os.path.basename(f)} ({size_mb:.1f} MB)")
     else:
-        print("\n  没有找到安装包，请检查构建日志")
+        print("\n  没有生成安装包 — 请检查上面的日志")
 
 
 if __name__ == "__main__":
