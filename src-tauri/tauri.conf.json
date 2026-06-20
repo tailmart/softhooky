@@ -42,12 +42,14 @@
       "icons/icon.ico"
     ],
     "resources": [],
+    "webviewInstallMode": {
+      "type": "bootstrapper"
+    },
     "windows": {
       "nsis": {
         "displayLanguageSelector": false,
         "installerIcon": "icons/icon.ico",
-        "languages": ["SimpChinese", "English"],
-        "webviewInstallMode": "bootstrapper"
+        "languages": ["SimpChinese", "English"]
       }
     },
     "macOS": {
